@@ -7,7 +7,7 @@ from . import models
 class RatingForm(forms.ModelForm):
     class Meta:
         model = models.Rating
-        fields = ["rating"]
+        fields = ["rating", "source_data_issue"]
         widgets = {"rating": forms.RadioSelect}
 
 

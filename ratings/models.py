@@ -17,8 +17,7 @@ class Ratings(models.IntegerChoices):
     PASS = 0
     UNSURE = 1
     FAIL = 2
-    NEEDS_REVIEW = 3
-    NOT_INFORMATIVE = 4
+    NOT_INFORMATIVE = 3
 
 
 class DisplayMode(models.IntegerChoices):
@@ -29,11 +28,6 @@ class DisplayMode(models.IntegerChoices):
     @classmethod
     def get_random(cls) -> int:
         return random.choice(cls.values)
-
-
-class Step(models.TextChoices):
-    IMAGE = "I"
-    MASK = "M"
 
 
 class Layout(models.Model):
@@ -89,15 +83,12 @@ class Mask(models.Model):
             return base64.b64encode(img.getvalue()).decode()
 
 
-def get_default_user() -> str:
-    return getpass.getuser()
-
-
 class Rating(models.Model):
-    rating = models.IntegerField(
-        choices=Ratings.choices, default=Ratings.NOT_INFORMATIVE
+    rating = models.IntegerField(choices=Ratings.choices, default=None, verbose_name="")
+    source_data_issue = models.BooleanField(
+        default=False, verbose_name="Source Data Issue"
     )
-    user = models.CharField(max_length=16, default=get_default_user)
+    user = models.CharField(max_length=16, default=getpass.getuser)
     created = models.DateTimeField(auto_now_add=True)
 
 
