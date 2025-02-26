@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<main>
+    <img src="data:image/png;base64,{{image}}" />
+</main>
+
+<div>
+    <h2>Rate this Image</h2>
+    <form method="POST">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Submit Rating</button>
+    </form>
+</div>
+{% endblock %}
