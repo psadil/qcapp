@@ -138,3 +138,20 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 MEDIA_ROOT = tempfile.mkdtemp()
 MEDIA_URL = "/media/"
+
+
+# https://docs.djangoproject.com/en/5.1/topics/logging/
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "timestamp": {"format": "%(asctime)s | %(levelname)-8s | %(message)s"}
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "timestamp"},
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}

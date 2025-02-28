@@ -8,7 +8,7 @@ from pathlib import Path
 import nibabel as nb
 from django.db import models
 from django.db.models import manager
-from matplotlib import figure
+from matplotlib import pyplot as plt
 from nilearn import image, plotting
 from nilearn.plotting import displays
 
@@ -36,8 +36,8 @@ class Layout(models.Model):
 
 class Mask(models.Model):
     layout = models.ForeignKey(Layout, on_delete=models.CASCADE)
-    file = models.CharField(max_length=256)
-    mask = models.CharField(max_length=256)
+    file = models.CharField(max_length=256, unique=True)
+    mask = models.CharField(max_length=256, unique=True)
 
     def __str__(self):
         mask = Path(self.mask)
@@ -65,7 +65,7 @@ class Mask(models.Model):
         cut_coord = image.coord_transform(img_id, img_id, img_id, nii.affine)[
             display_mode.value
         ]
-        f = figure.Figure(figsize=figsize, layout=None)
+        f = plt.figure(figsize=figsize, layout="none")
         with io.BytesIO() as img:
             p: displays.OrthoSlicer = plotting.plot_anat(
                 self.file,

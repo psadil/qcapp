@@ -1,8 +1,10 @@
+import logging
 import random
 import typing
 
-import ancpbids
+# import ancpbids
 import matplotlib
+import polars as pl
 from django import http, shortcuts, urls, views
 from django.db import models as dm
 from django.views.generic import edit
@@ -114,16 +116,38 @@ def _redirect_to_mask_randomly(
 
 
 def _get_create_masks_from_layout(layout: models.Layout) -> models.Mask:
-    bids_layout = ancpbids.BIDSLayout(layout.src)
-    files: list[str] = bids_layout.get(
-        description="brain", extension=".nii.gz", return_type="files"
-    )  # type: ignore
-    masks = [x for x in files if "anat" in x]
-    anats = [x.replace("brain_mask", "preproc_T1w") for x in masks]
+    logging.info("Reading dababase")
+    # bids_layout = ancpbids.BIDSLayout(layout.src)
+    # bids_layout = bids.BIDSLayout(database_path=layout.src, validate=False)
+    logging.info("Getting anatomical files")
+    # anats: list[str] = bids_layout.get(
+    #     suffix="T1w", extension=".nii.gz", return_type="files"
+    # )
+    masks: list[str] = (
+        pl.read_database_uri(
+            r"SELECT path FROM files WHERE path LIKE '%anat%desc-brain_mask.nii.gz'",
+            uri=f"sqlite://{layout.src}/layout_index.sqlite",
+        )
+        .to_series()
+        .to_list()
+    )
+    # masks_existing = bids_layout.get(
+    #     desc="brain", extension=".nii.gz", return_type="files"
+    # )
+    # masks_matched = [x.replace("preproc_T1w", "brain_mask") for x in anats]
     mask_objects = []
+    # logging.info("Confirming masks exist")
+    # for mask, anat in zip(masks_matched, anats):
+    #     if mask not in masks_existing:
+    #         continue
+    #     m, _ = models.Mask.objects.get_or_create(layout=layout, file=anat, mask=mask)
+    #     mask_objects.append(m)
+    anats = [x.replace("brain_mask", "preproc_T1w") for x in masks]
+    logging.info("Adding masks to db")
     for mask, anat in zip(masks, anats):
         m, _ = models.Mask.objects.get_or_create(layout=layout, file=anat, mask=mask)
         mask_objects.append(m)
+    logging.info("Making first mask figure")
 
     return random.choice(mask_objects)
 
