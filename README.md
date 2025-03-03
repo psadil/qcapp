@@ -18,7 +18,7 @@ idev -m 30 -p corralextra-dev
 Note that the following assumes that you have a file `.env` with values for the variables `DJANGO_SECRET_KEY` and `DB`.
 
 ```shell
-torate=/corral-secure/projects/A2CPS/shared/psadil/jobs/agg_with_skull/layout_fmriprep
+torate=/corral-secure/projects/A2CPS/shared/psadil/jobs/agg_with_skull/layout_masks
 db=/corral-secure/projects/A2CPS/shared/psadil/qclog/derivatives/db.sqlite3
 cd $torate
 apptainer run \
@@ -63,7 +63,7 @@ ssh -L 8000:localhost:8000 v320-003
 
 If all goes well, you should now be able to navigate to the app on a browser on your local machine: `http://localhost:8000/ratings`.
 
-You'll see a section to input the BIDS `Src`, which you should will with the path you mounted the folder pointed to by `${torate}` in `apptainer run` call (e.g., above, we had `--bind ${torate}`, and so you'd write the value of `torate`, which is `/corral-secure/projects/A2CPS/shared/psadil/jobs/agg_with_skull/layout_fmriprep`, in the `Src` box).
+You'll see a section to input the BIDS `Src`, which you should will with the path you mounted the folder pointed to by `${torate}` in `apptainer run` call (e.g., above, we had `--bind ${torate}`, and so you'd write the value of `torate`, which is `/corral-secure/projects/A2CPS/shared/psadil/jobs/agg_with_skull/layout_masks`, in the `Src` box).
 
 The rating are saved as you go along, so you can exit at any time.
 

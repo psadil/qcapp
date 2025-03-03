@@ -2,7 +2,6 @@ import logging
 import random
 import typing
 
-# import ancpbids
 import matplotlib
 import polars as pl
 from django import http, shortcuts, urls, views
@@ -123,6 +122,7 @@ def _get_create_masks_from_layout(layout: models.Layout) -> models.Mask:
     # anats: list[str] = bids_layout.get(
     #     suffix="T1w", extension=".nii.gz", return_type="files"
     # )
+    # if Path(layout.src).is_dir():
     masks: list[str] = (
         pl.read_database_uri(
             r"SELECT path FROM files WHERE path LIKE '%anat%desc-brain_mask.nii.gz'",
@@ -131,6 +131,11 @@ def _get_create_masks_from_layout(layout: models.Layout) -> models.Mask:
         .to_series()
         .to_list()
     )
+    # else:
+    #     bids_layout = ancpbids.BIDSLayout(layout.src)
+    #     masks: list[str] = bids_layout.get(
+    #         suffix="mask", extension=".nii.gz", return_type="files"
+    #     )  # type: ignore
     # masks_existing = bids_layout.get(
     #     desc="brain", extension=".nii.gz", return_type="files"
     # )
@@ -142,10 +147,11 @@ def _get_create_masks_from_layout(layout: models.Layout) -> models.Mask:
     #         continue
     #     m, _ = models.Mask.objects.get_or_create(layout=layout, file=anat, mask=mask)
     #     mask_objects.append(m)
-    anats = [x.replace("brain_mask", "preproc_T1w") for x in masks]
+    anats = [x.replace("desc-brain_mask", "T1w") for x in masks]
     logging.info("Adding masks to db")
     for mask, anat in zip(masks, anats):
         m, _ = models.Mask.objects.get_or_create(layout=layout, file=anat, mask=mask)
+
         mask_objects.append(m)
     logging.info("Making first mask figure")
 

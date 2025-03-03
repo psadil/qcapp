@@ -6,6 +6,7 @@ import typing
 from pathlib import Path
 
 import nibabel as nb
+import numpy as np
 from django.db import models
 from django.db.models import manager
 from matplotlib import pyplot as plt
@@ -36,8 +37,8 @@ class Layout(models.Model):
 
 class Mask(models.Model):
     layout = models.ForeignKey(Layout, on_delete=models.CASCADE)
-    file = models.CharField(max_length=256, unique=True)
-    mask = models.CharField(max_length=256, unique=True)
+    file = models.CharField(max_length=256)
+    mask = models.CharField(max_length=256)
 
     def __str__(self):
         mask = Path(self.mask)
@@ -48,9 +49,20 @@ class Mask(models.Model):
     def get_masks_from_layout(cls, layout: Layout) -> manager.BaseManager[typing.Self]:
         return cls.objects.filter(layout_id=layout)
 
-    def get_random_img_id(self, axis: int = 0) -> int:
+    def get_random_img_id(self, axis: int = 0, min_prop: float = 0.1) -> int:
         mask = nb.nifti1.Nifti1Image.load(self.mask)
-        return random.choice(range(mask.shape[axis]))
+        data = np.asarray(mask.get_fdata(), dtype=np.bool)
+        while True:
+            slice = random.choice(range(mask.shape[axis]))
+            if axis == 0:
+                out = data[slice, :, :]
+            elif axis == 1:
+                out = data[:, slice, :]
+            else:
+                out = data[:, :, slice]
+            if np.mean(out) > min_prop:
+                break
+        return slice
 
     def get_random_mask_from_layout(self, layout: Layout) -> typing.Self:
         return random.choice(self.get_masks_from_layout(layout=layout))
@@ -65,13 +77,15 @@ class Mask(models.Model):
         cut_coord = image.coord_transform(img_id, img_id, img_id, nii.affine)[
             display_mode.value
         ]
+        anat = nb.nifti1.Nifti1Image.load(self.file)
         f = plt.figure(figsize=figsize, layout="none")
         with io.BytesIO() as img:
             p: displays.OrthoSlicer = plotting.plot_anat(
-                self.file,
+                anat,
                 cut_coords=[cut_coord],
                 display_mode=display_mode.name.lower(),
                 figure=f,
+                vmax=np.quantile(anat.get_fdata(), 0.95),
             )  # type: ignore
             try:
                 p.add_contours(
