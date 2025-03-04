@@ -20,7 +20,7 @@ Note that the following assumes that you have a file `.env` with values for the 
 ```shell
 torate=/corral-secure/projects/A2CPS/shared/psadil/jobs/agg_with_skull/layout_masks
 db=/corral-secure/projects/A2CPS/shared/psadil/qclog/derivatives/db.sqlite3
-cd $torate
+cd $(dirname $torate)
 apptainer run \
   --bind ${torate} \
   --bind ${db}:/tmp/db.sqlite3 \

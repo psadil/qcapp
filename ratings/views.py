@@ -2,16 +2,12 @@ import logging
 import random
 import typing
 
-import matplotlib
 import polars as pl
 from django import http, shortcuts, urls, views
 from django.db import models as dm
 from django.views.generic import edit
 
 from . import forms, models
-
-matplotlib.use("agg")
-
 
 RATE_MASK_VIEW = "rate_mask"
 
