@@ -1,0 +1,6 @@
+<form hx-post="/ratings/{{post_dst}}/" hx-swap="none" hx-include="[name='extra']"
+    hx-on::after-request="if(event.detail.successful) this.reset()">
+    {% csrf_token %}
+    {{ form }}
+    <button type="submit" id="submit">Submit Rating</button>
+</form>

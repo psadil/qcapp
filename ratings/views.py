@@ -1,58 +1,224 @@
+import abc
+import json
 import logging
-import random
-import typing
+from pathlib import Path
 
 import polars as pl
+import pydantic
+from asgiref import sync
 from django import http, shortcuts, urls, views
 from django.db import models as dm
 from django.views.generic import edit
 
 from . import forms, models
 
-RATE_MASK_VIEW = "rate_mask"
+MASK_VIEW = "mask"
+ANAT_VIEW = "anat"
+SURFACE_LOCALIZATION_VIEW = "surface_localization"
+FMAP_COREGISTRATION_VIEW = "fmap_coregistration"
+
+RATE_MASK_VIEW = f"rate_{MASK_VIEW}"
+RATE_ANAT_VIEW = f"rate_{ANAT_VIEW}"
+RATE_SURFACE_LOCALIZATION_VIEW = f"rate_{SURFACE_LOCALIZATION_VIEW}"
+RATE_FMAP_COREGISTRATION_VIEW = f"rate_{FMAP_COREGISTRATION_VIEW}"
+
+
+class LayoutCache(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
+    layout: models.Layout | None = None
+
+
+layout_cache = LayoutCache()
+
+
+class StepView(abc.ABC, views.View):
+    template_name = "main.html"
+
+    @abc.abstractmethod
+    async def get_kwargs(self) -> dict:
+        raise NotImplementedError
+
+    async def get(self, request: http.HttpRequest) -> http.HttpResponse:
+        logging.info("serving image")
+        result = shortcuts.render(request, self.template_name, await self.get_kwargs())
+        return result
 
 
 # note: not a FormView because the (dynamic) image cannot be placed in form
-class RateMask(views.View):
+class RateView(abc.ABC, views.View):
     form_class = forms.RatingForm
     template_name = "rate_image.html"
 
-    def get(
-        self,
-        request: http.HttpRequest,
-        *args,
-        mask_id: int,
-        display_id: int,
-        img_id: int,
-        **kwargs,
-    ) -> http.HttpResponse:
-        form = self.form_class()
-        mask = shortcuts.get_object_or_404(models.Mask, pk=mask_id)
+    @property
+    @abc.abstractmethod
+    def step_view(self) -> type[StepView]:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def rating_model(self) -> type[models.BaseRating]:
+        raise NotImplementedError
+
+    async def get(self, request: http.HttpRequest) -> http.HttpResponse:
+        image_kwargs = await self.step_view().get_kwargs()
+        logging.info("rendering")
         return shortcuts.render(
-            request,
-            self.template_name,
-            {
-                "form": form,
-                "image": mask.get_image(
-                    img_id=img_id, display_mode=models.DisplayMode(display_id)
-                ),
-            },
+            request, self.template_name, {"form": self.form_class(), **image_kwargs}
         )
 
-    def post(
-        self, request: http.HttpRequest, *args, mask_id: int, img_id: int, **kwargs
-    ) -> http.HttpResponse | http.HttpResponsePermanentRedirect | None:
+    async def post(self, request: http.HttpRequest) -> http.HttpResponse:
         form = self.form_class(request.POST)
         if form.is_valid():
-            rating = form.save()
-            mask = shortcuts.get_object_or_404(models.Mask, pk=mask_id)
-            models.MaskRating.objects.create(rating=rating, img_id=img_id, mask=mask)
-            next_mask = self.get_next_mask(layout=mask.layout)
-            return _redirect_to_mask_randomly(next_mask)
+            logging.info("saving rating")
+
+            rating = sync.sync_to_async(form.save)()
+
+            await self.rating_model.from_request_rating(
+                rating=await rating, request=request
+            )
+            return http.HttpResponse("ok")
+
         raise http.Http404("Submitted invalid rating")
 
-    def get_next_mask(self, layout: models.Layout) -> models.Mask:
-        return _get_mask_with_fewest_ratings(layout=layout)
+
+class MaskView(StepView):
+    async def get_kwargs(self) -> dict:
+        logging.info("setting next")
+        display_id = models.DisplayMode.get_random()
+        if layout_cache.layout is None:
+            raise http.Http404("Layout not set?")
+        mask = await _get_mask_with_fewest_ratings(layout=layout_cache.layout)
+
+        img_id = mask.get_random_img_id()
+        image = mask.get_image(
+            img_id=img_id, display_mode=models.DisplayMode(display_id)
+        )
+
+        return {
+            "image": await image,
+            "get_dst": MASK_VIEW,
+            "post_dst": RATE_MASK_VIEW,
+            "extra": json.dumps(
+                {"mask_id": mask.pk, "img_id": img_id, "display_id": display_id}
+            ),
+        }
+
+
+class AnatView(StepView):
+    async def get_kwargs(self) -> dict:
+        logging.info("setting next")
+        if layout_cache.layout is None:
+            raise http.Http404("Layout not set?")
+        anat = await _get_anat_with_fewest_ratings(layout=layout_cache.layout)
+
+        img_id = models.SpatialNormalizationView.get_random()
+        image = anat.get_image(view=models.SpatialNormalizationView(img_id))
+
+        return {
+            "image": await image,
+            "get_dst": ANAT_VIEW,
+            "post_dst": RATE_ANAT_VIEW,
+            "extra": json.dumps({"file_id": anat.pk, "img_id": img_id}),
+        }
+
+
+class SurfaceLocalizationView(StepView):
+    async def get_kwargs(self) -> dict:
+        logging.info("setting next")
+        display_id = models.DisplayMode.get_random()
+        if layout_cache.layout is None:
+            raise http.Http404("Layout not set?")
+        surface = await _get_surface_localization_with_fewest_ratings(
+            layout=layout_cache.layout
+        )
+
+        img_id = surface.get_random_img_id()
+        image = surface.get_image(
+            img_id=img_id, display_mode=models.DisplayMode(display_id)
+        )
+
+        return {
+            "image": await image,
+            "get_dst": SURFACE_LOCALIZATION_VIEW,
+            "post_dst": RATE_SURFACE_LOCALIZATION_VIEW,
+            "extra": json.dumps(
+                {
+                    "surface_localization_id": surface.pk,
+                    "img_id": img_id,
+                    "display_id": display_id,
+                }
+            ),
+        }
+
+
+class FMapCoregistrationView(StepView):
+    async def get_kwargs(self) -> dict:
+        logging.info("setting next")
+        display_id = models.DisplayMode.get_random()
+        if layout_cache.layout is None:
+            raise http.Http404("Layout not set?")
+        fmap_coregistration = await _get_fmap_coregistration_with_fewest_ratings(
+            layout=layout_cache.layout
+        )
+
+        img_id = fmap_coregistration.get_random_img_id(axis=display_id)
+        image = fmap_coregistration.get_image(
+            img_id=img_id, display_mode=models.DisplayMode(display_id)
+        )
+
+        return {
+            "image": await image,
+            "get_dst": FMAP_COREGISTRATION_VIEW,
+            "post_dst": RATE_FMAP_COREGISTRATION_VIEW,
+            "extra": json.dumps(
+                {
+                    "fmap_coregistration_id": fmap_coregistration.pk,
+                    "img_id": img_id,
+                    "display_id": display_id,
+                }
+            ),
+        }
+
+
+class RateMask(RateView):
+    @property
+    def step_view(self) -> type[MaskView]:
+        return MaskView
+
+    @property
+    def rating_model(self) -> type[models.MaskRating]:
+        return models.MaskRating
+
+
+class RateAnat(RateView):
+    @property
+    def step_view(self) -> type[AnatView]:
+        return AnatView
+
+    @property
+    def rating_model(self) -> type[models.SpatialNormalizationRating]:
+        return models.SpatialNormalizationRating
+
+
+class RateSurfaceLocalization(RateView):
+    @property
+    def step_view(self) -> type[SurfaceLocalizationView]:
+        return SurfaceLocalizationView
+
+    @property
+    def rating_model(self) -> type[models.SurfaceLocalizationRating]:
+        return models.SurfaceLocalizationRating
+
+
+class RateFMapCoregistration(RateView):
+    @property
+    def step_view(self) -> type[FMapCoregistrationView]:
+        return FMapCoregistrationView
+
+    @property
+    def rating_model(self) -> type[models.FMapCoregistrationRating]:
+        return models.FMapCoregistrationRating
 
 
 class LayoutView(edit.FormView):
@@ -67,58 +233,113 @@ class LayoutView(edit.FormView):
 
     def get_success_url(self):
         layout = self.get_layout()
-        mask = _get_create_masks_from_layout(layout)
-        return urls.reverse(
-            RATE_MASK_VIEW, kwargs=_redirect_to_mask_randomly_kwargs(mask)
-        )
+        if self.form is None:
+            raise http.Http404("Trying to advance with invalid form")
+        match self.form.cleaned_data.get("step"):
+            case 0:
+                _create_masks_from_layout(layout)
+                return urls.reverse(f"{RATE_MASK_VIEW}")
+            case 1:
+                _create_anats_from_layout(layout)
+                return urls.reverse(f"{RATE_ANAT_VIEW}")
+            case 2:
+                _create_surface_localizations_from_layout(layout)
+                return urls.reverse(f"{RATE_SURFACE_LOCALIZATION_VIEW}")
+            case 3:
+                _create_fmap_coregistrations_from_layout(layout)
+                return urls.reverse(f"{RATE_FMAP_COREGISTRATION_VIEW}")
+            case _:
+                raise http.Http404("Unknown step")
 
     def form_valid(self, form: forms.IndexForm):
         # we only want the layout to be in the database once
         self.form = form
+        logging.info("here 1")
         try:
+            logging.info("checking if layout exists")
             self.get_layout()
         except models.Layout.DoesNotExist:
+            logging.info("layout does not exist")
             form.save()
+        layout_cache.layout = self.get_layout()
         return super().form_valid(form)
 
 
-def _get_mask_with_fewest_ratings(layout: models.Layout) -> models.Mask:
-    masks_in_layout = (
-        models.Mask.objects.filter(layout=layout)
+async def _get_surface_localization_with_fewest_ratings(
+    layout: models.Layout,
+) -> models.SurfaceLocalization:
+    masks_in_layout = await (
+        models.SurfaceLocalization.objects.filter(layout_id=layout.pk)
+        .select_related("surfacelocalizationrating")
+        .filter(~dm.Q(surfacelocalizationrating__rating=models.Ratings.NOT_INFORMATIVE))
+        .values("id")
+        .annotate(n_ratings=dm.Count("surfacelocalizationrating__rating"))
+        .order_by("n_ratings")
+        .afirst()
+    )
+    if masks_in_layout is None:
+        raise http.Http404("No masks in layout")
+
+    return await models.SurfaceLocalization.objects.aget(pk=masks_in_layout.get("id"))
+
+
+async def _get_mask_with_fewest_ratings(layout: models.Layout) -> models.Mask:
+    masks_in_layout = await (
+        models.Mask.objects.filter(layout_id=layout.pk)
         .select_related("maskrating")
+        .filter(~dm.Q(maskrating__rating=models.Ratings.NOT_INFORMATIVE))
         .values("id")
         .annotate(n_ratings=dm.Count("maskrating__rating"))
         .order_by("n_ratings")
+        .afirst()
     )
-    if len(masks_in_layout) == 0:
+    if masks_in_layout is None:
         raise http.Http404("No masks in layout")
 
-    return shortcuts.get_object_or_404(models.Mask, pk=masks_in_layout[0].get("id"))
+    return await models.Mask.objects.aget(pk=masks_in_layout.get("id"))
 
 
-def _redirect_to_mask_randomly_kwargs(mask: models.Mask) -> dict[str, typing.Any]:
-    return {
-        "mask_id": mask.pk,
-        "img_id": mask.get_random_img_id(),
-        "display_id": models.DisplayMode.get_random(),
-    }
+async def _get_anat_with_fewest_ratings(
+    layout: models.Layout,
+) -> models.SpatialNormalization:
+    files_in_layout = await (
+        models.SpatialNormalization.objects.filter(layout=layout)
+        .select_related("spatialnormalizationrating")
+        .filter(
+            ~dm.Q(spatialnormalizationrating__rating=models.Ratings.NOT_INFORMATIVE)
+        )
+        .values("id")
+        .annotate(n_ratings=dm.Count("spatialnormalizationrating__rating"))
+        .order_by("n_ratings")
+        .afirst()
+    )
+    if files_in_layout is None:
+        msg = f"No anats in layout {layout}"
+        raise http.Http404(msg)
+
+    return await models.SpatialNormalization.objects.aget(pk=files_in_layout.get("id"))
 
 
-def _redirect_to_mask_randomly(
-    mask: models.Mask,
-) -> http.HttpResponse | http.HttpResponsePermanentRedirect:
-    return shortcuts.redirect(RATE_MASK_VIEW, **_redirect_to_mask_randomly_kwargs(mask))
+async def _get_fmap_coregistration_with_fewest_ratings(
+    layout: models.Layout,
+) -> models.FMapCoregistration:
+    masks_in_layout = await (
+        models.FMapCoregistration.objects.filter(layout_id=layout.pk)
+        .select_related("fmapcoregistrationrating")
+        .filter(~dm.Q(fmapcoregistrationrating__rating=models.Ratings.NOT_INFORMATIVE))
+        .values("id")
+        .annotate(n_ratings=dm.Count("fmapcoregistrationrating__rating"))
+        .order_by("n_ratings")
+        .afirst()
+    )
+    if masks_in_layout is None:
+        raise http.Http404("No fmapcoregistrations in layout")
+
+    return await models.FMapCoregistration.objects.aget(pk=masks_in_layout.get("id"))
 
 
-def _get_create_masks_from_layout(layout: models.Layout) -> models.Mask:
-    logging.info("Reading dababase")
-    # bids_layout = ancpbids.BIDSLayout(layout.src)
-    # bids_layout = bids.BIDSLayout(database_path=layout.src, validate=False)
+def _create_masks_from_layout(layout: models.Layout):
     logging.info("Getting anatomical files")
-    # anats: list[str] = bids_layout.get(
-    #     suffix="T1w", extension=".nii.gz", return_type="files"
-    # )
-    # if Path(layout.src).is_dir():
     masks: list[str] = (
         pl.read_database_uri(
             r"SELECT path FROM files WHERE path LIKE '%anat%desc-brain_mask.nii.gz'",
@@ -127,72 +348,74 @@ def _get_create_masks_from_layout(layout: models.Layout) -> models.Mask:
         .to_series()
         .to_list()
     )
-    # else:
-    #     bids_layout = ancpbids.BIDSLayout(layout.src)
-    #     masks: list[str] = bids_layout.get(
-    #         suffix="mask", extension=".nii.gz", return_type="files"
-    #     )  # type: ignore
-    # masks_existing = bids_layout.get(
-    #     desc="brain", extension=".nii.gz", return_type="files"
-    # )
-    # masks_matched = [x.replace("preproc_T1w", "brain_mask") for x in anats]
-    mask_objects = []
-    # logging.info("Confirming masks exist")
-    # for mask, anat in zip(masks_matched, anats):
-    #     if mask not in masks_existing:
-    #         continue
-    #     m, _ = models.Mask.objects.get_or_create(layout=layout, file=anat, mask=mask)
-    #     mask_objects.append(m)
+
     anats = [x.replace("desc-brain_mask", "T1w") for x in masks]
     logging.info("Adding masks to db")
     for mask, anat in zip(masks, anats):
-        m, _ = models.Mask.objects.get_or_create(layout=layout, file=anat, mask=mask)
+        models.Mask.objects.get_or_create(
+            layout=layout_cache.layout, mask=mask, file=anat
+        )
 
-        mask_objects.append(m)
-    logging.info("Making first mask figure")
-
-    return random.choice(mask_objects)
-
-
-# def index(
-#     request: http.HttpRequest,
-# ) -> http.HttpResponse | http.HttpResponsePermanentRedirect:
-#     if request.method == "POST":
-#         form = forms.IndexForm(request.POST)
-#         if form.is_valid():
-#             src = form.cleaned_data["src"]
-#             layout, _ = models.Layout.objects.get_or_create(src=src)
-#             mask = _get_create_masks_from_layout(layout)
-#             return _redirect_to_mask_randomly(mask)
-#     else:
-#         form = forms.IndexForm()
-
-#     return shortcuts.render(request, "index.html", {"form": form})
+    logging.info("Finished adding masks")
 
 
-# def rate_mask(
-#     request: http.HttpRequest, mask_id: int, display_id: int, img_id: int
-# ) -> http.HttpResponse | http.HttpResponsePermanentRedirect:
-#     mask = shortcuts.get_object_or_404(models.Mask, pk=mask_id)
+def _create_anats_from_layout(layout: models.Layout):
+    logging.info("Getting anatomical files")
+    anats: list[str] = (
+        pl.read_database_uri(
+            r"SELECT path FROM files WHERE path LIKE '%anat%MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz'",
+            uri=f"sqlite://{layout.src}/layout_index.sqlite",
+        )
+        .to_series()
+        .to_list()
+    )
 
-#     if request.method == "POST":
-#         form = forms.RatingForm(request.POST)
-#         if form.is_valid():
-#             mask_rating = models.MaskRating.objects.create(
-#                 rating=form.cleaned_data["rating"], img_id=img_id, mask=mask
-#             )
-#             next_mask = mask_rating.mask.get_random_mask_from_layout(mask.layout)
-#             return _redirect_to_mask_randomly(next_mask)
-#     else:
-#         form = forms.RatingForm()
+    logging.info("Adding anats to db")
+    for anat in anats:
+        models.SpatialNormalization.objects.get_or_create(
+            layout=layout_cache.layout, file=anat
+        )
+    logging.info("Finished adding anats")
 
-#     return shortcuts.render(
-#         request,
-#         "rate_image.html",
-#         {
-#             "form": form,
-#             "image": mask.get_image(
-#                 img_id=img_id, display_mode=models.DisplayMode(display_id)
-#             ),
-#         },
-#     )
+
+def _create_surface_localizations_from_layout(layout: models.Layout):
+    mris = [s / "mri" for s in Path(layout.src).glob("sub*")]
+
+    logging.info("Adding ribbons to db")
+    for mri in mris:
+        models.SurfaceLocalization.objects.get_or_create(
+            layout=layout_cache.layout,
+            anat=mri / "brain.mgz",
+            ribbon=mri / "ribbon.mgz",
+        )
+    logging.info("Finished adding ribbons")
+
+
+def _create_fmap_coregistrations_from_layout(layout: models.Layout):
+    logging.info("Getting files")
+    masks: list[str] = (
+        pl.read_database_uri(
+            r"SELECT path FROM files WHERE path LIKE '%func%desc-brain_mask.nii.gz' AND path NOT LIKE '%MNI%'",
+            uri=f"sqlite://{layout.src}/layout_index.sqlite",
+        )
+        .to_series()
+        .to_list()
+    )
+    logging.info(masks)
+    anats: list[str] = []
+    for mask in masks:
+        fmaps = list(
+            (Path(mask).parent.parent / "fmap").glob("*desc-epi_fieldmap.nii.gz")
+        )
+        logging.info(fmaps)
+        if len(fmaps) == 0:
+            raise http.Http404("No fmaps found")
+        anats.append(str(fmaps[0]))
+
+    logging.info("Adding masks to db")
+    for mask, anat in zip(masks, anats):
+        models.FMapCoregistration.objects.get_or_create(
+            layout=layout_cache.layout, mask=mask, file=anat
+        )
+
+    logging.info("Finished adding masks")

@@ -14,4 +14,4 @@ class RatingForm(forms.ModelForm):
 class IndexForm(forms.ModelForm):
     class Meta:
         model = models.Layout
-        fields = ["src"]
+        fields = ["src", "step"]
