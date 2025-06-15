@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% load static %}
 
-
 {% block content %}
-<link rel="stylesheet" type="text/css" href="{% static 'ratings/style.css' %}">
+<div class="rating-interface">
+    <div class="rating-image">
+        {% include 'main.html' %}
+    </div>
 
-
-{% include 'main.html' %}
-
-{% include 'form.html' %}
-
-
+    <div class="rating-form">
+        {% include 'form.html' %}
+    </div>
+</div>
 {% endblock %}

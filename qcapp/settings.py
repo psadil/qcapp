@@ -25,9 +25,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = [".localhost", "127.0.0.1", "[::1]", "qcapp.pods.a2cps.tapis.io"]
+ALLOWED_HOSTS = [
+    ".localhost",
+    "127.0.0.1",
+    "[::1]",
+    "qcapp.pods.a2cps.tapis.io",
+    "0.0.0.0",
+]
 
 
 # Application definition
@@ -78,21 +84,22 @@ ASGI_APPLICATION = "qcapp.asgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.sqlite3",
-#         "NAME": os.environ.get("DB", BASE_DIR / "db.sqlite3"),
-#     }
-# }
-
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.oracle",
-        "NAME": "(description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=adb.us-ashburn-1.oraclecloud.com))(connect_data=(service_name=ge25c5f23fccde3_bmrwcomngcoypo92_high.adb.oraclecloud.com))(security=(ssl_server_dn_match=yes)))",
-        "USER": "ADMIN",
-        "PASSWORD": os.environ.get("ORACLE_PASSWORD"),
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": os.environ.get("DB", BASE_DIR / "db.sqlite3"),
+        # "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.oracle",
+#         "NAME": "(description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=adb.us-ashburn-1.oraclecloud.com))(connect_data=(service_name=ge25c5f23fccde3_u9171wao7q73yjmv_high.adb.oraclecloud.com))(security=(ssl_server_dn_match=yes)))",
+#         "USER": "ADMIN",
+#         "PASSWORD": os.environ.get("ORACLE_PASSWORD"),
+#     }
+# }
 
 
 # Password validation
@@ -159,6 +166,6 @@ LOGGING = {
 }
 
 
-# SECURE_SSL_REDIRECT = True
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
+# CSRF_TRUSTED_ORIGINS = ["https://qcapp.pods.a2cps.tapis.io"]

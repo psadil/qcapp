@@ -2,4 +2,4 @@ from django.contrib import admin
 
 from . import models
 
-admin.site.register([models.Mask, models.MaskRating, models.Rating, models.Layout])
+admin.site.register([models.Image, models.Rating, models.Session])

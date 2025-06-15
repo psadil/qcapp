@@ -1,4 +1,3 @@
-# forms.py
 from django import forms
 
 from . import models
@@ -13,5 +12,11 @@ class RatingForm(forms.ModelForm):
 
 class IndexForm(forms.ModelForm):
     class Meta:
-        model = models.Layout
-        fields = ["src", "step"]
+        model = models.Session
+        fields = ["step"]
+
+
+class ClickForm(forms.ModelForm):
+    class Meta:
+        model = models.ClickedCoordinate
+        fields = ["source_data_issue"]

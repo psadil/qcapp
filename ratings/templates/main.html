@@ -1,4 +1,7 @@
-<main hx-trigger="click from:#submit" hx-get="/ratings/{{get_dst}}/" hx-swap="outerHTML">
-    <img src="data:image/png;base64,{{image}}" class="center" id="image">
-    <input type="hidden" id="extra" name="extra" value="{{extra}}">
+{% load static %}
+
+<main id="main">
+    <div class="image-container">
+        <img src="{{image}}" class="img-fluid" id="image" alt="Quality Control Image">
+    </div>
 </main>
