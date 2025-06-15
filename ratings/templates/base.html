@@ -23,68 +23,68 @@
 </head>
 
 <body class="qcapp-body">
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <nav class="col-md-3 col-lg-2 d-md-block sidebar">
-                <div class="sidebar-sticky">
-                    <div class="sidebar-header">
-                        <h4 class="sidebar-title">
-                            <i class="fas fa-brain me-2"></i>
-                            QCAPP
-                        </h4>
-                        <p class="sidebar-subtitle">Quality Control</p>
-                    </div>
+    <!-- Bootstrap 5 Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{% url 'index' %}">
+                <i class="fas fa-brain me-2"></i>
+                QCAPP
+            </a>
 
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'index' %}">
-                                <i class="fas fa-home me-2"></i>
-                                Home
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'mask' %}">
-                                <i class="fas fa-mask me-2"></i>
-                                Mask Rating
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'spatial_normalization' %}">
-                                <i class="fas fa-arrows-alt me-2"></i>
-                                Spatial Normalization
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'surface_localization' %}">
-                                <i class="fas fa-map-marker-alt me-2"></i>
-                                Surface Localization
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'fmap_coregistration' %}">
-                                <i class="fas fa-sync-alt me-2"></i>
-                                FMap Coregistration
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'dtifit' %}">
-                                <i class="fas fa-chart-line me-2"></i>
-                                DTIFIT
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
 
-            <!-- Main content -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
-                <div class="content-wrapper">
-                    {% block content %}{% endblock %}
-                </div>
-            </main>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'index' %}">
+                            <i class="fas fa-home me-1"></i>
+                            Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'mask' %}">
+                            <i class="fas fa-mask me-1"></i>
+                            Mask Rating
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'spatial_normalization' %}">
+                            <i class="fas fa-arrows-alt me-1"></i>
+                            Spatial Normalization
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'surface_localization' %}">
+                            <i class="fas fa-map-marker-alt me-1"></i>
+                            Surface Localization
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'fmap_coregistration' %}">
+                            <i class="fas fa-sync-alt me-1"></i>
+                            FMap Coregistration
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'dtifit' %}">
+                            <i class="fas fa-chart-line me-1"></i>
+                            DTIFIT
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
-    </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="container-fluid py-4">
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
 
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

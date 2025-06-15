@@ -18,8 +18,6 @@
     --bg-primary: #ffffff;
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
-    --bg-sidebar: #1e293b;
-    --bg-sidebar-hover: #334155;
 
     /* Text Colors */
     --text-primary: #1e293b;
@@ -132,117 +130,49 @@ p {
 }
 
 /* ============================================================================
-   Sidebar Styles
+   Navbar Customization
    ============================================================================ */
 
-.sidebar {
-    background-color: var(--bg-sidebar);
-    min-height: 100vh;
-    box-shadow: var(--shadow-lg);
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 1000;
-    transition: all 0.3s ease;
-}
-
-.sidebar-sticky {
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    padding: var(--spacing-xl) 0;
-    overflow-y: auto;
-}
-
-.sidebar-header {
-    padding: 0 var(--spacing-lg) var(--spacing-xl);
-    border-bottom: 1px solid var(--bg-sidebar-hover);
-    margin-bottom: var(--spacing-lg);
-}
-
-.sidebar-title {
-    color: var(--text-light);
+.navbar-brand {
     font-size: var(--font-size-xl);
-    font-weight: 700;
-    margin: 0;
-    display: flex;
-    align-items: center;
 }
 
-.sidebar-subtitle {
-    color: var(--text-muted);
-    font-size: var(--font-size-sm);
-    margin: var(--spacing-xs) 0 0 0;
-}
-
-.sidebar .nav {
-    padding: 0 var(--spacing-md);
-}
-
-.sidebar .nav-item {
-    margin-bottom: var(--spacing-xs);
-}
-
-.sidebar .nav-link {
-    color: var(--text-muted);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-md);
-    transition: all 0.2s ease;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
+.navbar-nav .nav-link {
     font-weight: 500;
+    transition: all 0.2s ease;
 }
 
-.sidebar .nav-link:hover {
-    color: var(--text-light);
-    background-color: var(--bg-sidebar-hover);
-    transform: translateX(4px);
-}
-
-.sidebar .nav-link.active {
-    color: var(--text-light);
-    background-color: var(--primary-color);
-}
-
-.sidebar .nav-link i {
-    width: 20px;
-    text-align: center;
-    margin-right: var(--spacing-md);
+.navbar-nav .nav-link:hover {
+    transform: translateY(-1px);
 }
 
 /* ============================================================================
-   Main Content
+   Main Content Layout
    ============================================================================ */
-
-.main-content {
-    margin-left: 0;
-    padding: var(--spacing-xl);
-    min-height: 100vh;
-}
 
 .content-wrapper {
     max-width: 1200px;
     margin: 0 auto;
 }
 
-/* HTMX compatibility - main element */
 main#main {
-    width: 100%;
-    height: 100%;
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--spacing-xl);
+    margin-bottom: var(--spacing-xl);
 }
 
 /* ============================================================================
-   Cards and Containers
+   Card Styles
    ============================================================================ */
 
 .card {
-    background: var(--bg-primary);
+    background-color: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     transition: all 0.2s ease;
-    overflow: hidden;
 }
 
 .card:hover {
@@ -253,9 +183,8 @@ main#main {
 .card-header {
     background-color: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
-    padding: var(--spacing-lg);
-    font-weight: 600;
-    color: var(--text-primary);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .card-body {
@@ -265,19 +194,19 @@ main#main {
 .card-footer {
     background-color: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
-    padding: var(--spacing-lg);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 /* ============================================================================
-   Forms
+   Form Styles
    ============================================================================ */
 
 .form-container {
-    background: var(--bg-primary);
+    background-color: var(--bg-primary);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
-    padding: var(--spacing-2xl);
-    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-xl);
 }
 
 .form-group {
@@ -285,30 +214,25 @@ main#main {
 }
 
 .form-label {
-    display: block;
-    margin-bottom: var(--spacing-sm);
     font-weight: 600;
     color: var(--text-primary);
-    font-size: var(--font-size-sm);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-sm);
+    display: block;
 }
 
 .form-control {
-    width: 100%;
-    padding: var(--spacing-md) var(--spacing-lg);
     border: 2px solid var(--border-color);
     border-radius: var(--radius-md);
+    padding: var(--spacing-md);
     font-size: var(--font-size-base);
     transition: all 0.2s ease;
     background-color: var(--bg-primary);
-    color: var(--text-primary);
 }
 
 .form-control:focus {
-    outline: none;
     border-color: var(--border-focus);
     box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+    outline: none;
 }
 
 .form-control::placeholder {
@@ -316,28 +240,28 @@ main#main {
 }
 
 .form-select {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 0.5rem center;
-    background-repeat: no-repeat;
-    background-size: 1.5em 1.5em;
-    padding-right: 2.5rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    font-size: var(--font-size-base);
+    transition: all 0.2s ease;
+    background-color: var(--bg-primary);
 }
 
-/* Radio and Checkbox Styles */
 .form-check {
     display: flex;
     align-items: center;
-    margin-bottom: var(--spacing-md);
     padding: var(--spacing-md);
-    border: 1px solid var(--border-color);
+    border: 2px solid var(--border-color);
     border-radius: var(--radius-md);
     transition: all 0.2s ease;
     cursor: pointer;
+    margin-bottom: var(--spacing-sm);
 }
 
 .form-check:hover {
-    background-color: var(--bg-secondary);
     border-color: var(--border-focus);
+    background-color: var(--bg-secondary);
 }
 
 .form-check-input {
@@ -355,7 +279,7 @@ main#main {
 }
 
 /* ============================================================================
-   Buttons
+   Button Styles
    ============================================================================ */
 
 .btn {
@@ -365,8 +289,8 @@ main#main {
     padding: var(--spacing-md) var(--spacing-xl);
     border: none;
     border-radius: var(--radius-md);
-    font-size: var(--font-size-base);
     font-weight: 600;
+    font-size: var(--font-size-base);
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -396,8 +320,8 @@ main#main {
 
 .btn-primary:hover {
     background-color: var(--primary-hover);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
 }
 
 .btn-secondary {
@@ -407,8 +331,8 @@ main#main {
 
 .btn-secondary:hover {
     background-color: #475569;
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
 }
 
 .btn-success {
@@ -428,13 +352,13 @@ main#main {
 
 .btn-outline {
     background-color: transparent;
-    border: 2px solid var(--border-color);
-    color: var(--text-primary);
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
 }
 
 .btn-outline:hover {
-    background-color: var(--bg-secondary);
-    border-color: var(--border-focus);
+    background-color: var(--primary-color);
+    color: var(--text-light);
 }
 
 .btn-lg {
@@ -443,7 +367,7 @@ main#main {
 }
 
 .btn-sm {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-lg);
     font-size: var(--font-size-sm);
 }
 
@@ -646,25 +570,6 @@ canvas:hover {
    ============================================================================ */
 
 @media (max-width: 768px) {
-    .sidebar {
-        position: fixed;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100vh;
-        z-index: 1000;
-        transition: left 0.3s ease;
-    }
-
-    .sidebar.show {
-        left: 0;
-    }
-
-    .main-content {
-        margin-left: 0;
-        padding: var(--spacing-md);
-    }
-
     .rating-interface {
         grid-template-columns: 1fr;
         gap: var(--spacing-lg);
@@ -678,6 +583,7 @@ canvas:hover {
         grid-column: 1;
     }
 
+    /* Ensure main element works properly on mobile */
     .rating-image main#main {
         width: 100%;
         height: auto;
@@ -694,22 +600,22 @@ canvas:hover {
     }
 
     .content-wrapper {
-        padding: var(--spacing-sm);
+        padding: 0;
     }
 }
 
 @media (max-width: 576px) {
     .card-body {
-        padding: var(--spacing-md);
+        padding: var(--spacing-lg);
     }
 
     .form-container {
-        padding: var(--spacing-sm);
+        padding: var(--spacing-lg);
     }
 
     .btn {
-        padding: var(--spacing-sm) var(--spacing-md);
-        font-size: var(--font-size-sm);
+        width: 100%;
+        margin-bottom: var(--spacing-sm);
     }
 
     .canvas-wrapper {
@@ -876,21 +782,21 @@ canvas:hover {
 }
 
 /* ============================================================================
-   Legacy Support (for existing classes)
+   Additional Utilities
    ============================================================================ */
 
 .center {
-    display: block;
-    margin-left: auto;
-    margin-right: auto;
-    max-width: 100%;
-    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .x-marker {
     position: absolute;
-    color: var(--accent-color);
-    font-size: 20px;
-    pointer-events: none;
-    z-index: 10;
+    width: 20px;
+    height: 20px;
+    background-color: red;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
 }
