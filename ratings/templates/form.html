@@ -1,62 +1,64 @@
-<div class="form-container">
-    <form id="form" hx-post="{{request.path}}" hx-swap="outerHTML" hx-target="#main"
-        hx-on::after-request="if(event.detail.successful) this.reset()">
-        {% csrf_token %}
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <form id="form" hx-post="{{request.path}}" hx-swap="outerHTML" hx-target="#main"
+            hx-on::after-request="if(event.detail.successful) this.reset()">
+            {% csrf_token %}
 
-        <div class="rating-options">
-            {% for field in form %}
-            {% if field.name == 'rating' %}
-            <div class="form-group">
-                <label class="form-label">
-                    <i class="fas fa-star me-2"></i>
-                    Quality Rating
-                </label>
-                <div class="rating-options">
-                    {% for choice in field %}
-                    <div class="rating-option" onclick="selectRating(this, '{{ choice.choice_value }}')">
-                        {{ choice.tag }}
-                        <label class="rating-label" for="{{ choice.id_for_label }}">
-                            {{ choice.choice_label }}
-                        </label>
-                        {% if choice.choice_value == '0' %}
-                        <span class="status-badge status-pass ms-auto">Pass</span>
-                        {% elif choice.choice_value == '1' %}
-                        <span class="status-badge status-unsure ms-auto">Unsure</span>
-                        {% elif choice.choice_value == '2' %}
-                        <span class="status-badge status-fail ms-auto">Fail</span>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% elif field.name == 'source_data_issue' %}
-            <div class="form-group">
-                <div class="form-check">
-                    {{ field }}
-                    <label class="form-check-label" for="{{ field.id_for_label }}">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Source Data Issue
+            <div class="rating-options">
+                {% for field in form %}
+                {% if field.name == 'rating' %}
+                <div class="mb-4">
+                    <label class="form-label fw-bold">
+                        <i class="fas fa-star me-2"></i>
+                        Quality Rating
                     </label>
+                    <div class="rating-options">
+                        {% for choice in field %}
+                        <div class="rating-option" onclick="selectRating(this, '{{ choice.choice_value }}')">
+                            {{ choice.tag }}
+                            <label class="rating-label" for="{{ choice.id_for_label }}">
+                                {{ choice.choice_label }}
+                            </label>
+                            {% if choice.choice_value == '0' %}
+                            <span class="status-badge status-pass ms-auto">Pass</span>
+                            {% elif choice.choice_value == '1' %}
+                            <span class="status-badge status-unsure ms-auto">Unsure</span>
+                            {% elif choice.choice_value == '2' %}
+                            <span class="status-badge status-fail ms-auto">Fail</span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
+                {% elif field.name == 'source_data_issue' %}
+                <div class="mb-4">
+                    <div class="form-check">
+                        {{ field }}
+                        <label class="form-check-label" for="{{ field.id_for_label }}">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Source Data Issue
+                        </label>
+                    </div>
+                </div>
+                {% else %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold" for="{{ field.id_for_label }}">
+                        {{ field.label }}
+                    </label>
+                    {{ field }}
+                </div>
+                {% endif %}
+                {% endfor %}
             </div>
-            {% else %}
-            <div class="form-group">
-                <label class="form-label" for="{{ field.id_for_label }}">
-                    {{ field.label }}
-                </label>
-                {{ field }}
-            </div>
-            {% endif %}
-            {% endfor %}
-        </div>
 
-        <div class="d-grid gap-2">
-            <button type="submit" id="submit" class="btn btn-primary btn-lg">
-                <i class="fas fa-check me-2"></i>
-                Submit Rating
-            </button>
-        </div>
-    </form>
+            <div class="d-grid gap-2">
+                <button type="submit" id="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-check me-2"></i>
+                    Submit Rating
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script>

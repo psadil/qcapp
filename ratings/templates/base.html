@@ -7,8 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}QCAPP - Quality Control{% endblock %}</title>
 
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootswatch Themes -->
+    <link id="theme-css" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css"
+        rel="stylesheet">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" type="text/css" href="{% static 'ratings/style.css' %}">
@@ -75,6 +76,16 @@
                         </a>
                     </li>
                 </ul>
+
+                <!-- Theme Toggle -->
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <button id="theme-toggle" class="btn btn-outline-light btn-sm" type="button">
+                            <i id="theme-icon" class="fas fa-moon me-1"></i>
+                            <span id="theme-text">Dark Mode</span>
+                        </button>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
@@ -88,6 +99,77 @@
 
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Theme Switcher Script -->
+    <script>
+        // Theme configuration
+        const themes = {
+            light: {
+                name: 'flatly',
+                url: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css',
+                icon: 'fas fa-moon',
+                text: 'Dark Mode'
+            },
+            dark: {
+                name: 'darkly',
+                url: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/darkly/bootstrap.min.css',
+                icon: 'fas fa-sun',
+                text: 'Light Mode'
+            }
+        };
+
+        // Theme switcher functionality
+        class ThemeSwitcher {
+            constructor() {
+                this.currentTheme = localStorage.getItem('theme') || 'light';
+                this.themeLink = document.getElementById('theme-css');
+                this.themeToggle = document.getElementById('theme-toggle');
+                this.themeIcon = document.getElementById('theme-icon');
+                this.themeText = document.getElementById('theme-text');
+
+                this.init();
+            }
+
+            init() {
+                // Apply saved theme
+                this.applyTheme(this.currentTheme);
+
+                // Add event listener
+                this.themeToggle.addEventListener('click', () => {
+                    this.toggleTheme();
+                });
+            }
+
+            applyTheme(theme) {
+                const themeConfig = themes[theme];
+
+                // Update CSS link
+                this.themeLink.href = themeConfig.url;
+
+                // Update button
+                this.themeIcon.className = themeConfig.icon;
+                this.themeText.textContent = themeConfig.text;
+
+                // Update body class
+                document.body.className = `qcapp-body theme-${theme}`;
+
+                // Save to localStorage
+                localStorage.setItem('theme', theme);
+
+                this.currentTheme = theme;
+            }
+
+            toggleTheme() {
+                const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+                this.applyTheme(newTheme);
+            }
+        }
+
+        // Initialize theme switcher when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new ThemeSwitcher();
+        });
+    </script>
 </body>
 
 </html>
