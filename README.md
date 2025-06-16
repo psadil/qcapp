@@ -3,7 +3,7 @@
 ## Build
 
 ```shell
-$ docker build -t psadil/qcapp --provenance=true --platform=linux/amd64 --push .
+docker build -t psadil/qcapp --provenance=true --platform=linux/amd64 --push .
 ```
 
 ## Using the App
@@ -28,7 +28,8 @@ apptainer run \
   --env-file=.env \
   docker://psadil/qcapp
 ```
-If all goes well, you shoudl see this output
+
+If all goes well, you should see this output
 
 ```shell
 Watching for file changes with StatReloader
@@ -128,4 +129,3 @@ $ sqlite3 \
   }
 ]
 ```
-

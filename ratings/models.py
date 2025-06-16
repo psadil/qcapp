@@ -38,6 +38,7 @@ class Session(models.Model):
 
 class Image(models.Model):
     img = models.BinaryField()
+    compressed = models.BooleanField()
     slice = models.IntegerField(null=True)
     file1 = models.TextField(max_length=512)
     file2 = models.TextField(max_length=512, null=True)

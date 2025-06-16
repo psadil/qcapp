@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "connectorx>=0.4.2",
     "daphne>=4.1.2",
+    "dj-database-url>=3.0.0",
     "django>=5.1.6",
     "imageio>=2.37.0",
     "indexed-gzip>=1.9.4",
@@ -17,11 +18,13 @@ dependencies = [
     "pandas>=2.2.3",
     "pillow>=11.1.0",
     "polars>=1.23.0",
+    "psycopg2-binary>=2.9.10",
     "pyarrow>=19.0.1",
     "pybids>=0.18.1",
     "pydantic>=2.10.6",
     "scikit-image>=0.25.2",
     "twisted[http2,tls]>=24.11.0",
+    "whitenoise[brotli]>=6.9.0",
 ]
 
 [dependency-groups]
