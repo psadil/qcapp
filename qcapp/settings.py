@@ -14,8 +14,6 @@ import os
 import tempfile
 from pathlib import Path
 
-import dj_database_url
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -27,15 +25,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = [
-    ".localhost",
-    "127.0.0.1",
-    "[::1]",
-    "qcapp.pods.a2cps.tapis.io",
-    "0.0.0.0",
-]
+ALLOWED_HOSTS = [".localhost", "127.0.0.1", "[::1]", "0.0.0.0"]
 
 
 # Application definition
@@ -54,7 +46,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -92,16 +83,10 @@ if DEBUG:
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": os.environ.get("DB", BASE_DIR / "db.sqlite3"),
-            # "NAME": BASE_DIR / "db.sqlite3",
         }
     }
 else:
-    DATABASES = {
-        "default": dj_database_url.config(
-            default="postgresql://postgres:postgres@localhost:5432/mysite",
-            conn_max_age=600,
-        )
-    }
+    pass
 
 
 # Password validation
@@ -143,9 +128,6 @@ if DEBUG:
 else:
     STATIC_URL = "/static/"
     STATIC_ROOT = BASE_DIR / "static"
-    # Enable the WhiteNoise storage backend, which compresses static files to reduce disk use
-    # and renames the files with unique names for each version to support long-term caching
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
     # STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Default primary key field type
@@ -176,4 +158,3 @@ LOGGING = {
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    CSRF_TRUSTED_ORIGINS = ["https://qcapp.pods.a2cps.tapis.io"]

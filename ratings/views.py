@@ -1,6 +1,7 @@
 import abc
 import base64
 import logging
+import zlib
 
 from django import http, shortcuts, urls, views
 from django.db import models as dm
@@ -37,12 +38,16 @@ class RateView(abc.ABC, views.View):
         await request.session.aset("image_id", img.pk)  # type: ignore
         logging.info("rendering")
         logging.info(img.pk)
+        if img.compressed:
+            data = zlib.decompress(img.img)
+        else:
+            data = img.img
         return shortcuts.render(
             request,
             template,
             {
                 "form": self.form_class(),
-                "image": f"data:image/{self.img_type};base64,{base64.b64encode(img.img).decode()}",
+                "image": f"data:image/{self.img_type};base64,{base64.b64encode(data).decode()}",
             },
         )
 

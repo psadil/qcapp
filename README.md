@@ -1,72 +1,39 @@
 # QCAPP
 
-## Build
+## Running
+
+Note that the following assumes existence of a file `.env` with a value for the variable `DJANGO_SECRET_KEY`, and the variable `DB` set to `/tmp/db.sqlite3`.
 
 ```shell
-docker build -t psadil/qcapp --provenance=true --platform=linux/amd64 --push .
-```
-
-## Using the App
-
-Start interactive job
-
-```shell
-# on TACC login node
-idev -m 30 -p corralextra-dev
-```
-
-Note that the following assumes that you have a file `.env` with values for the variables `DJANGO_SECRET_KEY` and `DB`.
-
-```shell
-torate=/corral-secure/projects/A2CPS/shared/psadil/jobs/agg_with_skull/layout_masks
-db=/corral-secure/projects/A2CPS/shared/psadil/qclog/derivatives/db.sqlite3
-cd $(dirname $torate)
-apptainer run \
-  --bind ${torate} \
-  --bind ${db}:/tmp/db.sqlite3 \
-  --bind /corral-secure/projects/A2CPS \
+# assumes existence of a database db.sqlite3
+db=$PWD/db.sqlite3
+docker run \
+  --rm \  
+  -v ${db}:/tmp/db.sqlite3 \
   --env-file=.env \
-  docker://psadil/qcapp
+  -p 8000:8000 \
+  psadil/qcapp
 ```
 
-If all goes well, you should see this output
+If all goes well, you should see output like this
 
 ```shell
-Watching for file changes with StatReloader
+2025-06-16 21:47:44,039 | INFO     | Watching for file changes with StatReloader
 Performing system checks...
 
 System check identified no issues (0 silenced).
-February 25, 2025 - 23:39:13
-Django version 5.1.6, using settings 'qcapp.settings'
-Starting development server at http://127.0.0.1:8000/
+June 16, 2025 - 21:47:44
+Django version 5.2.3, using settings 'qcapp.settings'
+Starting ASGI/Daphne version 4.2.0 development server at http://0.0.0.0:8000/
 Quit the server with CONTROL-C.
+2025-06-16 21:47:44,076 | INFO     | HTTP/2 support enabled
+2025-06-16 21:47:44,076 | INFO     | Configuring endpoint tcp:port=8000:interface=0.0.0.0
+2025-06-16 21:47:44,076 | INFO     | Listening on TCP address 0.0.0.0:8000
 ```
 
-Now, back on your machine, create a new `ssh` connection to the relevant system, forwarding ports.
+You should now be able to navigate to the app on a browser on your local machine: `http://localhost:8000`.
 
-```shell
-ssh -L 8000:localhost:8000 ${USER}@login3.ls6.tacc.utexas.edu
-```
-
-Now that you're on the execution system, check which node is running the interactive job
-
-```shell
-$ squeue --me
-JOBID    PARTITION                             NAME     USER    STATE         SUBMIT_TIME       TIME TIME_LIMI NODE NODELIST(REASON)
-2236197     vm-small                         idv84398   psadil  RUNNING 2025-02-25T17:33:35       9:07     30:00    1 v320-003
-```
-
-`ssh` to that node, forwarding the ports again.
-
-```shell
-ssh -L 8000:localhost:8000 v320-003
-```
-
-If all goes well, you should now be able to navigate to the app on a browser on your local machine: `http://localhost:8000/ratings`.
-
-You'll see a section to input the BIDS `Src`, which you should will with the path you mounted the folder pointed to by `${torate}` in `apptainer run` call (e.g., above, we had `--bind ${torate}`, and so you'd write the value of `torate`, which is `/corral-secure/projects/A2CPS/shared/psadil/jobs/agg_with_skull/layout_masks`, in the `Src` box).
-
-The rating are saved as you go along, so you can exit at any time.
+Select a processing step, and go rate! The rating are saved as you go along, so you can exit at any time.
 
 ## Tips
 
@@ -129,3 +96,11 @@ $ sqlite3 \
   }
 ]
 ```
+
+## Build
+
+```shell
+docker build -t psadil/qcapp --provenance=true --push .
+```
+
+Note that we're not pushing this to dockerhub. Everything will be run locally.
