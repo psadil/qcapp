@@ -43,58 +43,72 @@ Select a processing step, and go rate! The rating are saved as you go along, so 
 
 ```shell
 $ sqlite3 db.sqlite3 .tables;
-auth_group                  django_content_type       
-auth_group_permissions      django_migrations         
-auth_permission             django_session            
-auth_user                   ratings_layout            
-auth_user_groups            ratings_mask              
-auth_user_user_permissions  ratings_maskrating        
-django_admin_log            ratings_rating   
+auth_group                  django_migrations         
+auth_group_permissions      django_session            
+auth_permission             ratings_clickedcoordinate 
+auth_user                   ratings_dynamicrating     
+auth_user_groups            ratings_image             
+auth_user_user_permissions  ratings_rating            
+django_admin_log            ratings_session           
+django_content_type
 ```
 
-#### Get All Ratings
+#### Look through some basic ratings
 
 ```shell
-$ sqlite3 -header db.sqlite3 "SELECT * FROM ratings_maskrating;"
-id|img_id|mask_id|rating_id
-1|188|1|1
-2|165|7|2
+$ sqlite3 -header db.sqlite3 "SELECT * FROM ratings_rating LIMIT 10;"
+id|rating|source_data_issue|created|session_id|image_id
+1|0|0|2025-04-05 22:28:04.244189|1|1
+2|0|0|2025-04-05 22:28:07.492339|1|2
+3|0|0|2025-04-05 22:28:20.364032|1|2542
+4|0|1|2025-04-05 22:28:25.293246|1|2543
+5|0|0|2025-04-05 22:28:28.736210|1|2544
+6|0|0|2025-04-08 15:09:23.584500|1|2548
+7|0|0|2025-04-08 15:09:27.203768|1|2549
+8|0|0|2025-04-08 15:09:30.206838|1|2550
+9|0|0|2025-04-08 15:09:33.375856|1|2551
+10|0|0|2025-04-08 15:09:38.637260|1|2552
 ```
 
-#### Get All Ratings and Metadata
+#### Look through location ratings
 
 ```shell
-$ sqlite3 -header db.sqlite3 "SELECT mask, user, rating, created FROM ratings_maskrating LEFT JOIN ratings_mask ON ratings_maskrating.mask_id = ratings_mask.id LEFT JOIN ratings_rating ON ratings_maskrating.rating_id = ratings_rating.id;"
-mask|user|rating|created
-/Users/psadil/git/a2cps/biomarkers/tests/data/fmriprep2/sub-travel2/ses-RU/anat/sub-travel2_ses-RU_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz|psadil|0|2025-02-25 17:06:32.356821
-/data/sub-travel2/ses-RU/anat/sub-travel2_ses-RU_space-MNI152NLin6Asym_desc-brain_mask.nii.gz|psadil|0|2025-02-25 23:46:44.217029
+$ ssqlite3 -header db.sqlite3 "SELECT * FROM ratings_clickedcoordinate LIMIT 10;"
+id|source_data_issue|created|x|image_id|session_id|y
+1|0|2025-04-08 21:14:14.250115|242.0|5|24|186.0
+2|0|2025-04-08 21:14:14.250183|325.0|5|24|175.0
+3|0|2025-04-08 21:14:14.250218|375.0|5|24|232.0
+4|0|2025-04-08 21:17:23.721516|369.0|5|25|173.0
+5|0|2025-04-08 21:17:23.721566|247.0|5|25|233.0
+6|0|2025-04-08 21:17:23.721596|213.0|5|25|204.0
+7|0|2025-04-08 21:18:02.419230|237.0|5|26|194.0
+8|0|2025-04-08 21:18:02.419273|303.0|5|26|186.0
+9|0|2025-04-08 21:18:02.419287|362.0|5|26|157.0
+10|0|2025-04-08 21:21:42.424830|230.0|5|30|172.0
 ```
 
-#### Get All Ratings and Metadata, with Extra Formatting
+#### Get Ratings and Metadata
 
 ```shell
-$ sqlite3 \
-  -header \
-  -json db.sqlite3 \
-  "SELECT mask, user, rating, created FROM ratings_maskrating LEFT JOIN ratings_mask ON ratings_maskrating.mask_id = ratings_mask.id LEFT JOIN ratings_rating ON ratings_maskrating.rating_id = ratings_rating.id;" \
-  | jq
-```
-
-```json
-[
-  {
-    "mask": "/Users/psadil/git/a2cps/biomarkers/tests/data/fmriprep2/sub-travel2/ses-RU/anat/sub-travel2_ses-RU_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz",
-    "user": "psadil",
-    "rating": 0,
-    "created": "2025-02-25 17:06:32.356821"
-  },
-  {
-    "mask": "/data/sub-travel2/ses-RU/anat/sub-travel2_ses-RU_space-MNI152NLin6Asym_desc-brain_mask.nii.gz",
-    "user": "psadil",
-    "rating": 0,
-    "created": "2025-02-25 23:46:44.217029"
-  }
-]
+$ sqlite3 -header db.sqlite3 "SELECT rating, file1 FROM ratings_rating LEFT JOIN ratings_image ON ratings_rating.image_id = ratings_image.id LIMIT 20;"
+rating|file1
+0|sub-10003_ses-V1_desc-brain_mask.nii.gz
+0|sub-10003_ses-V1_desc-brain_mask.nii.gz
+0|sub-travel2_ses-RU_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
+0|sub-travel2_ses-RU_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
+0|sub-travel2_ses-RU_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
+0|mri/brain.mgz
+0|mri/brain.mgz
+0|mri/brain.mgz
+0|mri/brain.mgz
+0|mri/brain.mgz
+0|mri/brain.mgz
+0|sub-travel2_ses-RU_acq-fmrib0_fmapid-auto00001_desc-epi_fieldmap.nii.gz
+0|sub-travel2_ses-RU_acq-fmrib0_fmapid-auto00001_desc-epi_fieldmap.nii.gz
+0|sub-10003_ses-V1_desc-brain_mask.nii.gz
+0|sub-10003_ses-V1_desc-brain_mask.nii.gz
+2|sub-travel2_ses-RU_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
+0|sub-travel2_ses-RU_acq-fmrib0_fmapid-auto00001_desc-epi_fieldmap.nii.gz
 ```
 
 ## Build
