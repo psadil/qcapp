@@ -1,4 +1,4 @@
-# QCAPP
+# QCAPP <a href="https://github.com/psadil/qcapp"><img src="qcapp/static/qcapp/qcapp.png" align="right" height="138" /></a>
 
 ## Running
 
