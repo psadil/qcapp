@@ -34,7 +34,7 @@ ALLOWED_HOSTS = [".localhost", "127.0.0.1", "[::1]", "0.0.0.0"]
 
 INSTALLED_APPS = [
     "daphne",
-    "ratings.apps.RatingsConfig",
+    "qcapp_ratings.apps.RatingsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
