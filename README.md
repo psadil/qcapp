@@ -73,7 +73,7 @@ id|rating|source_data_issue|created|session_id|image_id
 #### Look through location ratings
 
 ```shell
-$ ssqlite3 -header db.sqlite3 "SELECT * FROM ratings_clickedcoordinate LIMIT 10;"
+$ sqlite3 -header db.sqlite3 "SELECT * FROM ratings_clickedcoordinate LIMIT 10;"
 id|source_data_issue|created|x|image_id|session_id|y
 1|0|2025-04-08 21:14:14.250115|242.0|5|24|186.0
 2|0|2025-04-08 21:14:14.250183|325.0|5|24|175.0
