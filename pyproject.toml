@@ -17,3 +17,10 @@ dev = ["pywatchman>=3.0.0"]
 
 [tool.uv.sources]
 qcapp-ratings = { git = "https://github.com/psadil/qcapp-ratings.git" }
+
+[tool.codespell]
+# Ref: https://github.com/codespell-project/codespell#using-a-config-file
+skip = '.git*,*.lock'
+check-hidden = true
+# ignore-regex = ''
+# ignore-words-list = ''
