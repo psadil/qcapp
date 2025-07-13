@@ -16,7 +16,10 @@ dependencies = [
 manage = "qcapp.manage:main"
 
 [dependency-groups]
-dev = ["pywatchman>=3.0.0"]
+dev = [
+    "codespell>=2.4.1",
+    "pywatchman>=3.0.0",
+]
 
 [tool.uv.sources]
 django-qcapp-ratings = { path = "../django-qcapp-ratings", editable = true }
