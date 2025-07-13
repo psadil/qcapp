@@ -8,15 +8,18 @@ dependencies = [
     "connectorx>=0.4.2",
     "daphne>=4.1.2",
     "django>=5.1.6",
+    "django-qcapp-ratings",
     "twisted[http2,tls]>=24.11.0",
-    "qcapp-ratings",
 ]
+
+[project.scripts]
+manage = "qcapp.manage:main"
 
 [dependency-groups]
 dev = ["pywatchman>=3.0.0"]
 
 [tool.uv.sources]
-qcapp-ratings = { git = "https://github.com/psadil/qcapp-ratings.git" }
+django-qcapp-ratings = { path = "../django-qcapp-ratings", editable = true }
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
