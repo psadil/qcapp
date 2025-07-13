@@ -18,6 +18,7 @@ manage = "qcapp.manage:main"
 [dependency-groups]
 dev = [
     "codespell>=2.4.1",
+    "pre-commit>=4.2.0",
     "pywatchman>=3.0.0",
 ]
 
