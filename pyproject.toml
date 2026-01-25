@@ -6,20 +6,21 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "connectorx>=0.4.2",
-    "daphne>=4.1.2",
     "django>=5.1.6",
-    "django-qcapp-ratings",
-    "twisted[http2,tls]>=24.11.0",
+    "django-environ>=0.12.0,<0.13",
+    "django-qcapp-ratings @ git+https://github.com/psadil/django-qcapp-ratings.git@19b4233236a518e46fa9f03b38a44add221b7bf3",
 ]
 
 [project.scripts]
 manage = "qcapp.manage:main"
 
 [dependency-groups]
-dev = ["codespell>=2.4.1", "pre-commit>=4.2.0", "pywatchman>=3.0.0"]
+dev = ["codespell>=2.4.1", "pre-commit>=4.2.0", "pywatchman>=3.0.0,<4"]
+manage = [
+    "bids2table>=2.1.0,<3",
+    "neurorm @ git+https://github.com/psadil/neurorm.git",
+]
 
-[tool.uv.sources]
-django-qcapp-ratings = { path = "../django-qcapp-ratings", editable = true }
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
@@ -27,3 +28,79 @@ skip = '.git*,*.lock'
 check-hidden = true
 # ignore-regex = ''
 # ignore-words-list = ''
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.pypi-dependencies]
+qcapp = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+manage = ["manage"]
+
+[tool.pixi.tasks]
+memcached = { cmd = ["memcached", "-vd", "-s", "/tmp/memcached.sock"] }
+serve-rabbitmq = { cmd = ["rabbitmq-server", "-detached"] }
+start-rabbitmq-workers = { cmd = [
+    "celery",
+    "-A",
+    "qcapp",
+    "worker",
+    "--detach",
+], depends-on = [
+    "serve-rabbitmq",
+] }
+runserver = { cmd = [
+    "granian",
+    "qcapp.asgi:application",
+    "--interface",
+    "asginl",
+    "--host",
+    "0.0.0.0",
+    "--no-ws",
+    "--workers",
+    "2",
+    "--runtime-mode",
+    "st",
+    "--loop",
+    "uvloop",
+], depends-on = [
+    "start-rabbitmq-workers",
+    "memcached",
+] }
+
+[tool.pixi.dependencies]
+pyopenssl = ">=25.1.0,<26"
+service_identity = ">=24.2.0,<25"
+idna = ">=3.10,<4"
+priority = ">=1.3.0,<2"
+connectorx = ">=0.4.3,<0.5"
+celery = ">=5.5.3,<6"
+rabbitmq-server = ">=4.1.1,<5"
+psycopg = ">=3.2.9,<4"
+pymemcache = ">=4.0.0,<5"
+django-celery-results = ">=2.5.1,<3"
+granian = ">=2.6.0,<3"
+uvloop = ">=0.22.1,<0.23"
+
+[tool.pixi.feature.manage.dependencies]
+nilearn = "*"
+polars = "*"
+dipy = "*"
+imageio = "*"
+matplotlib = "*"
+nibabel = "*"
+numpy = "*"
+jupyter = ">=1.1.1,<2"
+postgresql = ">=17.5,<18"
+nitransforms = ">=24.1.3,<25"
+
+[tool.pixi.feature.dev.tasks]
+runserver = "manage runserver"
+
+[tool.pixi.feature.dev.dependencies]
+jupyter = ">=1.1.1,<2"
+psycopg = ">=3.2.9,<4"

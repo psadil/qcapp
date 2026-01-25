@@ -14,6 +14,23 @@ import os
 import tempfile
 from pathlib import Path
 
+
+def strtobool(val):
+    """Convert a string representation of truth to true (1) or false (0).
+
+    True values are case insensitive 'y', 'yes', 't', 'true', 'on', and '1'.
+    false values are case insensitive 'n', 'no', 'f', 'false', 'off', and '0'.
+    Raises ValueError if 'val' is anything else.
+    """
+    val = val.lower()
+    if val in ("y", "yes", "t", "true", "on", "1"):
+        return 1
+    elif val in ("n", "no", "f", "false", "off", "0"):
+        return 0
+    else:
+        raise ValueError("invalid truth value %r" % (val,))
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,15 +42,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = strtobool(os.environ.setdefault("DJANGO_DEBUG", "False"))
 
-ALLOWED_HOSTS = [".localhost", "127.0.0.1", "[::1]", "0.0.0.0"]
+ALLOWED_HOSTS = [
+    ".localhost",
+    "127.0.0.1",
+    "[::1]",
+    "0.0.0.0",
+    "qcapp.pods.a2cps.tapis.io",
+]
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    "daphne",
     "django_qcapp_ratings.apps.RatingsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -42,6 +64,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_typer",
+    "django_celery_results",
 ]
 
 MIDDLEWARE = [
@@ -79,15 +102,24 @@ ASGI_APPLICATION = "qcapp.asgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-if DEBUG:
+if strtobool(os.environ.get("DJANGO_DEPLOYED", "False")):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB", "postgres"),
+            "USER": os.environ.get("POSTGRES_USER", "postgres"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+            "HOST": "postgres.pods.a2cps.tapis.io",
+            "PORT": 443,  # default postgres port
+        }
+    }
+else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": os.environ.get("DB", BASE_DIR / "db.sqlite3"),
         }
     }
-else:
-    pass
 
 
 # Password validation
@@ -129,6 +161,8 @@ if DEBUG:
 else:
     STATIC_URL = "/static/"
     STATIC_ROOT = BASE_DIR / "static"
+    # STATIC_ROOT = "/var/www/django/static"
+    # MEDIA_ROOT = "/var/www/django/media"
     # STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Default primary key field type
@@ -156,6 +190,69 @@ LOGGING = {
     },
 }
 
-if not DEBUG:
+if strtobool(os.environ.get("DJANGO_DEPLOYED", "False")):
     SESSION_COOKIE_SECURE = True
+    SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
     CSRF_COOKIE_SECURE = True
+    CSRF_TRUSTED_ORIGINS = ["https://qcapp.pods.a2cps.tapis.io"]
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+
+# Celery Broker URL: Using RabbitMQ
+# The standard AMQP URL for RabbitMQ, using default guest user and password,
+# on localhost, default port 5672, and the default virtual host '/'.
+CELERY_BROKER_URL = "amqp://guest:guest@localhost:5672//"
+
+
+# Celery Result Backend: You can still use 'django-db' for convenience,
+# or even RabbitMQ's RPC backend if you don't need persistent results.
+# CELERY_RESULT_BACKEND = 'django-db' # Recommended for Django integration
+# Alternatively, to use RabbitMQ itself for temporary, non-persistent results (RPC backend):
+# CELERY_RESULT_BACKEND = "rpc://"
+# Or, if you still want a persistent external cache:
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379/1'
+# CELERY_WORKER_STATE_DB = None
+CELERY_RESULT_BACKEND = "django-cache"
+# CELERY_RESULT_BACKEND = "cache+memcached://127.0.0.1:11211/"
+CELERY_CACHE_BACKEND = "default"
+
+# Content type for tasks and results (JSON is still a good default)
+# CELERY_ACCEPT_CONTENT = ["json"]
+# CELERY_TASK_SERIALIZER = "json"
+# CELERY_RESULT_SERIALIZER = "json"
+
+# Ensure this matches your Django TIME_ZONE if USE_TZ is True
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Optional: Time limit for tasks
+# CELERY_TASK_SOFT_TIME_LIMIT = 300
+# CELERY_TASK_TIME_LIMIT = 360
+
+# Optional: Track 'STARTED' state
+# CELERY_TASK_TRACK_STARTED = True
+
+# Optional: Store errors even if results are otherwise ignored
+# CELERY_TASK_STORE_ERRORS_EVEN_IF_IGNORED = True
+
+# Optional: Configuration for django-celery-results
+# DJANGO_CELERY_RESULTS_TASK_ID_MAX_LENGTH = 191
+
+# Optional: Broker connection retry on startup (useful if broker starts after worker)
+# CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# CELERY_WORKER_POOL = "gevent"
+
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+        "LOCATION": "unix:/tmp/memcached.sock",
+    }
+}
+
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+#     }
+# }
