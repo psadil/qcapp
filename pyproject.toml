@@ -8,7 +8,7 @@ dependencies = [
     "connectorx>=0.4.2",
     "django>=5.1.6",
     "django-environ>=0.12.0,<0.13",
-    "django-qcapp-ratings @ git+https://github.com/psadil/django-qcapp-ratings.git@19b4233236a518e46fa9f03b38a44add221b7bf3",
+    "django-qcapp-ratings @ git+https://github.com/psadil/django-qcapp-ratings.git@20cbd32478ea430b5dffedbd4776a38a2cb10561",
 ]
 
 [project.scripts]
