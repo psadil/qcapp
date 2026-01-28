@@ -1,8 +1,9 @@
 .venv
 .vscode
-*sqlite3
-Wallet*
-.env
-layout*
-fmriprep*
-synthstrip*
+*sqlite3*
+.env*
+build
+.pixi
+*egg*
+*.DS_Store
+.git

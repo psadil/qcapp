@@ -114,7 +114,7 @@ rating|file1
 ## Build
 
 ```shell
-docker build -t psadil/qcapp --provenance=true --push .
+docker build -t psadil/qcapp:prod --provenance=true --platform=linux/amd64 .
 ```
 
 Note that we're not pushing this to dockerhub. Everything will be run locally.

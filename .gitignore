@@ -10,7 +10,8 @@ wheels/
 .venv
 
 *sqlite3
-.env
+.env*
 fmriprep
 synthstrip
-layout*
+layout*# pixi environments
+.pixi
