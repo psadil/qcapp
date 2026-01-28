@@ -112,7 +112,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zlib-1.3.1-hb9d3cd8_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
       - pypi: https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl
-      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=19b4233236a518e46fa9f03b38a44add221b7bf3#19b4233236a518e46fa9f03b38a44add221b7bf3
+      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=20cbd32478ea430b5dffedbd4776a38a2cb10561#20cbd32478ea430b5dffedbd4776a38a2cb10561
       - pypi: https://files.pythonhosted.org/packages/83/b3/0a3bec4ecbfee960f39b1842c2f91e4754251e0a6ed443db9fe3f666ba8f/django_environ-0.12.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/b3/30600696c2532fcf026259f2f4980b364cb6847518bb4b3365d42a4a3afe/django_ninja-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/1d/891bffc8d93000f91e06d598bee625d7a47df6fd7c7908b746070d5660d6/django_typer-3.5.1-py3-none-any.whl
@@ -220,7 +220,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zlib-1.3.1-h8359307_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
       - pypi: https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl
-      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=19b4233236a518e46fa9f03b38a44add221b7bf3#19b4233236a518e46fa9f03b38a44add221b7bf3
+      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=20cbd32478ea430b5dffedbd4776a38a2cb10561#20cbd32478ea430b5dffedbd4776a38a2cb10561
       - pypi: https://files.pythonhosted.org/packages/83/b3/0a3bec4ecbfee960f39b1842c2f91e4754251e0a6ed443db9fe3f666ba8f/django_environ-0.12.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/b3/30600696c2532fcf026259f2f4980b364cb6847518bb4b3365d42a4a3afe/django_ninja-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/1d/891bffc8d93000f91e06d598bee625d7a47df6fd7c7908b746070d5660d6/django_typer-3.5.1-py3-none-any.whl
@@ -452,7 +452,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/20/01/b394922252051e97aab231d416c86da3d8a6d781eeadcdca1082867de64e/codespell-2.4.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
-      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=19b4233236a518e46fa9f03b38a44add221b7bf3#19b4233236a518e46fa9f03b38a44add221b7bf3
+      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=20cbd32478ea430b5dffedbd4776a38a2cb10561#20cbd32478ea430b5dffedbd4776a38a2cb10561
       - pypi: https://files.pythonhosted.org/packages/83/b3/0a3bec4ecbfee960f39b1842c2f91e4754251e0a6ed443db9fe3f666ba8f/django_environ-0.12.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/b3/30600696c2532fcf026259f2f4980b364cb6847518bb4b3365d42a4a3afe/django_ninja-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/1d/891bffc8d93000f91e06d598bee625d7a47df6fd7c7908b746070d5660d6/django_typer-3.5.1-py3-none-any.whl
@@ -675,7 +675,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/20/01/b394922252051e97aab231d416c86da3d8a6d781eeadcdca1082867de64e/codespell-2.4.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
-      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=19b4233236a518e46fa9f03b38a44add221b7bf3#19b4233236a518e46fa9f03b38a44add221b7bf3
+      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=20cbd32478ea430b5dffedbd4776a38a2cb10561#20cbd32478ea430b5dffedbd4776a38a2cb10561
       - pypi: https://files.pythonhosted.org/packages/83/b3/0a3bec4ecbfee960f39b1842c2f91e4754251e0a6ed443db9fe3f666ba8f/django_environ-0.12.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/b3/30600696c2532fcf026259f2f4980b364cb6847518bb4b3365d42a4a3afe/django_ninja-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/1d/891bffc8d93000f91e06d598bee625d7a47df6fd7c7908b746070d5660d6/django_typer-3.5.1-py3-none-any.whl
@@ -1057,7 +1057,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/79/95/57e15bbd99041bd42d1c64463fe6a2bebd6f6888f4ab85c0894f084c9cec/bids2table-2.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/11/87/51b9442243a6b8ec4cf6694c2caf628d625e32119884fef96219d85bfb8a/bidsschematools-1.1.6-py3-none-any.whl
-      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=19b4233236a518e46fa9f03b38a44add221b7bf3#19b4233236a518e46fa9f03b38a44add221b7bf3
+      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=20cbd32478ea430b5dffedbd4776a38a2cb10561#20cbd32478ea430b5dffedbd4776a38a2cb10561
       - pypi: https://files.pythonhosted.org/packages/83/b3/0a3bec4ecbfee960f39b1842c2f91e4754251e0a6ed443db9fe3f666ba8f/django_environ-0.12.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/b3/30600696c2532fcf026259f2f4980b364cb6847518bb4b3365d42a4a3afe/django_ninja-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/1d/891bffc8d93000f91e06d598bee625d7a47df6fd7c7908b746070d5660d6/django_typer-3.5.1-py3-none-any.whl
@@ -1368,7 +1368,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/79/95/57e15bbd99041bd42d1c64463fe6a2bebd6f6888f4ab85c0894f084c9cec/bids2table-2.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/11/87/51b9442243a6b8ec4cf6694c2caf628d625e32119884fef96219d85bfb8a/bidsschematools-1.1.6-py3-none-any.whl
-      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=19b4233236a518e46fa9f03b38a44add221b7bf3#19b4233236a518e46fa9f03b38a44add221b7bf3
+      - pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=20cbd32478ea430b5dffedbd4776a38a2cb10561#20cbd32478ea430b5dffedbd4776a38a2cb10561
       - pypi: https://files.pythonhosted.org/packages/83/b3/0a3bec4ecbfee960f39b1842c2f91e4754251e0a6ed443db9fe3f666ba8f/django_environ-0.12.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/b3/30600696c2532fcf026259f2f4980b364cb6847518bb4b3365d42a4a3afe/django_ninja-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/1d/891bffc8d93000f91e06d598bee625d7a47df6fd7c7908b746070d5660d6/django_typer-3.5.1-py3-none-any.whl
@@ -2647,7 +2647,7 @@ packages:
   - ruff==0.5.7 ; extra == 'test'
   - django-stubs ; extra == 'test'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=19b4233236a518e46fa9f03b38a44add221b7bf3#19b4233236a518e46fa9f03b38a44add221b7bf3
+- pypi: git+https://github.com/psadil/django-qcapp-ratings.git?rev=20cbd32478ea430b5dffedbd4776a38a2cb10561#20cbd32478ea430b5dffedbd4776a38a2cb10561
   name: django-qcapp-ratings
   version: 0.1.0
   requires_dist:
@@ -7111,12 +7111,12 @@ packages:
 - pypi: ./
   name: qcapp
   version: 0.1.0
-  sha256: 522bfeaab5102f82d16e103c5b1d4e853789102d60ee012007f0c4b61400b8cd
+  sha256: 07e888bf4a9085376d532c7b4462644cebab82097cf5a48768aa29a7fa693c24
   requires_dist:
   - connectorx>=0.4.2
   - django>=5.1.6
   - django-environ>=0.12.0,<0.13
-  - django-qcapp-ratings @ git+https://github.com/psadil/django-qcapp-ratings.git@19b4233236a518e46fa9f03b38a44add221b7bf3
+  - django-qcapp-ratings @ git+https://github.com/psadil/django-qcapp-ratings.git@20cbd32478ea430b5dffedbd4776a38a2cb10561
   requires_python: '>=3.12'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/qhull-2020.2-h434a139_5.conda
   sha256: 776363493bad83308ba30bcb88c2552632581b143e8ee25b1982c8c743e73abc

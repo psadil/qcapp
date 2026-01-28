@@ -10,6 +10,8 @@ rabbitmq-server -detached
 
 celery -A qcapp worker --detach
 
+manage collectstatic --no-input
+
 # manage runserver --noreload 0.0.0.0:8000
 granian \
 	qcapp.asgi:application \
@@ -18,4 +20,6 @@ granian \
 	--workers 2 \
 	--runtime-mode st \
 	--loop uvloop \
+	--static-path-route /static \
+	--static-path-mount /app/static \
 	--no-ws

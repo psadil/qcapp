@@ -56,7 +56,7 @@ ALLOWED_HOSTS = [
 # Application definition
 
 INSTALLED_APPS = [
-    "django_qcapp_ratings.apps.RatingsConfig",
+    "django_qcapp_ratings",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -159,8 +159,11 @@ USE_TZ = True
 if DEBUG:
     STATIC_URL = "static/"
 else:
+    # granian: matches --static-path-route
     STATIC_URL = "/static/"
-    STATIC_ROOT = BASE_DIR / "static"
+
+    # granian: must be mounted with --static-path-mount
+    STATIC_ROOT = BASE_DIR.parent / "static"
     # STATIC_ROOT = "/var/www/django/static"
     # MEDIA_ROOT = "/var/www/django/media"
     # STATICFILES_DIRS = [BASE_DIR / "static"]
@@ -195,6 +198,8 @@ if strtobool(os.environ.get("DJANGO_DEPLOYED", "False")):
     SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
     CSRF_COOKIE_SECURE = True
     CSRF_TRUSTED_ORIGINS = ["https://qcapp.pods.a2cps.tapis.io"]
+    # https://rtl.chrisadams.me.uk/2024/05/til-keeping-your-hair-when-upgrading-django-3-2-behind-a-caddy-server/
+    # also needed because this is behind traefik
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
 
