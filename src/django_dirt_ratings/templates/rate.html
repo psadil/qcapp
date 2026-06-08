@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="rating-interface">
+    <div class="rating-image" hx-get="/rate_partial/" hx-trigger="load" id="main">
+        <i> Loading image... </i>
+    </div>
+
+    <div class="rating-form">
+        {% include 'form.html' %}
+    </div>
+</div>
+{% endblock %}

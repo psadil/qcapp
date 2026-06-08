@@ -1,24 +1,46 @@
 [project]
-name = "qcapp"
+name = "dirt"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "connectorx>=0.4.2",
-    "django>=5.1.6",
+    "django>=6.0.0",
     "django-environ>=0.12.0,<0.13",
-    "django-qcapp-ratings @ git+https://github.com/psadil/django-qcapp-ratings.git@20cbd32478ea430b5dffedbd4776a38a2cb10561",
+    "celery>=5.5.0",
+    "django-typer>=3.7.0",
+    "django-ninja>=1.2.0",
+    "orjson>=3.11.1",
+    "psycopg>=3.2.9,<4",
+    "django-celery-results>=2.5.1,<3",
 ]
 
 [project.scripts]
-manage = "qcapp.manage:main"
+manage = "dirt.manage:main"
 
 [dependency-groups]
-dev = ["codespell>=2.4.1", "pre-commit>=4.2.0", "pywatchman>=3.0.0,<4"]
+dev = [
+    "codespell>=2.4.1",
+    "prek",
+    "pywatchman>=3.0.0,<4",
+    "celery-types>=0.23.0",
+    "django-stubs>=5.2.2",
+    "jupyter>=1.1.1",
+]
 manage = [
     "bids2table>=2.1.0,<3",
+    "django-stubs>=5.2.2",
     "neurorm @ git+https://github.com/psadil/neurorm.git",
+    "dipy>=1.11.0",
+    "imageio>=2.37.0",
+    "matplotlib>=3.10.3",
+    "nibabel>=5.3.2",
+    "nilearn>=0.12.0",
+    "nitransforms>=25.0.0",
+    "numpy>=2.3.1",
+    "polars>=1.31.0",
+
 ]
 
 
@@ -34,12 +56,12 @@ channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.pypi-dependencies]
-qcapp = { path = ".", editable = true }
+dirt = { path = ".", editable = true }
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
-manage = ["manage"]
+manage = { features = ["manage"] }
 
 [tool.pixi.tasks]
 memcached = { cmd = ["memcached", "-vd", "-s", "/tmp/memcached.sock"] }
@@ -47,7 +69,7 @@ serve-rabbitmq = { cmd = ["rabbitmq-server", "-detached"] }
 start-rabbitmq-workers = { cmd = [
     "celery",
     "-A",
-    "qcapp",
+    "dirt",
     "worker",
     "--detach",
 ], depends-on = [
@@ -55,7 +77,7 @@ start-rabbitmq-workers = { cmd = [
 ] }
 runserver = { cmd = [
     "granian",
-    "qcapp.asgi:application",
+    "dirt.asgi:application",
     "--interface",
     "asginl",
     "--host",
@@ -69,38 +91,21 @@ runserver = { cmd = [
     "uvloop",
 ], depends-on = [
     "start-rabbitmq-workers",
-    "memcached",
 ] }
 
 [tool.pixi.dependencies]
-pyopenssl = ">=25.1.0,<26"
-service_identity = ">=24.2.0,<25"
-idna = ">=3.10,<4"
-priority = ">=1.3.0,<2"
-connectorx = ">=0.4.3,<0.5"
-celery = ">=5.5.3,<6"
 rabbitmq-server = ">=4.1.1,<5"
-psycopg = ">=3.2.9,<4"
 pymemcache = ">=4.0.0,<5"
-django-celery-results = ">=2.5.1,<3"
 granian = ">=2.6.0,<3"
 uvloop = ">=0.22.1,<0.23"
 
-[tool.pixi.feature.manage.dependencies]
-nilearn = "*"
-polars = "*"
-dipy = "*"
-imageio = "*"
-matplotlib = "*"
-nibabel = "*"
-numpy = "*"
-jupyter = ">=1.1.1,<2"
-postgresql = ">=17.5,<18"
-nitransforms = ">=24.1.3,<25"
-
 [tool.pixi.feature.dev.tasks]
-runserver = "manage runserver"
 
 [tool.pixi.feature.dev.dependencies]
 jupyter = ">=1.1.1,<2"
-psycopg = ">=3.2.9,<4"
+
+[tool.pixi.feature.manage.dependencies]
+postgresql = ">=18.2,<19"
+
+[tool.pixi.feature.manage.tasks]
+devsetup = "./tools/devsetup.sh"

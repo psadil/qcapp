@@ -1,0 +1,150 @@
+/* ============================================================================
+   QCAPP - Quality Control Application Styles
+   Using Bootswatch themes with minimal custom CSS
+   ============================================================================ */
+
+/* ============================================================================
+   Theme Variables
+   ============================================================================ */
+
+:root {
+    /* Light theme colors (Flatly) */
+    --light-bg: #ffffff;
+    --light-border: #e2e8f0;
+    --light-text: #2c3e50;
+    --light-text-muted: #7f8c8d;
+    --light-hover: #f8f9fa;
+    --light-primary: #3498db;
+    --light-success: #27ae60;
+    --light-danger: #e74c3c;
+    --light-warning: #f39c12;
+}
+
+/* Dark theme colors (Darkly) */
+.theme-dark {
+    --light-bg: #303030;
+    --light-border: #444444;
+    --light-text: #ffffff;
+    --light-text-muted: #b0b0b0;
+    --light-hover: #404040;
+    --light-primary: #375a7f;
+    --light-success: #00bc8c;
+    --light-danger: #e74c3c;
+    --light-warning: #f39c12;
+}
+
+/* ============================================================================
+   Responsive Images and Canvas
+   ============================================================================ */
+
+/* Ensure images are responsive */
+img.img-fluid {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Canvas wrapper for responsive behavior */
+.canvas-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: var(--light-bg);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    overflow: hidden;
+}
+
+/* Responsive canvas */
+.responsive-canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    border: 2px solid var(--light-border);
+    border-radius: 0.5rem;
+    cursor: crosshair;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    max-width: 100%;
+}
+
+.responsive-canvas:hover {
+    border-color: var(--light-primary);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+
+/* ============================================================================
+   Rating Interface (Custom - Two-column layout)
+   ============================================================================ */
+
+.rating-interface {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.rating-image {
+    grid-column: 1;
+}
+
+.rating-form {
+    grid-column: 2;
+}
+
+
+/* ============================================================================
+   Theme Toggle Button
+   ============================================================================ */
+
+#theme-toggle {
+    transition: all 0.2s ease;
+}
+
+#theme-toggle:hover {
+    transform: scale(1.05);
+}
+
+/* ============================================================================
+   Mobile Responsive (Custom - Layout adjustments)
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .rating-interface {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .rating-image {
+        grid-column: 1;
+    }
+
+    .rating-form {
+        grid-column: 1;
+    }
+
+    .canvas-wrapper {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    .responsive-canvas {
+        width: 100%;
+        height: auto;
+    }
+}
+
+@media (max-width: 576px) {
+    .canvas-wrapper {
+        max-width: 100%;
+        padding: 0;
+    }
+
+    .responsive-canvas {
+        border-width: 1px;
+    }
+
+    .rating-option {
+        padding: 1rem;
+    }
+}

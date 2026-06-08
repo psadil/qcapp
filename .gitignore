@@ -220,3 +220,7 @@ fmriprep
 synthstrip
 layout*# pixi environments
 .pixi
+data/*
+
+
+**/.DS_Store

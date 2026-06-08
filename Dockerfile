@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1-labs
 
-ARG PIXI_VERSION=0.62.2
+ARG PIXI_VERSION=0.70.1
 ARG BASE_IMAGE=ubuntu:24.04
 ARG ENVIRONMENT=default
 ARG DEBIAN_FRONTEND=noninteractive
@@ -23,7 +23,7 @@ RUN curl -Ls \
 RUN /pixi --version
 
 WORKDIR /app
-COPY --parents ./pixi.lock ./pyproject.toml ./src/qcapp /app/
+COPY --parents ./pixi.lock ./pyproject.toml ./src/dirt ./src/django_dirt_ratings /app/
 RUN /pixi install -e ${ENVIRONMENT} --locked 
 
 FROM $BASE_IMAGE

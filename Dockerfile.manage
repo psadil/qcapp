@@ -21,7 +21,7 @@ RUN curl -Ls \
 RUN /pixi --version
 
 WORKDIR /app
-COPY --parents ./pixi.lock ./pyproject.toml ./src/qcapp /app/
+COPY --parents ./pixi.lock ./pyproject.toml ./src/dirt /app/
 RUN /pixi install -e ${ENVIRONMENT} --locked 
 
 FROM $BASE_IMAGE

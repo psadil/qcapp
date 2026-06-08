@@ -1,5 +1,5 @@
 """
-URL configuration for qcapp project.
+URL configuration for dirt project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.1/topics/http/urls/
@@ -19,6 +19,6 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
-    path("", include("django_qcapp_ratings.urls")),
+    path("", include("django_dirt_ratings.urls")),
     path("admin/", admin.site.urls),
 ]

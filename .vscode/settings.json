@@ -8,5 +8,6 @@
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
     "ruff.nativeServer": "on",
-    "python.analysis.typeCheckingMode": "standard"
+    "python.analysis.typeCheckingMode": "standard",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

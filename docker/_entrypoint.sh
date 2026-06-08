@@ -8,13 +8,13 @@ memcached -vd -s /tmp/memcached.sock
 
 rabbitmq-server -detached
 
-celery -A qcapp worker --detach
+celery -A dirt worker --detach
 
 manage collectstatic --no-input
 
 # manage runserver --noreload 0.0.0.0:8000
 granian \
-	qcapp.asgi:application \
+	dirt.asgi:application \
 	--interface asginl \
 	--host 0.0.0.0 \
 	--workers 2 \

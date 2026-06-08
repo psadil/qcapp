@@ -1,4 +1,4 @@
-# QCAPP <a href="https://github.com/psadil/qcapp"><img src="qcapp/static/qcapp/qcapp.png" align="right" height="138" /></a>
+# DIRT 
 
 ## Running
 
@@ -8,11 +8,12 @@ Note that the following assumes existence of a file `.env` with a value for the 
 # assumes existence of a database db.sqlite3
 db=$PWD/db.sqlite3
 docker run \
-  --rm \  
+  --rm \
+  -it \
   -v ${db}:/tmp/db.sqlite3 \
   --env-file=.env \
   -p 8000:8000 \
-  psadil/qcapp
+  psadil/dirt
 ```
 
 If all goes well, you should see output like this
@@ -23,7 +24,7 @@ Performing system checks...
 
 System check identified no issues (0 silenced).
 June 16, 2025 - 21:47:44
-Django version 5.2.3, using settings 'qcapp.settings'
+Django version 5.2.3, using settings 'dirt.settings'
 Starting ASGI/Daphne version 4.2.0 development server at http://0.0.0.0:8000/
 Quit the server with CONTROL-C.
 2025-06-16 21:47:44,076 | INFO     | HTTP/2 support enabled
@@ -35,7 +36,26 @@ You should now be able to navigate to the app on a browser on your local machine
 
 Select a processing step, and go rate! The rating are saved as you go along, so you can exit at any time.
 
+## Development Setup
+
+For local testing and development, you can use the provided setup script to automatically download a small sample dataset (from OpenNeuro `ds000228`), create a database, and generate quality control images.
+
+1. Run the setup script from the project root:
+   ```shell
+   pixi run devsetup
+   ```
+2. Build the Docker image:
+   ```shell
+   docker buildx build -t psadil/dirt --platform=linux/amd64 --provenance=true .
+   ```
+3. Run the development server via Docker (using your newly populated local database):
+   ```shell
+   docker run --rm -it -v $PWD/db.sqlite3:/tmp/db.sqlite3 --env-file=.env.docker -p 8000:8000 psadil/dirt
+   ```
+4. Navigate to `http://localhost:8000`. You can log into the admin interface (`/admin`) using the username `admin` and password `admin`.
+
 ## Tips
+
 
 ### sqlite3
 
@@ -114,7 +134,7 @@ rating|file1
 ## Build
 
 ```shell
-docker build -t psadil/qcapp:prod --provenance=true --platform=linux/amd64 .
+docker build -t psadil/dirt:prod --provenance=true --platform=linux/amd64 .
 ```
 
 Note that we're not pushing this to dockerhub. Everything will be run locally.
