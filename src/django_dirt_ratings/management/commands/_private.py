@@ -276,40 +276,51 @@ def get_fmap_coregistration(
 
     with io.BytesIO() as frame0:
         with io.BytesIO() as frame1:
+            # Create an empty background image to enforce identical, uncropped FOV for both frames
+            bg_nii = nb.Nifti1Image(np.zeros(file2_nii.shape), file2_nii.affine, header=file2_nii.header)
+
             # https://github.com/nipreps/nireports/blob/e7beccc14670e820c646306eb1d7dd3d56591450/nireports/reportlets/utils.py#L62-L70
-            p: displays.OrthoSlicer = plotting.plot_anat(
-                file_nii,
+            p0: displays.OrthoSlicer = plotting.plot_anat(
+                bg_nii,
                 cut_coords=[cuts[cut]],
                 display_mode=display_mode.name.lower(),
                 figure=f0,
-                vmax=np.quantile(file_nii.get_fdata(), 0.998),
-                vmin=np.quantile(file_nii.get_fdata(), 0.15),
                 colorbar=False,
                 title="func/boldref",
             )
+            p0.add_overlay(
+                file_nii,
+                cmap="gray",
+                vmax=np.quantile(file_nii.get_fdata(), 0.998),
+                vmin=np.quantile(file_nii.get_fdata(), 0.15),
+            )
             try:
-                p.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
+                p0.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
             except ValueError:
                 pass
-            _savefig(p, frame0)
+            _savefig(p0, frame0)
             plt.close(f0)
 
             # https://github.com/nipreps/nireports/blob/e7beccc14670e820c646306eb1d7dd3d56591450/nireports/reportlets/utils.py#L62-L70
-            p: displays.OrthoSlicer = plotting.plot_anat(
-                file2_nii,
+            p1: displays.OrthoSlicer = plotting.plot_anat(
+                bg_nii,
                 cut_coords=[cuts[cut]],
                 display_mode=display_mode.name.lower(),
                 figure=f1,
-                vmax=np.quantile(file2_nii.get_fdata(), 0.998),
-                vmin=np.quantile(file2_nii.get_fdata(), 0.15),
                 colorbar=False,
                 title="fmap/epi",
             )
+            p1.add_overlay(
+                file2_nii,
+                cmap="gray",
+                vmax=np.quantile(file2_nii.get_fdata(), 0.998),
+                vmin=np.quantile(file2_nii.get_fdata(), 0.15),
+            )
             try:
-                p.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
+                p1.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
             except ValueError:
                 pass
-            _savefig(p, frame1)
+            _savefig(p1, frame1)
             plt.close(f1)
 
             frames = np.stack(

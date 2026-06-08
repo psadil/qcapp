@@ -5,19 +5,29 @@ set -euo pipefail
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$PROJECT_ROOT"
 
-DATA_DIR="data/ds000228-fmriprep"
-INDEX_FILE="data/ds000228_index.parquet"
+DATA_DIR="data/ds007070-fmriprep"
+INDEX_FILE="data/ds007070_index.parquet"
 
-echo "Downloading sample data from OpenNeuro..."
+echo "Downloading sample data from OpenNeuro (ds007070)..."
 mkdir -p "$DATA_DIR"
 
-# Download anat files for two subjects (we need the .json sidecars for b2t2 index to recognize it properly as BIDS/derivatives)
-aws s3 sync --no-sign-request s3://openneuro-derivatives/fmriprep/ds000228-fmriprep/sub-pixar001/anat/ "$DATA_DIR/sub-pixar001/anat/" --exclude "*" --include "*desc-brain_mask.nii.gz" --include "*desc-preproc_T1w.nii.gz" --include "*.json"
-aws s3 sync --no-sign-request s3://openneuro-derivatives/fmriprep/ds000228-fmriprep/sub-pixar002/anat/ "$DATA_DIR/sub-pixar002/anat/" --exclude "*" --include "*desc-brain_mask.nii.gz" --include "*desc-preproc_T1w.nii.gz" --include "*.json"
+for SUB in "sub-0001" "sub-0002"; do
+    # anat files
+    aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/$SUB/ses-01/anat/" "$DATA_DIR/$SUB/ses-01/anat/" --exclude "*" --include "*desc-brain_mask.nii.gz" --include "*desc-preproc_T1w.nii.gz" --include "*.json"
+    
+    # func files needed for fmap coregistration
+    aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/$SUB/ses-01/func/" "$DATA_DIR/$SUB/ses-01/func/" --exclude "*" --include "*desc-brain_mask.nii.gz" --include "*desc-coreg_boldref.nii.gz" --include "*from-boldref_to-*_mode-image_xfm.txt" --include "*.json"
+    
+    # fmap files
+    aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/$SUB/ses-01/fmap/" "$DATA_DIR/$SUB/ses-01/fmap/" --exclude "*" --include "*desc-epi_fieldmap.nii.gz" --include "*desc-preproc_fieldmap.nii.gz" --include "*.json"
+    
+    # freesurfer files
+    aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/sourcedata/freesurfer/$SUB/mri/" "$DATA_DIR/sourcedata/freesurfer/$SUB/mri/" --exclude "*" --include "brain.mgz" --include "ribbon.mgz"
+done
 
 # Add a dataset_description.json so b2t2 recognizes it as a valid derivative dataset
 echo '{
-    "Name": "ds000228-fmriprep-subset",
+    "Name": "ds007070-fmriprep-subset",
     "BIDSVersion": "1.4.0",
     "DatasetType": "derivative",
     "GeneratedBy": [{"Name": "fmriprep"}]
@@ -48,6 +58,12 @@ pixi run -e manage manage add_masks "$INDEX_FILE"
 
 echo "  -> Adding spatial normalization..."
 pixi run -e manage manage add_spatial_normalization "$INDEX_FILE" --res 2
+
+echo "  -> Adding surface localization..."
+pixi run -e manage manage add_surface_localization "$DATA_DIR/sourcedata/freesurfer"
+
+echo "  -> Adding fmap coregistration..."
+pixi run -e manage manage add_fmap_coregistration "$INDEX_FILE"
 
 echo ""
 echo "Setup complete! You can now run the development server using Docker:"

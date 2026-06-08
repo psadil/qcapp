@@ -52,6 +52,9 @@ class Command(TyperCommand):
             file2 = root / path.replace("preproc", "epi")
             file2_nii = nb.nifti1.Nifti1Image.load(file2)
             intendedfor: list[str] = sidecar.get("IntendedFor")  # type:ignore
+            if not intendedfor:
+                logging.info("No IntendedFor field found. Skipping.")
+                continue
             for i in intendedfor:
                 logging.info(f"{i=}")
                 mask = (

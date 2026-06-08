@@ -6,7 +6,7 @@ from pathlib import Path
 import typer
 from django_typer.completers import path
 from django_typer.management import TyperCommand
-from neurorm import freesurfer
+
 
 from django_dirt_ratings import models
 
@@ -42,12 +42,16 @@ class Command(TyperCommand):
             if exclude and sub.name in exclude:
                 logging.info(f"--exclude specified and {sub.name} in list. Excluding")
                 continue
-            fs = freesurfer.FreeSurferSubject.from_subjects_dir(
-                subjects_dir=subjects_dir, subject_id=sub.name
-            )
-            brain_nii = _private.mgz_to_nifti(fs.mri.brain)
-            ribbon_nii = _private.mgz_to_nifti(fs.mri.ribbon)
-            file1 = str(fs.mri.ribbon.relative_to(subjects_dir))
+            brain_mgz = sub / "mri" / "brain.mgz"
+            ribbon_mgz = sub / "mri" / "ribbon.mgz"
+            
+            if not brain_mgz.exists() or not ribbon_mgz.exists():
+                logging.info(f"Missing brain.mgz or ribbon.mgz for {sub.name}. Skipping.")
+                continue
+
+            brain_nii = _private.mgz_to_nifti(brain_mgz)
+            ribbon_nii = _private.mgz_to_nifti(ribbon_mgz)
+            file1 = str(ribbon_mgz.relative_to(subjects_dir))
             logging.info(f"{file1=}")
             for display_mode in models.DisplayMode.choices:
                 logging.info(f"{display_mode=}")
@@ -75,6 +79,6 @@ class Command(TyperCommand):
                             display=display_mode[0],
                             step=models.Step.SURFACE_LOCALIZATION,
                             file1=file1,
-                            file2=str(fs.mri.brain.relative_to(subjects_dir)),
+                            file2=str(brain_mgz.relative_to(subjects_dir)),
                         )
                     )
