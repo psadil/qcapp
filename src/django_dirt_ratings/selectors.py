@@ -73,9 +73,7 @@ async def get_img_id(request: http.HttpRequest) -> ImageResult:
 
 
 def _fewest_ratings_qs(
-    step: models.Step,
-    key: str = "source_data_issue",
-    exclude_pk: int | None = None,
+    step: models.Step, key: str = "source_data_issue", exclude_pk: int | None = None
 ) -> dm.QuerySet:
     """Build a queryset that orders images by ascending rating count."""
     related = get_related_from_step(step)
@@ -91,21 +89,10 @@ def _fewest_ratings_qs(
 
 
 async def get_image_with_fewest_ratings(
-    step: models.Step, key: str = "source_data_issue"
+    step: models.Step, key: str = "source_data_issue", exclude: int | None = None
 ) -> models.Image:
-    image = await _fewest_ratings_qs(step, key).afirst()
+    image = await _fewest_ratings_qs(step, key, exclude_pk=exclude).afirst()
     if image is None:
         raise ValueError("No image found")
 
-    return await models.Image.objects.aget(pk=image.get("id"))
-
-
-async def get_image_pk_with_fewest_ratings(
-    step: models.Step, last_pk: int, key: str = "source_data_issue"
-) -> models.Image:
-    image = await _fewest_ratings_qs(step, key, exclude_pk=last_pk).afirst()
-    if image is None:
-        raise ValueError("No image found")
-
-    logging.info("starting to load the image from db")
     return await models.Image.objects.aget(pk=image.get("id"))

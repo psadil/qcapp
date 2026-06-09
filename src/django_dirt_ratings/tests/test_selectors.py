@@ -16,7 +16,6 @@ from django_dirt_ratings.models import (
 )
 from django_dirt_ratings.selectors import (
     ImageResult,
-    get_image_pk_with_fewest_ratings,
     get_image_with_fewest_ratings,
     get_related_from_step,
     img_type_for_step,
@@ -119,12 +118,12 @@ class TestGetImageWithFewestRatings:
             async_to_sync(get_image_with_fewest_ratings)(step=Step.FMAP_COREGISTRATION)
 
     def test_excludes_last_pk(self):
-        """get_image_pk_with_fewest_ratings should skip the excluded image."""
+        """get_image_with_fewest_ratings should skip the excluded image."""
         img1 = _make_image()
         img2 = _make_image()
 
-        result = async_to_sync(get_image_pk_with_fewest_ratings)(
-            step=Step.FMAP_COREGISTRATION, last_pk=img1.pk
+        result = async_to_sync(get_image_with_fewest_ratings)(
+            step=Step.FMAP_COREGISTRATION, exclude=img1.pk
         )
         assert result.pk == img2.pk
 
@@ -132,8 +131,8 @@ class TestGetImageWithFewestRatings:
         """Excluding the only image should raise ValueError."""
         img = _make_image()
         with pytest.raises(ValueError, match="No image found"):
-            async_to_sync(get_image_pk_with_fewest_ratings)(
-                step=Step.FMAP_COREGISTRATION, last_pk=img.pk
+            async_to_sync(get_image_with_fewest_ratings)(
+                step=Step.FMAP_COREGISTRATION, exclude=img.pk
             )
 
     def test_click_step_uses_clickedcoordinate(self):
