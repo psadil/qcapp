@@ -5,7 +5,7 @@ from celery.exceptions import TimeoutError
 from django import http, shortcuts, urls, views
 from django.views.generic import edit
 
-from django_dirt_ratings import forms, models, selectors, tasks
+from django_dirt_ratings import forms, models, selectors, services, tasks
 
 MASK_VIEW = "mask"
 SPATIAL_NORMALIZATION_VIEW = "spatial_normalization"
@@ -25,7 +25,7 @@ class RatePartial(views.View):
     async def get(self, request: http.HttpRequest) -> http.HttpResponse:
         try:
             img = await selectors.get_img_id(request)
-        except TimeoutError:
+        except (TimeoutError, ValueError):
             return http.HttpResponse(
                 "There has been an issue. Please return to the homepage."
             )
@@ -49,7 +49,7 @@ class ClickPartial(RatePartial):
 class RateView(abc.ABC, edit.CreateView):
     template_name = "rate.html"
     form_class = forms.RatingForm
-    success_url: str = f"/{RATE_PARTIAL}/"  # type: ignore
+    success_url: str = f"/{RATE_PARTIAL}/"
 
     @property
     @abc.abstractmethod
@@ -68,13 +68,8 @@ class RateView(abc.ABC, edit.CreateView):
     def post(self, request: http.HttpRequest, *args, **kwargs) -> http.HttpResponse:
         form = self.get_form()
         if form.is_valid():
-            logging.info("saving rating")
-            saved: models.FromRequest = form.save(commit=False)
-            if not isinstance(saved, models.FromRequest):
-                raise http.Http404("Form field not expected type")
-            saved.update_instance_and_save(request=request)
-
-            # call this instead of form_valid because the model has already been saved
+            instance = form.save(commit=False)
+            services.rating_create(instance=instance, request=request)
             return http.HttpResponseRedirect(self.success_url)
 
         raise http.Http404("Submitted invalid rating")
@@ -84,6 +79,15 @@ class ClickView(RateView):
     template_name = "click.html"
     form_class = forms.ClickForm
     success_url = f"/{CLICK_PARTIAL}/"
+
+    def post(self, request: http.HttpRequest, *args, **kwargs) -> http.HttpResponse:
+        form = self.get_form()
+        if form.is_valid():
+            instance = form.save(commit=False)
+            services.clicked_coordinate_create(instance=instance, request=request)
+            return http.HttpResponseRedirect(self.success_url)
+
+        raise http.Http404("Submitted invalid click")
 
 
 class RateMask(ClickView):

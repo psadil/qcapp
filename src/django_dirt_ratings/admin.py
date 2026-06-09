@@ -5,24 +5,19 @@ from django.contrib import admin
 from django.utils.html import format_html
 
 from . import models
-
-
-def _img_type_for_step(step: int) -> str:
-    match step:
-        case (
-            models.Step.MASK
-            | models.Step.SPATIAL_NORMALIZATION
-            | models.Step.SURFACE_LOCALIZATION
-        ):
-            return "png"
-        case models.Step.FMAP_COREGISTRATION | models.Step.DTIFIT:
-            return "apng"
-        case _:
-            return "png"
+from .selectors import img_type_for_step
 
 
 class ImageAdmin(admin.ModelAdmin):
-    list_display = ["id", "file1", "step", "display", "slice", "image_preview", "created"]
+    list_display = [
+        "id",
+        "file1",
+        "step",
+        "display",
+        "slice",
+        "image_preview",
+        "created",
+    ]
     list_filter = ["step", "display"]
     search_fields = ["file1", "file2"]
     readonly_fields = ["image_full"]
@@ -31,7 +26,7 @@ class ImageAdmin(admin.ModelAdmin):
     def image_preview(self, obj: models.Image) -> str:
         if not obj.img:
             return "-"
-        img_type = _img_type_for_step(obj.step)
+        img_type = img_type_for_step(obj.step)
         b64 = base64.b64encode(obj.img).decode()
         return format_html(
             '<img src="data:image/{};base64,{}" '
@@ -44,11 +39,10 @@ class ImageAdmin(admin.ModelAdmin):
     def image_full(self, obj: models.Image) -> str:
         if not obj.img:
             return "-"
-        img_type = _img_type_for_step(obj.step)
+        img_type = img_type_for_step(obj.step)
         b64 = base64.b64encode(obj.img).decode()
         return format_html(
-            '<img src="data:image/{};base64,{}" '
-            'style="max-width:100%;" />',
+            '<img src="data:image/{};base64,{}" style="max-width:100%;" />',
             img_type,
             b64,
         )

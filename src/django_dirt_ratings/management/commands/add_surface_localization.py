@@ -7,7 +7,6 @@ import typer
 from django_typer.completers import path
 from django_typer.management import TyperCommand
 
-
 from django_dirt_ratings import models
 
 from . import _private
@@ -44,9 +43,11 @@ class Command(TyperCommand):
                 continue
             brain_mgz = sub / "mri" / "brain.mgz"
             ribbon_mgz = sub / "mri" / "ribbon.mgz"
-            
+
             if not brain_mgz.exists() or not ribbon_mgz.exists():
-                logging.info(f"Missing brain.mgz or ribbon.mgz for {sub.name}. Skipping.")
+                logging.info(
+                    f"Missing brain.mgz or ribbon.mgz for {sub.name}. Skipping."
+                )
                 continue
 
             brain_nii = _private.mgz_to_nifti(brain_mgz)

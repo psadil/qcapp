@@ -27,6 +27,8 @@ dev = [
     "celery-types>=0.23.0",
     "django-stubs>=5.2.2",
     "jupyter>=1.1.1",
+    "pytest>=8.0",
+    "pytest-django>=4.9",
 ]
 manage = [
     "bids2table>=2.1.0,<3",
@@ -40,9 +42,12 @@ manage = [
     "nitransforms>=25.0.0",
     "numpy>=2.3.1",
     "polars>=1.31.0",
-
 ]
 
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "dirt.settings"
+pythonpath = ["src"]
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
@@ -100,6 +105,7 @@ granian = ">=2.6.0,<3"
 uvloop = ">=0.22.1,<0.23"
 
 [tool.pixi.feature.dev.tasks]
+test = { cmd = ["pytest", "src/django_dirt_ratings/tests/", "-v"] }
 
 [tool.pixi.feature.dev.dependencies]
 jupyter = ">=1.1.1,<2"

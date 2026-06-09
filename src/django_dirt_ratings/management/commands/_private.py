@@ -277,7 +277,9 @@ def get_fmap_coregistration(
     with io.BytesIO() as frame0:
         with io.BytesIO() as frame1:
             # Create an empty background image to enforce identical, uncropped FOV for both frames
-            bg_nii = nb.Nifti1Image(np.zeros(file2_nii.shape), file2_nii.affine, header=file2_nii.header)
+            bg_nii = nb.Nifti1Image(
+                np.zeros(file2_nii.shape), file2_nii.affine, header=file2_nii.header
+            )
 
             # https://github.com/nipreps/nireports/blob/e7beccc14670e820c646306eb1d7dd3d56591450/nireports/reportlets/utils.py#L62-L70
             p0: displays.OrthoSlicer = plotting.plot_anat(

@@ -57,7 +57,7 @@ echo "  -> Adding masks..."
 pixi run -e manage manage add_masks "$INDEX_FILE"
 
 echo "  -> Adding spatial normalization..."
-pixi run -e manage manage add_spatial_normalization "$INDEX_FILE" --res 2
+pixi run -e manage manage add_spatial_normalization "$INDEX_FILE"
 
 echo "  -> Adding surface localization..."
 pixi run -e manage manage add_surface_localization "$DATA_DIR/sourcedata/freesurfer"

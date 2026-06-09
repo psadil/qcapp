@@ -12,6 +12,25 @@ from django_dirt_ratings import models
 TASK_TIMEOUT_SEC = 30
 
 
+def img_type_for_step(step: int) -> str:
+    """Return the image MIME subtype for a given Step value.
+
+    This is the single source of truth used by selectors, admin, and
+    anywhere else that needs to map step → image format.
+    """
+    match step:
+        case (
+            models.Step.MASK
+            | models.Step.SPATIAL_NORMALIZATION
+            | models.Step.SURFACE_LOCALIZATION
+        ):
+            return "png"
+        case models.Step.FMAP_COREGISTRATION | models.Step.DTIFIT:
+            return "apng"
+        case _:
+            return "png"
+
+
 @dataclasses.dataclass
 class ImageResult:
     id: int
@@ -20,18 +39,7 @@ class ImageResult:
 
     @property
     def img_type(self) -> str:
-        match self.step:
-            case (
-                models.Step.MASK
-                | models.Step.SPATIAL_NORMALIZATION
-                | models.Step.SURFACE_LOCALIZATION
-            ):
-                related = "png"
-            case models.Step.FMAP_COREGISTRATION | models.Step.DTIFIT:
-                related = "apng"
-            case _:
-                raise AssertionError("Unknown step")
-        return related
+        return img_type_for_step(self.step)
 
     @property
     def img_decoded(self) -> str:
@@ -64,18 +72,28 @@ async def get_img_id(request: http.HttpRequest) -> ImageResult:
     return ImageResult(**img)
 
 
-async def get_image_with_fewest_ratings(
-    step: models.Step, key: str = "source_data_issue"
-) -> models.Image:
+def _fewest_ratings_qs(
+    step: models.Step,
+    key: str = "source_data_issue",
+    exclude_pk: int | None = None,
+) -> dm.QuerySet:
+    """Build a queryset that orders images by ascending rating count."""
     related = get_related_from_step(step)
-    image = await (
-        models.Image.objects.filter(step=step.value)
-        .select_related(related)
+    qs = models.Image.objects.filter(step=step.value)
+    if exclude_pk is not None:
+        qs = qs.exclude(id=exclude_pk)
+    return (
+        qs
         .values("id")
         .annotate(n_ratings=dm.Count(f"{related}__{key}"))
         .order_by("n_ratings")
-        .afirst()
     )
+
+
+async def get_image_with_fewest_ratings(
+    step: models.Step, key: str = "source_data_issue"
+) -> models.Image:
+    image = await _fewest_ratings_qs(step, key).afirst()
     if image is None:
         raise ValueError("No image found")
 
@@ -85,16 +103,7 @@ async def get_image_with_fewest_ratings(
 async def get_image_pk_with_fewest_ratings(
     step: models.Step, last_pk: int, key: str = "source_data_issue"
 ) -> models.Image:
-    related = get_related_from_step(step)
-    image = await (
-        models.Image.objects.filter(step=step.value)
-        .exclude(id__in=[last_pk])
-        .select_related(related)
-        .values("id")
-        .annotate(n_ratings=dm.Count(f"{related}__{key}"))
-        .order_by("n_ratings")
-        .afirst()
-    )
+    image = await _fewest_ratings_qs(step, key, exclude_pk=last_pk).afirst()
     if image is None:
         raise ValueError("No image found")
 

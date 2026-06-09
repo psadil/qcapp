@@ -124,7 +124,8 @@ def get_image(request: http.HttpRequest, image_id: int):
 def list_ratings(request: http.HttpRequest):
     """List all ratings"""
     return (
-        models.Rating.objects.all()
+        models.Rating.objects
+        .all()
         .select_related("session", "image")
         .values(
             "id",
