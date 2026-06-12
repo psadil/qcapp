@@ -28,11 +28,6 @@ def _make_request(factory, image, session, *, points=None, url="/rate_partial/")
     return request
 
 
-# ---------------------------------------------------------------------------
-# rating_create
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 class TestRatingCreate:
     def test_saves_instance(self, request_factory, fmap_image, fmap_session):
@@ -63,11 +58,6 @@ class TestRatingCreate:
 
         with pytest.raises(Http404):
             rating_create(instance=instance, request=request)
-
-
-# ---------------------------------------------------------------------------
-# clicked_coordinate_create
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db

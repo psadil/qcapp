@@ -22,11 +22,6 @@ def _mock_task():
     return mock
 
 
-# ---------------------------------------------------------------------------
-# LayoutView
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 class TestLayoutView:
     def test_get_renders_index_template(self, client):
@@ -55,11 +50,6 @@ class TestLayoutView:
         assert response.status_code == 200  # form re-rendered
 
 
-# ---------------------------------------------------------------------------
-# RateView GET
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 class TestRateViewGet:
     @patch(
@@ -77,11 +67,6 @@ class TestRateViewGet:
         response = client.get(reverse(MASK_VIEW))
         assert response.status_code == 200
         assert "click.html" in [t.name for t in response.templates]
-
-
-# ---------------------------------------------------------------------------
-# RateView POST
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
@@ -118,11 +103,6 @@ class TestRateViewPost:
         )
         assert response.status_code == 404
         assert Rating.objects.count() == 0
-
-
-# ---------------------------------------------------------------------------
-# Step routing
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db

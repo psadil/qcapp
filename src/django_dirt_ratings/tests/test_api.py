@@ -6,10 +6,6 @@ import pytest
 
 from django_dirt_ratings.models import DisplayMode, Image, Step
 
-# ---------------------------------------------------------------------------
-# /api/image/ endpoints
-# ---------------------------------------------------------------------------
-
 
 @pytest.mark.django_db
 class TestImageAPI:
@@ -74,11 +70,6 @@ class TestImageAPI:
         response = client.get("/api/images/?limit=2")
         assert response.status_code == 200
         assert len(response.json()) == 2
-
-
-# ---------------------------------------------------------------------------
-# /api/ratings/ endpoint
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db

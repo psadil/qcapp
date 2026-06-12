@@ -21,10 +21,6 @@ from django_dirt_ratings.selectors import (
     img_type_for_step,
 )
 
-# ---------------------------------------------------------------------------
-# img_type_for_step  (no DB)
-# ---------------------------------------------------------------------------
-
 
 class TestImgTypeForStep:
     @pytest.mark.parametrize(
@@ -42,11 +38,6 @@ class TestImgTypeForStep:
         assert img_type_for_step(step) == expected
 
 
-# ---------------------------------------------------------------------------
-# ImageResult dataclass  (no DB)
-# ---------------------------------------------------------------------------
-
-
 class TestImageResult:
     def test_img_type_delegates_to_utility(self):
         ir = ImageResult(id=1, step=Step.MASK, img=b"\x89PNG")
@@ -62,11 +53,6 @@ class TestImageResult:
         assert ir.img_decoded == base64.b64encode(raw).decode()
 
 
-# ---------------------------------------------------------------------------
-# get_related_from_step  (no DB)
-# ---------------------------------------------------------------------------
-
-
 class TestGetRelatedFromStep:
     @pytest.mark.parametrize(
         "step, expected",
@@ -80,11 +66,6 @@ class TestGetRelatedFromStep:
     )
     def test_maps_step_to_related_name(self, step, expected):
         assert get_related_from_step(step) == expected
-
-
-# ---------------------------------------------------------------------------
-# Fewest-ratings selectors  (async, need DB)
-# ---------------------------------------------------------------------------
 
 
 def _make_image(step=Step.FMAP_COREGISTRATION, **kwargs):

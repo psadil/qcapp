@@ -13,10 +13,6 @@ from django_dirt_ratings.models import (
     Step,
 )
 
-# ---------------------------------------------------------------------------
-# Enum / choices tests (no DB needed)
-# ---------------------------------------------------------------------------
-
 
 class TestStepChoices:
     """Step enum should expose all expected pipeline stages."""
@@ -61,11 +57,6 @@ class TestDisplayMode:
             assert val in DisplayMode.values
 
 
-# ---------------------------------------------------------------------------
-# Image model tests
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 class TestImageModel:
     @staticmethod
@@ -107,11 +98,6 @@ class TestImageModel:
         assert img2.pk is not None
 
 
-# ---------------------------------------------------------------------------
-# Session model tests
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 class TestSessionModel:
     def test_session_creation(self):
@@ -123,11 +109,6 @@ class TestSessionModel:
     def test_session_with_user(self):
         s = Session.objects.create(step=Step.DTIFIT, user="testuser")
         assert s.user == "testuser"
-
-
-# ---------------------------------------------------------------------------
-# Rating model tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
@@ -151,11 +132,6 @@ class TestRatingModel:
         )
         assert r.source_data_issue is True
         assert r.comments == "Looks bad"
-
-
-# ---------------------------------------------------------------------------
-# ClickedCoordinate model tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
