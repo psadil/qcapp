@@ -25,7 +25,7 @@ jobs:
           locked: true
       # Regenerates the reference pages + OpenAPI schema, then builds with Zensical.
       - run: pixi run -e docs docs-build
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
