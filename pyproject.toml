@@ -105,18 +105,12 @@ runserver = { cmd = [
 rabbitmq-server = ">=4.1.1,<5"
 granian = ">=2.6.0,<3"
 uvloop = ">=0.22.1,<0.23"
-gdal = ">=3.12.2,<4"
-libgdal = ">=3.12.2,<4"
-libspatialite = ">=5.1"
 
 [tool.pixi.feature.dev.tasks]
 test = { cmd = ["pytest", "-v"] }
 
 [tool.pixi.feature.dev.dependencies]
 jupyter = ">=1.1.1,<2"
-
-[tool.pixi.feature.manage.dependencies]
-libgdal = ">=3.12.2,<4"
 
 [tool.pixi.feature.manage.tasks]
 devsetup = "./tools/devsetup.sh"

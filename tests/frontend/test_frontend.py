@@ -143,7 +143,7 @@ def test_canvas_clicking_flow(live_server, page: Page, eager_celery_and_test_cac
     expect(page).to_have_url(f"{live_server.url}/mask/")
     canvas = page.locator("#canvas")
 
-    # Perform a click inside the canvas bounds
+    # Tap a grid cell inside the canvas bounds
     page.wait_for_timeout(500)
     box = canvas.bounding_box()
     assert box is not None
@@ -152,18 +152,16 @@ def test_canvas_clicking_flow(live_server, page: Page, eager_celery_and_test_cac
     assert models.Annotation.objects.count() == 0
 
     # Press Enter to submit
-    # no longer needed
     page.keyboard.press("Enter")
 
-    # Wait for SSE responses to render and database transaction to complete
+    # Wait for the response to render and the transaction to commit
     page.wait_for_load_state("networkidle")
-    print("HTML AFTER ENTER:", page.content())
 
-    # Annotation row should be saved
+    # One Annotation submission with at least one marked cell should be saved
     annotation = models.Annotation.objects.first()
     assert (
         models.Annotation.objects.count() == 1
         and isinstance(annotation, models.Annotation)
         and annotation.image_id == img1.pk
-        and annotation.geometry is not None
+        and annotation.cells.count() >= 1
     )

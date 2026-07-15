@@ -8,7 +8,6 @@ writes to the database.
 
 import typing
 
-from django.contrib.gis import geos
 from django.db import transaction
 
 from django_dirt_ratings import models
@@ -88,37 +87,42 @@ def rating_create(
     return instance
 
 
-def annotation_bulk_create(
+def annotation_create(
     *,
     image: models.Image,
     session: models.Session,
-    points: typing.Sequence[tuple[float, float]],
+    grid_cols: int,
+    grid_rows: int,
+    cells: typing.Sequence[tuple[int, int, int]],
     source_data_issue: bool = False,
     comments: str = "",
-) -> list[models.Annotation]:
-    """Create one Annotation per clicked point.
+) -> models.Annotation:
+    """Record one annotation submission and the grid cells it marked.
 
-    An empty ``points`` still creates a single row with null geometry: it
-    records a submission whose only content is the flags/comments.
+    ``cells`` is a sequence of ``(col, row, rating)`` tuples. An empty
+    ``cells`` still creates the Annotation (with no related cells): it records
+    a submission whose only content is the flags/comments.
     """
-    common = {
-        "image": image,
-        "session": session,
-        "source_data_issue": source_data_issue,
-        "comments": comments,
-    }
-    if points:
-        instances = [
-            models.Annotation(
-                **common, geometry=geos.Point(x, y, srid=models.GEOMETRY_SRID)
-            )
-            for x, y in points
-        ]
-    else:
-        instances = [models.Annotation(**common)]
-
-    for instance in instances:
-        instance.full_clean(validate_constraints=False)
-
     with transaction.atomic():
-        return models.Annotation.objects.bulk_create(instances)
+        annotation = models.Annotation(
+            image=image,
+            session=session,
+            grid_cols=grid_cols,
+            grid_rows=grid_rows,
+            source_data_issue=source_data_issue,
+            comments=comments,
+        )
+        annotation.full_clean()
+        annotation.save()
+
+        instances = [
+            models.AnnotationCell(
+                annotation=annotation, col=col, row=row, rating=rating
+            )
+            for col, row, rating in cells
+        ]
+        for instance in instances:
+            instance.full_clean(validate_constraints=False)
+        models.AnnotationCell.objects.bulk_create(instances)
+
+    return annotation

@@ -3,11 +3,13 @@
         <input type="hidden" id="image-data" value="data:image/{{img_type}};base64,{{image}}">
         <div class="text-center">
             <div class="canvas-wrapper">
-                <canvas id="canvas" class="responsive-canvas"></canvas>
+                <canvas id="canvas" class="responsive-canvas" data-grid-cols="{{ grid_cols }}"></canvas>
             </div>
             <p class="text-muted mt-3">
-                <i class="fas fa-mouse-pointer me-2"></i>
-                Click to add markers, click existing markers to remove them, <strong>Enter</strong> = Submit
+                <i class="fas fa-hand-pointer me-2"></i>
+                Tap a cell to mark it &middot; drag to paint a region &middot;
+                <strong>u</strong> = unsure, <strong>f</strong> = fail,
+                <strong>Enter</strong> = submit
             </p>
         </div>
     </div>

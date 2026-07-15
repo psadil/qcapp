@@ -1,13 +1,8 @@
-from django.contrib.gis.db import models as gm
 from django.db import models
 from django.utils import timezone
 
-GEOMETRY_SRID = -1
-"""Annotations store canvas pixel coordinates, not geographic ones.
-
-SpatiaLite's "undefined" srid is -1; srid 0 cannot be used because GEOS
-treats 0 as "no srid set" and Django then emits invalid SQL.
-"""
+DEFAULT_GRID_COLS = 28
+"""Default number of columns in the annotation grid (see ``Step.grid_cols``)."""
 
 
 class Step(models.IntegerChoices):
@@ -34,6 +29,15 @@ class Step(models.IntegerChoices):
                 return "annotation"
             case _:
                 return "rating"
+
+    @property
+    def grid_cols(self) -> int:
+        """Columns in the annotation grid overlaid on this step's images.
+
+        Rows are derived on the client from the image aspect ratio and
+        recorded per-submission on ``Annotation``.
+        """
+        return DEFAULT_GRID_COLS
 
 
 class Ratings(models.IntegerChoices):
@@ -97,16 +101,38 @@ class FromRequest(BaseModel):
 
 
 class Annotation(FromRequest):
-    """A clicked point on an image, in canvas pixel coordinates.
+    """One annotation submission: the grid used and the cells marked on it.
 
-    A null geometry records a submission with no clicked points, i.e. an
-    image where the rater found nothing to mark but may have left flags or
-    comments.
+    A submission with no marked cells (zero related ``AnnotationCell`` rows)
+    records an image where the rater found nothing to mark but may have left
+    flags or comments.
     """
 
-    geometry = gm.GeometryField(
-        srid=GEOMETRY_SRID, spatial_index=False, null=True, blank=True
+    grid_cols = models.IntegerField()
+    grid_rows = models.IntegerField()
+
+
+class AnnotationCell(models.Model):
+    """A single grid cell a rater marked as a problem.
+
+    ``rating`` reuses the whole-image ``Ratings`` vocabulary: a marked cell is
+    UNSURE (rater not confident) or FAIL (confident problem); PASS is implied
+    by a cell being left unmarked.
+    """
+
+    annotation = models.ForeignKey(
+        Annotation, on_delete=models.CASCADE, related_name="cells"
     )
+    col = models.IntegerField()
+    row = models.IntegerField()
+    rating = models.IntegerField(choices=Ratings.choices)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["annotation", "col", "row"], name="annotation_cell"
+            )
+        ]
 
 
 class Rating(FromRequest):

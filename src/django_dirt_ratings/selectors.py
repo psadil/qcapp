@@ -59,16 +59,20 @@ def rating_list() -> dm.QuerySet[models.Rating]:
 def _fewest_ratings_qs(
     *,
     step: models.Step,
-    key: str = "source_data_issue",
     exclude_pk: int | None = None,
 ) -> dm.QuerySet:
-    """Order a step's images by ascending number of submissions."""
+    """Order a step's images by ascending number of review submissions.
+
+    Counts distinct submission rows (Rating/Annotation), so an image reviewed
+    once but marked with many cells does not look "more reviewed" than one
+    reviewed several times.
+    """
     qs = models.Image.objects.filter(step=step.value)
     if exclude_pk is not None:
         qs = qs.exclude(id=exclude_pk)
     return (
         qs.values("id")
-        .annotate(n_ratings=dm.Count(f"{step.related_name}__{key}"))
+        .annotate(n_ratings=dm.Count(step.related_name, distinct=True))
         .order_by("n_ratings")
     )
 

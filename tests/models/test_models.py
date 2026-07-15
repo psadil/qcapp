@@ -1,12 +1,11 @@
 """Tests for django_dirt_ratings models."""
 
 import pytest
-from django.contrib.gis import geos
 from django.db import IntegrityError
 
 from django_dirt_ratings.models import (
-    GEOMETRY_SRID,
     Annotation,
+    AnnotationCell,
     DisplayMode,
     Image,
     Rating,
@@ -164,16 +163,47 @@ class TestRatingModel:
 
 @pytest.mark.django_db
 class TestAnnotationModel:
-    def test_geometry_round_trip(self, mask_image, mask_session):
+    def test_annotation_with_cells(self, mask_image, mask_session):
         annotation = Annotation.objects.create(
-            image=mask_image,
-            session=mask_session,
-            geometry=geos.Point(10.5, 20.3, srid=GEOMETRY_SRID),
+            image=mask_image, session=mask_session, grid_cols=28, grid_rows=21
         )
-        saved = Annotation.objects.get(pk=annotation.pk)
-        assert saved.geometry.x == pytest.approx(10.5)
-        assert saved.geometry.y == pytest.approx(20.3)
+        AnnotationCell.objects.create(
+            annotation=annotation, col=3, row=5, rating=Ratings.FAIL
+        )
+        AnnotationCell.objects.create(
+            annotation=annotation, col=3, row=6, rating=Ratings.UNSURE
+        )
+        assert annotation.cells.count() == 2
+        assert set(annotation.cells.values_list("rating", flat=True)) == {
+            Ratings.FAIL,
+            Ratings.UNSURE,
+        }
 
-    def test_nullable_geometry(self, mask_image, mask_session):
-        annotation = Annotation.objects.create(image=mask_image, session=mask_session)
-        assert annotation.geometry is None
+    def test_empty_annotation_has_no_cells(self, mask_image, mask_session):
+        """A submission with nothing marked is an Annotation with zero cells."""
+        annotation = Annotation.objects.create(
+            image=mask_image, session=mask_session, grid_cols=28, grid_rows=21
+        )
+        assert annotation.cells.count() == 0
+
+    def test_cell_unique_per_annotation(self, mask_image, mask_session):
+        annotation = Annotation.objects.create(
+            image=mask_image, session=mask_session, grid_cols=28, grid_rows=21
+        )
+        AnnotationCell.objects.create(
+            annotation=annotation, col=1, row=1, rating=Ratings.FAIL
+        )
+        with pytest.raises(IntegrityError):
+            AnnotationCell.objects.create(
+                annotation=annotation, col=1, row=1, rating=Ratings.UNSURE
+            )
+
+    def test_cells_cascade_delete(self, mask_image, mask_session):
+        annotation = Annotation.objects.create(
+            image=mask_image, session=mask_session, grid_cols=28, grid_rows=21
+        )
+        AnnotationCell.objects.create(
+            annotation=annotation, col=1, row=1, rating=Ratings.FAIL
+        )
+        annotation.delete()
+        assert AnnotationCell.objects.count() == 0

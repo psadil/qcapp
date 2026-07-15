@@ -2,12 +2,11 @@
 
 import pytest
 from asgiref.sync import async_to_sync
-from django.contrib.gis import geos
 
 from django_dirt_ratings.exceptions import ApplicationError, NotFound
 from django_dirt_ratings.models import (
-    GEOMETRY_SRID,
     Annotation,
+    AnnotationCell,
     DisplayMode,
     Image,
     Rating,
@@ -122,10 +121,31 @@ class TestImageWithFewestRatings:
         img_unclicked = _make_image(step=Step.MASK)
         session = Session.objects.create(step=Step.MASK)
         Annotation.objects.create(
-            image=img_clicked,
-            session=session,
-            geometry=geos.Point(1.0, 2.0, srid=GEOMETRY_SRID),
+            image=img_clicked, session=session, grid_cols=28, grid_rows=21
         )
 
         result = async_to_sync(image_with_fewest_ratings)(step=Step.MASK)
         assert result.pk == img_unclicked.pk
+
+    def test_counts_submissions_not_cells(self):
+        """An image marked with many cells in one review counts as one review."""
+        img_many_cells = _make_image(step=Step.MASK)
+        img_one_review = _make_image(step=Step.MASK)
+        session = Session.objects.create(step=Step.MASK)
+        # img_many_cells: one submission, but many marked cells.
+        annotation = Annotation.objects.create(
+            image=img_many_cells, session=session, grid_cols=28, grid_rows=21
+        )
+        AnnotationCell.objects.bulk_create(
+            AnnotationCell(annotation=annotation, col=c, row=0, rating=Ratings.FAIL)
+            for c in range(10)
+        )
+        # img_one_review: one submission, zero cells (still one review).
+        Annotation.objects.create(
+            image=img_one_review, session=session, grid_cols=28, grid_rows=21
+        )
+
+        # Both have exactly one submission, so a third image with none is next.
+        img_unreviewed = _make_image(step=Step.MASK)
+        result = async_to_sync(image_with_fewest_ratings)(step=Step.MASK)
+        assert result.pk == img_unreviewed.pk

@@ -3,12 +3,10 @@ Django settings for the dirt project.
 
 Configuration is environment-driven (django-environ): every deployment knob
 is an env var with a development-friendly default. The database, the cache,
-and the celery result store all run on SQLite/SpatiaLite, following
+and the celery result store all run on SQLite, following
 https://alldjango.com/articles/definitive-guide-to-using-django-sqlite-in-production
 """
 
-import platform
-import sys
 from pathlib import Path
 
 import environ
@@ -17,28 +15,6 @@ env = environ.Env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-
-# GeoDjango library discovery. The pixi environments ship GDAL/GEOS/SpatiaLite
-# releases newer than the names Django searches for, so point directly at the
-# active environment (sys.prefix); env vars win when set.
-_GIS_LIB_SUFFIX = "dylib" if platform.system() == "Darwin" else "so"
-
-
-def _gis_lib(env_var: str, stem: str) -> str | None:
-    if (path := env.str(env_var, default=None)) is not None:
-        return path
-    if (default := Path(sys.prefix) / "lib" / f"{stem}.{_GIS_LIB_SUFFIX}").exists():
-        return str(default)
-    return None
-
-
-if (_gdal := _gis_lib("GDAL_LIBRARY_PATH", "libgdal")) is not None:
-    GDAL_LIBRARY_PATH = _gdal
-if (_geos := _gis_lib("GEOS_LIBRARY_PATH", "libgeos_c")) is not None:
-    GEOS_LIBRARY_PATH = _geos
-if (_spatialite := _gis_lib("SPATIALITE_LIBRARY_PATH", "mod_spatialite")) is not None:
-    SPATIALITE_LIBRARY_PATH = _spatialite
 
 
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
@@ -63,7 +39,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django.contrib.gis",
     "django_typer",
     "django_celery_results",
 ]
@@ -129,7 +104,7 @@ def _sqlite_options() -> dict:
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.contrib.gis.db.backends.spatialite",
+        "ENGINE": "django.db.backends.sqlite3",
         "NAME": DB_PATH,
         "OPTIONS": _sqlite_options(),
     },

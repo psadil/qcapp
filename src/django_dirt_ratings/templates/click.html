@@ -8,8 +8,29 @@
     </div>
 
     <div class="rating-form">
+        <div class="annotation-controls btn-toolbar mb-3" role="toolbar" aria-label="Annotation controls">
+            <div class="btn-group me-2" role="group" aria-label="Marking level">
+                <button type="button" class="btn btn-outline-warning" data-level="1" aria-pressed="false">
+                    <i class="fas fa-circle-question me-1"></i> Unsure <kbd>u</kbd>
+                </button>
+                <button type="button" class="btn btn-outline-danger" data-level="2" aria-pressed="false">
+                    <i class="fas fa-circle-xmark me-1"></i> Fail <kbd>f</kbd>
+                </button>
+            </div>
+            <div class="btn-group me-2" role="group" aria-label="Corrections">
+                <button type="button" id="undo" class="btn btn-outline-secondary">
+                    <i class="fas fa-rotate-left me-1"></i> Undo
+                </button>
+                <button type="button" id="clear" class="btn btn-outline-secondary">
+                    <i class="fas fa-eraser me-1"></i> Clear
+                </button>
+            </div>
+            <span class="navbar-text ms-auto">
+                <span id="cell-count">0</span> cells marked
+            </span>
+        </div>
+
         {% include 'form.html' %}
     </div>
 </div>
-
 {% endblock %}

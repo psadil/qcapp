@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 
 from django_dirt_ratings.models import (
     Annotation,
+    AnnotationCell,
     DisplayMode,
     Image,
     Rating,
@@ -12,7 +13,7 @@ from django_dirt_ratings.models import (
     Step,
 )
 from django_dirt_ratings.services import (
-    annotation_bulk_create,
+    annotation_create,
     image_create,
     image_delete,
     image_upsert,
@@ -106,35 +107,47 @@ class TestImageServices:
 
 
 @pytest.mark.django_db
-class TestAnnotationBulkCreate:
-    def test_no_points_saves_single_row(self, mask_image, mask_session):
-        created = annotation_bulk_create(
-            image=mask_image, session=mask_session, points=[]
-        )
-        assert len(created) == 1
-        assert Annotation.objects.count() == 1
-        assert Annotation.objects.get().geometry is None
-
-    def test_multiple_points_bulk_creates(self, mask_image, mask_session):
-        points = [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]
-
-        annotation_bulk_create(image=mask_image, session=mask_session, points=points)
-
-        assert Annotation.objects.count() == 3
-        stored = sorted(
-            (annotation.geometry.x, annotation.geometry.y)
-            for annotation in Annotation.objects.all()
-        )
-        assert stored == points
-
-    def test_bulk_created_share_image_and_session(self, mask_image, mask_session):
-        annotation_bulk_create(
+class TestAnnotationCreate:
+    def test_no_cells_creates_annotation_only(self, mask_image, mask_session):
+        annotation = annotation_create(
             image=mask_image,
             session=mask_session,
-            points=[(10.0, 20.0), (30.0, 40.0)],
-            comments="two clicks",
+            grid_cols=28,
+            grid_rows=21,
+            cells=[],
         )
-        for annotation in Annotation.objects.all():
-            assert annotation.image_id == mask_image.pk
-            assert annotation.session_id == mask_session.pk
-            assert annotation.comments == "two clicks"
+        assert Annotation.objects.count() == 1
+        assert annotation.cells.count() == 0
+
+    def test_creates_cells(self, mask_image, mask_session):
+        cells = [(1, 2, Ratings.FAIL), (3, 4, Ratings.UNSURE), (5, 6, Ratings.FAIL)]
+
+        annotation = annotation_create(
+            image=mask_image,
+            session=mask_session,
+            grid_cols=28,
+            grid_rows=21,
+            cells=cells,
+        )
+
+        assert Annotation.objects.count() == 1
+        assert AnnotationCell.objects.count() == 3
+        stored = sorted((c.col, c.row, c.rating) for c in annotation.cells.all())
+        assert stored == sorted(cells)
+
+    def test_annotation_records_grid_and_flags(self, mask_image, mask_session):
+        annotation = annotation_create(
+            image=mask_image,
+            session=mask_session,
+            grid_cols=28,
+            grid_rows=21,
+            cells=[(0, 0, Ratings.FAIL)],
+            source_data_issue=True,
+            comments="widespread",
+        )
+        assert annotation.grid_cols == 28
+        assert annotation.grid_rows == 21
+        assert annotation.source_data_issue is True
+        assert annotation.comments == "widespread"
+        assert annotation.image_id == mask_image.pk
+        assert annotation.session_id == mask_session.pk

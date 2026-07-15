@@ -59,6 +59,7 @@ class RatePartial(views.View):
             {
                 "img_type": models.Step(image.step).image_type,
                 "image": formatters.image_to_base64(image.img),
+                "grid_cols": models.Step(image.step).grid_cols,
             },
         )
 
@@ -132,12 +133,14 @@ class ClickView(RateView):
             return self.form_invalid(form)
 
         image, session = self._get_image_and_session(request)
-        points_raw = request.POST.get("points")
-        points: list[dict] = json.loads(points_raw) if points_raw else []
-        services.annotation_bulk_create(
+        cells_raw = request.POST.get("cells")
+        cells: list[list[int]] = json.loads(cells_raw) if cells_raw else []
+        services.annotation_create(
             image=image,
             session=session,
-            points=[(point["x"], point["y"]) for point in points],
+            grid_cols=int(request.POST["grid_cols"]),
+            grid_rows=int(request.POST["grid_rows"]),
+            cells=[(col, row, rating) for col, row, rating in cells],
             source_data_issue=form.cleaned_data["source_data_issue"],
             comments=form.cleaned_data["comments"],
         )
