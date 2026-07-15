@@ -1,5 +1,8 @@
 """Frontend browser integration tests using Playwright."""
 
+import struct
+import zlib
+
 import pytest
 from playwright.sync_api import Page, expect
 from pytest_django import live_server_helper
@@ -7,65 +10,78 @@ from pytest_django import live_server_helper
 from django_dirt_ratings import models
 
 
+def _make_png(width: int, height: int) -> bytes:
+    """A solid light-gray RGB PNG (stdlib only), big enough to show a grid."""
+    row = bytes([200, 200, 205]) * width
+    raw = b"".join(b"\x00" + row for _ in range(height))
+
+    def chunk(typ: bytes, data: bytes) -> bytes:
+        body = typ + data
+        return (
+            struct.pack(">I", len(data))
+            + body
+            + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+        )
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
+    )
+
+
 @pytest.fixture
 def eager_celery_and_test_cache(settings):
-    """Ensure celery tasks run eagerly and cache doesn't require memcached."""
-    import os
+    """Run Celery tasks inline (no broker) and use an in-memory cache.
 
-    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+    The views are synchronous, so no DJANGO_ALLOW_ASYNC_UNSAFE is needed; eager
+    results are stored (see settings) so the view's AsyncResult.get() reads the
+    prefetched image back.
+    """
     settings.CELERY_TASK_ALWAYS_EAGER = True
     settings.CELERY_TASK_EAGER_PROPAGATES = True
+    settings.CELERY_TASK_STORE_EAGER_RESULT = True
     settings.CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        }
+        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
     }
 
 
-@pytest.mark.skip
 @pytest.mark.django_db(transaction=True)
 def test_index_and_theme_toggling(
     live_server: live_server_helper.LiveServer,
     page: Page,
     eager_celery_and_test_cache,
 ):
-    """Test landing step selection page and the reactive theme switcher."""
-    page.on("console", lambda msg: print(f"CONSOLE: {msg.text}"))
+    """Landing step-selection page and the theme switcher (themes.js)."""
     page.goto(live_server.url)
 
-    # Check theme is initially light (Bootswatch Flatly theme link)
     theme_css = page.locator("#theme-css")
     expect(theme_css).to_have_attribute(
         "href",
         "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css",
     )
 
-    # Toggle to dark mode
-    toggle_btn = page.locator("#theme-toggle")
-    toggle_btn.click()
-
-    # Check theme is now dark (Bootswatch Darkly theme link)
+    page.locator("#theme-toggle").click()
     expect(theme_css).to_have_attribute(
         "href",
         "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/darkly/bootstrap.min.css",
     )
 
-    # Reload page to verify state persists in localStorage
+    # State persists across reloads via localStorage.
     page.reload()
     expect(theme_css).to_have_attribute(
         "href",
         "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/darkly/bootstrap.min.css",
     )
 
-    # Toggle back to light mode
-    toggle_btn.click()
+    page.locator("#theme-toggle").click()
     expect(theme_css).to_have_attribute(
         "href",
         "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css",
     )
 
 
-@pytest.mark.skip
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("hotkey", ["p", "u", "f"])
 def test_rating_hotkeys(
@@ -74,94 +90,100 @@ def test_rating_hotkeys(
     hotkey: str,
     eager_celery_and_test_cache,
 ):
-    """Test selecting values with hotkeys, and submitting."""
-    # Seed DB
-    img1 = models.Image.objects.create(
-        img=b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR",
-        slice=0,
-        file1="test1.nii.gz",
-        display=models.DisplayMode.X,
-        step=models.Step.FMAP_COREGISTRATION,
-    )
+    """Rating radios respond to p/u/f hotkeys and Enter submits (selects.js)."""
+    # Two images so the background prefetch of the "next" image always has one.
+    seeded = {
+        models.Image.objects.create(
+            img=_make_png(64, 64),
+            slice=i,
+            file1=f"test{i}.nii.gz",
+            display=models.DisplayMode.X,
+            step=models.Step.FMAP_COREGISTRATION,
+        ).pk
+        for i in range(2)
+    }
 
-    # Go to landing page
-    page.goto(f"{live_server.url}/fmap_coregistration")
+    # Start from the landing page so the session (session_id/step) is set up.
+    page.goto(live_server.url)
+    page.select_option("select[name=step]", str(models.Step.FMAP_COREGISTRATION.value))
+    page.click("button[type=submit]")
+    expect(page).to_have_url(f"{live_server.url}/fmap_coregistration/")
 
-    # Ensure window is focused
     page.click("body")
-    # Press hotkey 'p' to select Pass
     page.keyboard.press(hotkey)
-    match hotkey:
-        case "p":
-            expected = models.Ratings.PASS
-        case "u":
-            expected = models.Ratings.UNSURE
-        case "f":
-            expected = models.Ratings.FAIL
-        case _:
-            raise ValueError
 
-    # Verify Pass radio button becomes selected
-    pass_radio = page.locator(f"input[value='{expected.value}']")
-    expect(pass_radio).to_be_checked()
+    expected = {
+        "p": models.Ratings.PASS,
+        "u": models.Ratings.UNSURE,
+        "f": models.Ratings.FAIL,
+    }[hotkey]
+    expect(page.locator(f"input[value='{expected.value}']")).to_be_checked()
 
-    # Submit with Enter
-    page.keyboard.press("Enter")
+    # Wait for the submit POST itself so the row is committed before we query.
+    with page.expect_response(
+        lambda r: (
+            r.request.method == "POST"
+            and r.url.rstrip("/").endswith("fmap_coregistration")
+        )
+    ):
+        page.keyboard.press("Enter")
 
-    # Check rating created in DB
     r = models.Rating.objects.first()
-    assert (
-        models.Rating.objects.count() == 1
-        and isinstance(r, models.Rating)
-        and r.rating == expected
-        and r.image_id == img1.pk
-    )
+    assert models.Rating.objects.count() == 1
+    assert r is not None and r.rating == expected and r.image_id in seeded
 
 
-@pytest.mark.skip
 @pytest.mark.django_db(transaction=True)
-def test_canvas_clicking_flow(live_server, page: Page, eager_celery_and_test_cache):
-    """Test clicking on the canvas to add coordinates and submitting."""
-    # Seed DB with MASK images
-    valid_png = __import__("base64").b64decode(
-        b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
-    )
-    img1 = models.Image.objects.create(
-        img=valid_png,
-        slice=0,
-        file1="test_mask.nii.gz",
-        display=models.DisplayMode.X,
-        step=models.Step.MASK,
-    )
+def test_canvas_grid_paint_flow(
+    live_server: live_server_helper.LiveServer,
+    page: Page,
+    eager_celery_and_test_cache,
+):
+    """Paint cells on the grid at two levels and submit; cells persist."""
+    # Two images so the background prefetch of the "next" image always has one.
+    seeded = {
+        models.Image.objects.create(
+            img=_make_png(200, 200),
+            slice=i,
+            file1=f"test_mask{i}.nii.gz",
+            display=models.DisplayMode.X,
+            step=models.Step.MASK,
+        ).pk
+        for i in range(2)
+    }
 
-    # Go through step selection on landing page
     page.goto(live_server.url)
     page.select_option("select[name=step]", str(models.Step.MASK.value))
     page.click("button[type=submit]")
 
-    # Expect coordinates template to load
     expect(page).to_have_url(f"{live_server.url}/mask/")
     canvas = page.locator("#canvas")
+    expect(canvas).to_be_visible()
+    page.wait_for_timeout(500)  # let the image load and the grid draw
 
-    # Tap a grid cell inside the canvas bounds
-    page.wait_for_timeout(500)
     box = canvas.bounding_box()
     assert box is not None
-    page.mouse.click(box["x"] + 100, box["y"] + 100)
 
-    assert models.Annotation.objects.count() == 0
+    # One cell at the default UNSURE level.
+    page.mouse.click(box["x"] + 40, box["y"] + 40)
+    # Switch to FAIL and mark a second, distinct cell.
+    page.keyboard.press("f")
+    page.mouse.click(box["x"] + box["width"] - 40, box["y"] + box["height"] - 40)
 
-    # Press Enter to submit
-    page.keyboard.press("Enter")
+    expect(page.locator("#cell-count")).to_have_text("2")
+    assert models.Annotation.objects.count() == 0  # not submitted yet
 
-    # Wait for the response to render and the transaction to commit
-    page.wait_for_load_state("networkidle")
+    # Wait for the submit POST itself so the row is committed before we query.
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.rstrip("/").endswith("mask")
+    ):
+        page.click("#submit")
 
-    # One Annotation submission with at least one marked cell should be saved
     annotation = models.Annotation.objects.first()
-    assert (
-        models.Annotation.objects.count() == 1
-        and isinstance(annotation, models.Annotation)
-        and annotation.image_id == img1.pk
-        and annotation.cells.count() >= 1
-    )
+    assert annotation is not None
+    assert annotation.image_id in seeded
+    assert annotation.cells.count() == 2
+    assert set(annotation.cells.values_list("rating", flat=True)) == {
+        models.Ratings.UNSURE,
+        models.Ratings.FAIL,
+    }
