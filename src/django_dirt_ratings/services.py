@@ -9,6 +9,7 @@ writes to the database.
 import typing
 
 from django.db import transaction
+from django.db.models import F
 
 from django_dirt_ratings import models
 
@@ -60,6 +61,30 @@ def image_upsert(
     return instance
 
 
+def image_upsert_many(*, images: typing.Sequence[dict]) -> None:
+    """Create or refresh many Images in one INSERT ... ON CONFLICT.
+
+    Each dict is the fields of one Image (``img``, ``file1``, ``file2``,
+    ``display``, ``step``, ``slice``). On conflict against the ``image_meta``
+    unique key the bytes are refreshed in place, preserving the primary key (and
+    hence ratings) and ``n_reviews``. Only valid for non-null ``slice`` rows:
+    SQLite treats NULLs as distinct in a unique index, so ON CONFLICT would not
+    dedup them (the single-image DTIFIT step uses :func:`image_upsert` instead).
+    """
+    instances = [models.Image(**fields) for fields in images]
+    for instance in instances:
+        # Skip the unique/constraint checks — the image_meta uniqueness is what
+        # ON CONFLICT resolves below (validate_constraints would reject the very
+        # rows we intend to upsert). Field validation still runs.
+        instance.full_clean(validate_unique=False, validate_constraints=False)
+    models.Image.objects.bulk_create(
+        instances,
+        update_conflicts=True,
+        unique_fields=["slice", "file1", "display", "step"],
+        update_fields=["img", "file2"],
+    )
+
+
 def session_create(*, step: int, user: str | None = None) -> models.Session:
     session = models.Session(step=step, user=user)
     session.full_clean()
@@ -75,15 +100,18 @@ def rating_create(
     source_data_issue: bool = False,
     comments: str = "",
 ) -> models.Rating:
-    instance = models.Rating(
-        image=image,
-        session=session,
-        rating=rating,
-        source_data_issue=source_data_issue,
-        comments=comments,
-    )
-    instance.full_clean()
-    instance.save()
+    with transaction.atomic():
+        instance = models.Rating(
+            image=image,
+            session=session,
+            rating=rating,
+            source_data_issue=source_data_issue,
+            comments=comments,
+        )
+        instance.full_clean()
+        instance.save()
+        # Maintain the denormalized review counter (see Image.n_reviews).
+        models.Image.objects.filter(pk=image.pk).update(n_reviews=F("n_reviews") + 1)
     return instance
 
 
@@ -124,5 +152,9 @@ def annotation_create(
         for instance in instances:
             instance.full_clean(validate_constraints=False)
         models.AnnotationCell.objects.bulk_create(instances)
+
+        # One increment per submission (see Image.n_reviews): an annotation marked
+        # with many cells still counts as a single review.
+        models.Image.objects.filter(pk=image.pk).update(n_reviews=F("n_reviews") + 1)
 
     return annotation

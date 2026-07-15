@@ -1,9 +1,6 @@
 import abc
 import json
-import logging
 
-from celery import result
-from celery.exceptions import TimeoutError
 from django import http, shortcuts, urls, views
 from django.views.generic import edit
 
@@ -14,7 +11,6 @@ from django_dirt_ratings import (
     models,
     selectors,
     services,
-    tasks,
 )
 
 MASK_VIEW = "mask"
@@ -26,35 +22,27 @@ RATE_PARTIAL = "rate_partial"
 CLICK_PARTIAL = "click_partial"
 
 
-IMG_TASK = "img_task"
-TASK_TIMEOUT_SEC = 30
-
-
 class RatePartial(views.View):
     template_name = f"{RATE_PARTIAL}.html"
 
     def get(self, request: http.HttpRequest) -> http.HttpResponse:
-        img_task = request.session.get(IMG_TASK)
-        if img_task is None:
-            raise http.Http404("no img_task found")
+        step = request.session.get("step")
+        if step is None:
+            raise http.Http404("no active rating session")
 
-        # This is a sync view on purpose: AsyncResult.get() blocks until the
-        # prefetched result is ready. Under ASGI it runs in a thread pool, so
-        # the wait (usually instant, since the task ran while the reviewer
-        # annotated the previous image) never blocks the event loop.
+        # Serve the next image synchronously. Backed by the image_next index,
+        # image_with_fewest_ratings is a sub-millisecond seek, so there is no
+        # slow query to hide behind a background prefetch — excluding the image
+        # just shown gives the next one in the breadth-first order.
         try:
-            # ApplicationError is how the task reports "no image left to
-            # rate"; it is re-raised locally by AsyncResult.get.
-            payload = result.AsyncResult(img_task).get(timeout=TASK_TIMEOUT_SEC)
-            image = selectors.image_get(image_id=payload["id"])
-        except (TimeoutError, exceptions.ApplicationError, exceptions.NotFound):
+            image = selectors.image_with_fewest_ratings(
+                step=models.Step(step), exclude=request.session.get("image_id")
+            )
+        except exceptions.ApplicationError:
             return http.HttpResponse(
                 "There has been an issue. Please return to the homepage."
             )
 
-        # Prefetch the next image while the reviewer works on this one.
-        next_task = tasks.run_db_query_async.delay(step=image.step, last_pk=image.pk)
-        request.session[IMG_TASK] = next_task.id
         request.session["image_id"] = image.pk
         return shortcuts.render(
             request,
@@ -82,15 +70,6 @@ class RateView(abc.ABC, edit.CreateView):
 
     def get_success_url(self) -> str:
         return urls.reverse(RATE_PARTIAL)
-
-    def get(self, request: http.HttpRequest, *args, **kwargs):
-        logging.info("getting first img")
-        img_task = tasks.run_db_query_async.delay(step=self.step)
-
-        logging.info(f"updating session with {img_task=}")
-        request.session[IMG_TASK] = img_task.id
-
-        return super().get(request, *args, **kwargs)
 
     def _get_image_and_session(
         self, request: http.HttpRequest

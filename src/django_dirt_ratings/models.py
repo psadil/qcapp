@@ -72,12 +72,26 @@ class Image(BaseModel):
     file2 = models.TextField(max_length=512, null=True, blank=True)
     display = models.IntegerField(choices=DisplayMode.choices)
     step = models.IntegerField(choices=Step.choices)
+    n_reviews = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Denormalized count of review submissions (Rating/Annotation rows) for "
+            "this image, maintained by the services layer. Lets the review-ordering "
+            "selector find the least-reviewed image with an index seek instead of an "
+            "aggregate scan over every image of a step."
+        ),
+    )
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["slice", "file1", "display", "step"], name="image_meta"
             )
+        ]
+        indexes = [
+            # Serves selectors.image_with_fewest_ratings: filter by step, order by
+            # (n_reviews, id) — an index range seek returning one leaf entry.
+            models.Index(fields=["step", "n_reviews", "id"], name="image_next"),
         ]
 
 

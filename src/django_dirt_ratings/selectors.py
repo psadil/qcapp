@@ -35,6 +35,14 @@ def image_exists(
     ).exists()
 
 
+def image_file_exists(*, file1: str, step: int) -> bool:
+    """Whether any Image for this source file + step exists.
+
+    Used by ingest to skip re-rendering a whole file's series when not updating.
+    """
+    return models.Image.objects.filter(file1=file1, step=step).exists()
+
+
 def image_list(
     *, step: models.Step | None = None, limit: int = 100
 ) -> dm.QuerySet[models.Image]:
@@ -48,33 +56,21 @@ def rating_list() -> dm.QuerySet[models.Rating]:
     return models.Rating.objects.select_related("session", "image").all()
 
 
-def _fewest_ratings_qs(
-    *,
-    step: models.Step,
-    exclude_pk: int | None = None,
-) -> dm.QuerySet:
-    """Order a step's images by ascending number of review submissions.
-
-    Counts distinct submission rows (Rating/Annotation), so an image reviewed
-    once but marked with many cells does not look "more reviewed" than one
-    reviewed several times.
-    """
-    qs = models.Image.objects.filter(step=step.value)
-    if exclude_pk is not None:
-        qs = qs.exclude(id=exclude_pk)
-    return (
-        qs.values("id")
-        .annotate(n_ratings=dm.Count(step.related_name, distinct=True))
-        .order_by("n_ratings")
-    )
-
-
 def image_with_fewest_ratings(
     *, step: models.Step, exclude: int | None = None
 ) -> models.Image:
-    """The next image to rate for a step: the one with fewest submissions."""
-    image = _fewest_ratings_qs(step=step, exclude_pk=exclude).first()
-    if image is None:
+    """The next image to rate for a step: the one with fewest submissions.
+
+    Ordered by the denormalized ``Image.n_reviews`` counter (maintained by the
+    services layer, one increment per Rating/Annotation submission) and then by
+    ``id``. Backed by the ``image_next`` index, this is an index range seek that
+    reads a single leaf entry — no aggregate scan over the whole step.
+    """
+    qs = models.Image.objects.filter(step=step.value)
+    if exclude is not None:
+        qs = qs.exclude(id=exclude)
+    image_id = qs.order_by("n_reviews", "id").values_list("id", flat=True).first()
+    if image_id is None:
         raise exceptions.ApplicationError("No image found")
 
-    return models.Image.objects.get(pk=image.get("id"))
+    return models.Image.objects.get(pk=image_id)

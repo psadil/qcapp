@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH -J qcapp-fmap
-#SBATCH -o fmap.log
+#SBATCH -J qcapp-render
+#SBATCH -o render.log
 #SBATCH -t 2-00:00:00
 #SBATCH -p corralextra
 #SBATCH -N 1 -n 1
@@ -10,49 +10,28 @@ set -xeu
 
 a2cps=/corral-secure/projects/A2CPS
 release=${a2cps}/products/consortium-data/pre-surgery-release-3-0-0/mris
+derivatives=${release}/derivatives
 
-pixi run b2t2 index \
-	--output fmriprep.parquet \
-	--workers 4 \
-	"${release}"/derivatives/fmriprep
+# Index every derivative tree into one bidslake catalog. Related files (a mask's
+# T1w, a field map's IntendedFor bold + boldref + transform) are then resolved by
+# BIDS concept at render time, across trees, from this single catalog. FreeSurfer
+# recon-all is non-BIDS, so it uses the bidslake FreeSurfer adapter and indexes as
+# its own dataset (its sourcedata/ nesting defeats the term-map anchor otherwise).
+catalog=/scratch/08266/psadil/qcapp/a2cps.duckdb
+bidslake index -i "${derivatives}/fmriprep" -o "${catalog}"
+bidslake index -i "${derivatives}/synthstrip" -o "${catalog}"
+bidslake index -i "${derivatives}/qsirecon_fsl_dtifit/dtifit/multishell" \
+	--dataset-id dtifit -o "${catalog}"
+bidslake index -i "${derivatives}/freesurfer" --adapter freesurfer \
+	--dataset-id freesurfer -o "${catalog}"
 
-pixi run b2t2 index \
-	--output synthstrip.parquet \
-	--workers 4 \
-	"${release}"/derivatives/synthstrip
-
+# Render every step present in the catalog, updating in place. One process is the
+# sole SQLite writer; rendering fans out across worker processes internally.
+# The psadil/dirt:manage image ships the `bidslake` CLI and depends on bidslake by
+# git rev, so `bidslake index` above can also run inside the container if desired.
 apptainer run \
-	--bind /scratch/08266/psadil/qcapp/fmriprep.parquet:/tmp/fmriprep.parquet \
+	--bind /scratch/08266/psadil/qcapp/a2cps.duckdb:/tmp/a2cps.duckdb \
 	--bind "${a2cps}" \
 	--env-file=.env \
 	docker://psadil/dirt:manage \
-	add_fmap_coregistration \
-	--update \
-	/tmp/fmriprep.parquet &
-
-apptainer run \
-	--bind "${a2cps}" \
-	--env-file=.env \
-	docker://psadil/dirt:manage \
-	add_dtifit \
-	--update \
-	"${release}"/derivatives/qsirecon_fsl_dtifit/dtifit/multishell &
-
-apptainer run \
-	--bind /scratch/08266/psadil/qcapp/synthstrip.parquet:/tmp/synthstrip.parquet \
-	--bind "${a2cps}" \
-	--env-file=.env \
-	docker://psadil/dirt:manage \
-	add_masks \
-	--update \
-	/tmp/synthstrip.parquet &
-
-apptainer run \
-	--bind "${a2cps}" \
-	--env-file=.env \
-	docker://psadil/dirt:manage \
-	add_surface_localization \
-	--update \
-	"${release}"/derivatives/freesurfer &
-
-wait
+	render --update /tmp/a2cps.duckdb

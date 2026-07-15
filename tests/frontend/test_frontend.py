@@ -32,16 +32,8 @@ def _make_png(width: int, height: int) -> bytes:
 
 
 @pytest.fixture
-def eager_celery_and_test_cache(settings):
-    """Run Celery tasks inline (no broker) and use an in-memory cache.
-
-    The views are synchronous, so no DJANGO_ALLOW_ASYNC_UNSAFE is needed; eager
-    results are stored (see settings) so the view's AsyncResult.get() reads the
-    prefetched image back.
-    """
-    settings.CELERY_TASK_ALWAYS_EAGER = True
-    settings.CELERY_TASK_EAGER_PROPAGATES = True
-    settings.CELERY_TASK_STORE_EAGER_RESULT = True
+def test_cache(settings):
+    """Use an in-memory cache so the live-server tests need no cache table."""
     settings.CACHES = {
         "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
     }
@@ -51,7 +43,7 @@ def eager_celery_and_test_cache(settings):
 def test_index_and_theme_toggling(
     live_server: live_server_helper.LiveServer,
     page: Page,
-    eager_celery_and_test_cache,
+    test_cache,
 ):
     """Landing step-selection page and the theme switcher (themes.js)."""
     page.goto(live_server.url)
@@ -88,10 +80,10 @@ def test_rating_hotkeys(
     live_server: live_server_helper.LiveServer,
     page: Page,
     hotkey: str,
-    eager_celery_and_test_cache,
+    test_cache,
 ):
     """Rating radios respond to p/u/f hotkeys and Enter submits (selects.js)."""
-    # Two images so the background prefetch of the "next" image always has one.
+    # Two images so there is a "next" image after the first is reviewed.
     seeded = {
         models.Image.objects.create(
             img=_make_png(64, 64),
@@ -137,10 +129,10 @@ def test_rating_hotkeys(
 def test_canvas_grid_paint_flow(
     live_server: live_server_helper.LiveServer,
     page: Page,
-    eager_celery_and_test_cache,
+    test_cache,
 ):
     """Paint cells on the grid at two levels and submit; cells persist."""
-    # Two images so the background prefetch of the "next" image always has one.
+    # Two images so there is a "next" image after the first is reviewed.
     seeded = {
         models.Image.objects.create(
             img=_make_png(200, 200),

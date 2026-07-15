@@ -17,6 +17,7 @@ from django_dirt_ratings.services import (
     image_create,
     image_delete,
     image_upsert,
+    image_upsert_many,
     rating_create,
     session_create,
 )
@@ -68,6 +69,36 @@ class TestRatingCreate:
 
 
 @pytest.mark.django_db
+class TestReviewCounter:
+    """Image.n_reviews is maintained by the services layer (see selectors)."""
+
+    def test_rating_increments_counter(self, fmap_image, fmap_session):
+        assert fmap_image.n_reviews == 0
+        rating_create(image=fmap_image, session=fmap_session, rating=Ratings.PASS)
+        rating_create(image=fmap_image, session=fmap_session, rating=Ratings.FAIL)
+        fmap_image.refresh_from_db()
+        assert fmap_image.n_reviews == 2
+
+    def test_annotation_counts_once_regardless_of_cells(self, mask_image, mask_session):
+        annotation_create(
+            image=mask_image,
+            session=mask_session,
+            grid_cols=28,
+            grid_rows=21,
+            cells=[(c, 0, Ratings.FAIL) for c in range(5)],
+        )
+        mask_image.refresh_from_db()
+        # One submission == one review, even though five cells were marked.
+        assert mask_image.n_reviews == 1
+
+    def test_invalid_rating_does_not_increment(self, fmap_image, fmap_session):
+        with pytest.raises(ValidationError):
+            rating_create(image=fmap_image, session=fmap_session, rating=999)
+        fmap_image.refresh_from_db()
+        assert fmap_image.n_reviews == 0
+
+
+@pytest.mark.django_db
 class TestImageServices:
     def test_image_create(self):
         image = image_create(
@@ -104,6 +135,39 @@ class TestImageServices:
         assert updated.pk == created.pk
         assert Image.objects.count() == 1
         assert bytes(Image.objects.get().img) == b"second"
+
+    def test_image_upsert_many_creates_then_updates(self):
+        rows = [
+            {
+                "img": b"a",
+                "file1": "f.nii.gz",
+                "file2": None,
+                "display": DisplayMode.X,
+                "step": Step.MASK,
+                "slice": s,
+            }
+            for s in (0, 1)
+        ]
+        image_upsert_many(images=rows)
+        assert Image.objects.count() == 2
+
+        first = Image.objects.get(file1="f.nii.gz", slice=0)
+        # Re-upsert one identity with new bytes -> update in place (ON CONFLICT).
+        image_upsert_many(
+            images=[
+                {
+                    "img": b"A",
+                    "file1": "f.nii.gz",
+                    "file2": None,
+                    "display": DisplayMode.X,
+                    "step": Step.MASK,
+                    "slice": 0,
+                }
+            ]
+        )
+        assert Image.objects.count() == 2  # no duplicate
+        first.refresh_from_db()
+        assert bytes(first.img) == b"A"
 
 
 @pytest.mark.django_db

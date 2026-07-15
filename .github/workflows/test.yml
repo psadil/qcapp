@@ -1,0 +1,33 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "pixi.lock"
+      - ".github/workflows/test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The `dev` env is the web app + test tooling only — no neuro/bidslake
+      # stack (the tests are all web-side, using synthetic images).
+      - uses: prefix-dev/setup-pixi@v0.8.14
+        with:
+          environments: dev
+          locked: true
+      # The frontend tests drive a real browser via Playwright.
+      - run: pixi run -e dev playwright install --with-deps chromium
+      - name: Run tests
+        env:
+          DJANGO_SECRET_KEY: ci-not-a-secret
+        run: pixi run -e dev test
