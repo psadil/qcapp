@@ -1,10 +1,12 @@
 """Tests for django_dirt_ratings models."""
 
 import pytest
+from django.contrib.gis import geos
 from django.db import IntegrityError
 
 from django_dirt_ratings.models import (
-    ClickedCoordinate,
+    GEOMETRY_SRID,
+    Annotation,
     DisplayMode,
     Image,
     Rating,
@@ -31,6 +33,38 @@ class TestStepChoices:
             "DTIFIT",
         }
 
+    @pytest.mark.parametrize(
+        "step, expected",
+        [
+            (Step.MASK, "png"),
+            (Step.SPATIAL_NORMALIZATION, "png"),
+            (Step.SURFACE_LOCALIZATION, "png"),
+            (Step.FMAP_COREGISTRATION, "apng"),
+            (Step.DTIFIT, "apng"),
+        ],
+    )
+    def test_image_type(self, step, expected):
+        assert step.image_type == expected
+
+    @pytest.mark.parametrize(
+        "step, expected",
+        [
+            (Step.MASK, "annotation"),
+            (Step.SPATIAL_NORMALIZATION, "annotation"),
+            (Step.SURFACE_LOCALIZATION, "annotation"),
+            (Step.FMAP_COREGISTRATION, "rating"),
+            (Step.DTIFIT, "rating"),
+        ],
+    )
+    def test_related_name(self, step, expected):
+        assert step.related_name == expected
+
+    def test_related_name_matches_query_names(self):
+        """The enum property must stay in sync with Image's related query names."""
+        query_names = {related.name for related in Image._meta.related_objects}
+        for step in Step:
+            assert step.related_name in query_names
+
 
 class TestRatingsChoices:
     """Ratings enum should expose PASS / UNSURE / FAIL."""
@@ -45,16 +79,11 @@ class TestRatingsChoices:
 
 
 class TestDisplayMode:
-    """DisplayMode should have X/Y/Z and a get_random helper."""
+    """DisplayMode should expose the three view axes."""
 
     def test_expected_modes_exist(self):
         names = {d.name for d in DisplayMode}
         assert names == {"X", "Y", "Z"}
-
-    def test_get_random_returns_valid_choice(self):
-        for _ in range(20):
-            val = DisplayMode.get_random()
-            assert val in DisplayMode.values
 
 
 @pytest.mark.django_db
@@ -71,11 +100,10 @@ class TestImageModel:
         defaults.update(overrides)
         return Image.objects.create(**defaults)
 
-    def test_to_dict_returns_expected_keys(self):
+    def test_timestamps_are_set(self):
         img = self._make_image()
-        d = img.to_dict()
-        assert set(d.keys()) == {"id", "step", "img"}
-        assert d["id"] == img.pk
+        assert img.created_at is not None
+        assert img.updated_at is not None
 
     def test_unique_constraint_prevents_duplicates(self):
         self._make_image()
@@ -135,15 +163,19 @@ class TestRatingModel:
 
 
 @pytest.mark.django_db
-class TestClickedCoordinateModel:
-    def test_create_clicked_coordinate(self, mask_image, mask_session):
-        cc = ClickedCoordinate.objects.create(
-            image=mask_image, session=mask_session, x=10.5, y=20.3
+class TestAnnotationModel:
+    def test_geometry_round_trip(self, mask_image, mask_session):
+        annotation = Annotation.objects.create(
+            image=mask_image,
+            session=mask_session,
+            geometry=geos.Point(10.5, 20.3, srid=GEOMETRY_SRID),
         )
-        assert cc.pk is not None
-        assert cc.x == pytest.approx(10.5)
+        saved = Annotation.objects.get(pk=annotation.pk)
+        assert saved.geometry.x == pytest.approx(10.5)
+        assert saved.geometry.y == pytest.approx(20.3)
 
-    def test_nullable_coordinates(self, mask_image, mask_session):
-        cc = ClickedCoordinate.objects.create(image=mask_image, session=mask_session)
-        assert cc.x is None
-        assert cc.y is None
+    def test_nullable_geometry(self, mask_image, mask_session):
+        annotation = Annotation.objects.create(
+            image=mask_image, session=mask_session
+        )
+        assert annotation.geometry is None

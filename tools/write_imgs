@@ -25,7 +25,7 @@ apptainer run \
 	--bind /scratch/08266/psadil/qcapp/fmriprep.parquet:/tmp/fmriprep.parquet \
 	--bind "${a2cps}" \
 	--env-file=.env \
-	docker://psadil/qcapp:manage \
+	docker://psadil/dirt:manage \
 	add_fmap_coregistration \
 	--update \
 	/tmp/fmriprep.parquet &
@@ -33,7 +33,7 @@ apptainer run \
 apptainer run \
 	--bind "${a2cps}" \
 	--env-file=.env \
-	docker://psadil/qcapp:manage \
+	docker://psadil/dirt:manage \
 	add_dtifit \
 	--update \
 	"${release}"/derivatives/qsirecon_fsl_dtifit/dtifit/multishell &
@@ -42,7 +42,7 @@ apptainer run \
 	--bind /scratch/08266/psadil/qcapp/synthstrip.parquet:/tmp/synthstrip.parquet \
 	--bind "${a2cps}" \
 	--env-file=.env \
-	docker://psadil/qcapp:manage \
+	docker://psadil/dirt:manage \
 	add_masks \
 	--update \
 	/tmp/synthstrip.parquet &
@@ -50,7 +50,7 @@ apptainer run \
 apptainer run \
 	--bind "${a2cps}" \
 	--env-file=.env \
-	docker://psadil/qcapp:manage \
+	docker://psadil/dirt:manage \
 	add_surface_localization \
 	--update \
 	"${release}"/derivatives/freesurfer &

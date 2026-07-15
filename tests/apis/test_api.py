@@ -71,6 +71,73 @@ class TestImageAPI:
         assert response.status_code == 200
         assert len(response.json()) == 2
 
+    def test_list_images_filters_by_step(self, client):
+        Image.objects.create(
+            img=b"\x89PNG",
+            slice=0,
+            file1="mask.nii.gz",
+            display=DisplayMode.X,
+            step=Step.MASK,
+        )
+        Image.objects.create(
+            img=b"\x89PNG",
+            slice=0,
+            file1="dtifit.nii.gz",
+            display=DisplayMode.X,
+            step=Step.DTIFIT,
+        )
+        response = client.get(f"/api/images/?step={Step.DTIFIT.value}")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["file1"] == "dtifit.nii.gz"
+
+    def test_create_image_decodes_base64(self, client):
+        payload = {
+            "img": base64.b64encode(b"\x89PNG").decode(),
+            "file1": "posted.nii.gz",
+            "display": DisplayMode.X.value,
+            "step": Step.MASK.value,
+            "slice": 0,
+        }
+        response = client.post(
+            "/api/image/", data=payload, content_type="application/json"
+        )
+        assert response.status_code == 200
+        img = Image.objects.get(pk=response.json()["id"])
+        assert bytes(img.img) == b"\x89PNG"
+
+
+@pytest.mark.django_db
+class TestErrorEnvelope:
+    """All API errors share the {"message": ..., "extra": {...}} shape."""
+
+    def test_not_found_envelope(self, client):
+        response = client.get("/api/image/99999/")
+        assert response.status_code == 404
+        assert response.json() == {"message": "Image 99999 not found", "extra": {}}
+
+    def test_validation_error_envelope(self, client):
+        payload = {
+            "img": base64.b64encode(b"\x89PNG").decode(),
+            "file1": "dup.nii.gz",
+            "display": DisplayMode.X.value,
+            "step": Step.MASK.value,
+            "slice": 0,
+        }
+        first = client.post(
+            "/api/image/", data=payload, content_type="application/json"
+        )
+        assert first.status_code == 200
+
+        duplicate = client.post(
+            "/api/image/", data=payload, content_type="application/json"
+        )
+        assert duplicate.status_code == 400
+        body = duplicate.json()
+        assert body["message"] == "Validation error"
+        assert "fields" in body["extra"]
+
 
 @pytest.mark.django_db
 class TestRatingsAPI:

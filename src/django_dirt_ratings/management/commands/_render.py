@@ -1,8 +1,6 @@
 import io
-import logging
 import tempfile
 import time
-import typing
 from datetime import datetime
 from pathlib import Path
 from wsgiref import handlers
@@ -11,7 +9,6 @@ import imageio.v3 as iio
 import nibabel as nb
 import numpy as np
 import numpy.typing as npt
-import polars as pl
 from dipy.reconst import dti
 from matplotlib import pyplot as plt
 from nibabel import spatialimages
@@ -114,7 +111,7 @@ def get_mask(
 ) -> bytes:
     cuts = cuts_from_bbox(mask_nii, cuts=N_CUTS).get(display_mode)
     if cuts is None:
-        raise ValueError("Misaglinged Display Mode")
+        raise ValueError("Misaligned Display Mode")
     f = plt.figure(figsize=figsize, layout="none")
     with io.BytesIO() as img:
         p: displays.OrthoSlicer = plotting.plot_anat(
@@ -145,7 +142,7 @@ def get_surface_localization(
 ) -> bytes:
     cuts = cuts_from_bbox(ribbon_nii, cuts=N_CUTS).get(display_mode)
     if cuts is None:
-        raise ValueError("Misaglinged Display Mode")
+        raise ValueError("Misaligned Display Mode")
     f = plt.figure(figsize=figsize, layout="none")
     contour_data = ribbon_nii.get_fdata() % 39
     white = image.new_img_like(ribbon_nii, contour_data == 2)
@@ -197,43 +194,6 @@ def mgz_to_nifti(src) -> nb.nifti1.Nifti1Image:
     return nb.nifti1.Nifti1Image.from_image(mgh)
 
 
-def merge_or_write_image_db(d: pl.LazyFrame, dst: Path) -> None:
-    if dst.exists():
-        logging.info(f"Using existing database {dst}")
-        joined: pl.DataFrame = (
-            pl
-            .scan_parquet(dst)
-            .join(
-                d,
-                how="full",
-                on=["slice", "file1", "file2", "display", "step"],
-                coalesce=True,
-            )
-            .with_columns(match=pl.col("img") == pl.col("img_right"))
-            .collect()
-        )  # type: ignore
-        if joined.select("match").to_series().any():
-            logging.warning("Replacing images")
-            logging.debug(
-                joined.filter(pl.col("match")).drop(
-                    pl.selectors.starts_with("img"), "match"
-                )
-            )
-        joined.drop("img_left").write_parquet(dst)
-    else:
-        d.sink_parquet(dst)
-
-
-async def merge_imgs(imgs: typing.Sequence[models.Image]) -> None:
-    if len(imgs):
-        await models.Image.objects.abulk_create(
-            imgs,
-            update_conflicts=True,
-            update_fields=["img", "created"],
-            unique_fields=["slice", "file1", "display", "step"],
-        )
-
-
 def rotation2canonical(img):
     """Calculate the rotation w.r.t. cardinal axes of input image."""
     img = nb.funcs.as_closest_canonical(img)
@@ -270,7 +230,7 @@ def get_fmap_coregistration(
 
     cuts = cuts_from_bbox(mask_nii, cuts=N_CUTS).get(display_mode)
     if cuts is None:
-        raise ValueError("Misaglinged Display Mode")
+        raise ValueError("Misaligned Display Mode")
     f0 = plt.figure(figsize=figsize, layout="none")
     f1 = plt.figure(figsize=figsize, layout="none")
 

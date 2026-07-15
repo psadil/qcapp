@@ -1,4 +1,4 @@
-import asyncio
+import functools
 import logging
 import typing as t
 from pathlib import Path
@@ -11,7 +11,9 @@ from django_typer.management import TyperCommand
 
 from django_dirt_ratings import models
 
-from . import _private
+from . import _ingest, _render
+
+N_SPATIAL_NORMALIZATION_CUTS = 3
 
 
 class Command(TyperCommand):
@@ -61,35 +63,12 @@ class Command(TyperCommand):
         for anat in anats:
             logging.info(f"{anat=}")
             file_nii = nb.nifti1.Nifti1Image.load(anat)
-            file1 = Path(anat).name
-            for display_mode in models.DisplayMode.choices:
-                logging.info(f"{display_mode=}")
-                for cut in range(3):
-                    logging.info(f"{cut=}")
-                    if (
-                        i := models.Image.objects.filter(
-                            slice=cut,
-                            display=display_mode[0],
-                            step=models.Step.SPATIAL_NORMALIZATION,
-                            file1=file1,
-                        )
-                    ).exists():
-                        if not update:
-                            logging.info("Found object. Skipping")
-                            continue
-                        else:
-                            i.delete()
-                    i = _private.get_spatial_normalization(
-                        cut=cut,
-                        display_mode=models.DisplayMode(display_mode[0]),
-                        file_nii=file_nii,
-                    )
-                    asyncio.run(
-                        models.Image.objects.acreate(
-                            img=i,
-                            slice=cut,
-                            display=display_mode[0],
-                            step=models.Step.SPATIAL_NORMALIZATION,
-                            file1=file1,
-                        )
-                    )
+            _ingest.ingest_series(
+                file1=Path(anat).name,
+                step=models.Step.SPATIAL_NORMALIZATION,
+                cuts=range(N_SPATIAL_NORMALIZATION_CUTS),
+                render=functools.partial(
+                    _render.get_spatial_normalization, file_nii=file_nii
+                ),
+                update=update,
+            )

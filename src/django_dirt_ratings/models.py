@@ -1,7 +1,13 @@
-import random
-import typing
-
+from django.contrib.gis.db import models as gm
 from django.db import models
+from django.utils import timezone
+
+GEOMETRY_SRID = -1
+"""Annotations store canvas pixel coordinates, not geographic ones.
+
+SpatiaLite's "undefined" srid is -1; srid 0 cannot be used because GEOS
+treats 0 as "no srid set" and Django then emits invalid SQL.
+"""
 
 
 class Step(models.IntegerChoices):
@@ -10,6 +16,24 @@ class Step(models.IntegerChoices):
     SURFACE_LOCALIZATION = 2
     FMAP_COREGISTRATION = 3
     DTIFIT = 4
+
+    @property
+    def image_type(self) -> str:
+        """MIME subtype of the figures stored for this step."""
+        match self:
+            case Step.FMAP_COREGISTRATION | Step.DTIFIT:
+                return "apng"
+            case _:
+                return "png"
+
+    @property
+    def related_name(self) -> str:
+        """Related query name from Image to this step's submission model."""
+        match self:
+            case Step.MASK | Step.SPATIAL_NORMALIZATION | Step.SURFACE_LOCALIZATION:
+                return "annotation"
+            case _:
+                return "rating"
 
 
 class Ratings(models.IntegerChoices):
@@ -23,25 +47,27 @@ class DisplayMode(models.IntegerChoices):
     Y = 1
     Z = 2
 
-    @classmethod
-    def get_random(cls) -> int:
-        return random.choice(cls.values)
+
+class BaseModel(models.Model):
+    created_at = models.DateTimeField(db_index=True, default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
 
 
-class Session(models.Model):
+class Session(BaseModel):
     step = models.IntegerField(choices=Step.choices)
-    created = models.DateTimeField(auto_now_add=True)
-    user = models.TextField(default=None, null=True)
+    user = models.TextField(default=None, null=True, blank=True)
 
 
-class Image(models.Model):
+class Image(BaseModel):
     img = models.BinaryField()
-    slice = models.IntegerField(null=True)
+    slice = models.IntegerField(null=True, blank=True)
     file1 = models.TextField(max_length=512)
-    file2 = models.TextField(max_length=512, null=True)
+    file2 = models.TextField(max_length=512, null=True, blank=True)
     display = models.IntegerField(choices=DisplayMode.choices)
     step = models.IntegerField(choices=Step.choices)
-    created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
@@ -50,11 +76,8 @@ class Image(models.Model):
             )
         ]
 
-    def to_dict(self) -> dict[str, typing.Any]:
-        return {"id": self.pk, "step": self.step, "img": self.img}
 
-
-class FromRequest(models.Model):
+class FromRequest(BaseModel):
     """Abstract base for models submitted during a rating session."""
 
     class Meta:
@@ -71,13 +94,20 @@ class FromRequest(models.Model):
         help_text="Please only add additional comments if necessary.",
         blank=True,
     )
-    created = models.DateTimeField(auto_now_add=True)
 
 
-class ClickedCoordinate(FromRequest):
-    x = models.FloatField(null=True)
-    y = models.FloatField(null=True)
+class Annotation(FromRequest):
+    """A clicked point on an image, in canvas pixel coordinates.
+
+    A null geometry records a submission with no clicked points, i.e. an
+    image where the rater found nothing to mark but may have left flags or
+    comments.
+    """
+
+    geometry = gm.GeometryField(
+        srid=GEOMETRY_SRID, spatial_index=False, null=True, blank=True
+    )
 
 
 class Rating(FromRequest):
-    rating = models.IntegerField(choices=Ratings.choices, default=None, verbose_name="")
+    rating = models.IntegerField(choices=Ratings.choices, verbose_name="")

@@ -1,4 +1,4 @@
-import asyncio
+import functools
 import json
 import logging
 import typing as t
@@ -14,7 +14,7 @@ from nibabel import spatialimages
 
 from django_dirt_ratings import models
 
-from . import _private
+from . import _ingest, _render
 
 
 class Command(TyperCommand):
@@ -35,7 +35,7 @@ class Command(TyperCommand):
         ] = False,
     ):
         """
-        Add Masks from BIDS Table
+        Add fmap coregistration figures from BIDS Table
         """
 
         fieldmaps = pl.read_parquet(index).filter(
@@ -86,40 +86,16 @@ class Command(TyperCommand):
                 file_nii: spatialimages.SpatialImage = nt.resampling.apply(
                     transform, spatialimage=boldref_nii
                 )  # type: ignore
-                file1 = boldref.name
-                for display_mode in models.DisplayMode.choices:
-                    logging.info(f"{display_mode=}")
-                    for cut in range(_private.N_CUTS):
-                        logging.info(f"{cut=}")
-                        image = models.Image.objects.filter(
-                            slice=cut,
-                            display=display_mode[0],
-                            step=models.Step.FMAP_COREGISTRATION,
-                            file1=file1,
-                        )
-                        if image.exists():
-                            if not update:
-                                logging.info("Found object. Skipping.")
-                                continue
-                            logging.info("Found object. Updating.")
-
-                        i = _private.get_fmap_coregistration(
-                            cut=cut,
-                            display_mode=models.DisplayMode(display_mode[0]),
-                            mask_nii=mask_nii,
-                            file_nii=file_nii,
-                            file2_nii=file2_nii,
-                        )
-                        if image.exists():
-                            asyncio.run(image.aupdate(img=i))
-                        else:
-                            asyncio.run(
-                                models.Image.objects.acreate(
-                                    img=i,
-                                    slice=cut,
-                                    display=display_mode[0],
-                                    step=models.Step.FMAP_COREGISTRATION,
-                                    file1=file1,
-                                    file2=file2.name,
-                                )
-                            )
+                _ingest.ingest_series(
+                    file1=boldref.name,
+                    file2=file2.name,
+                    step=models.Step.FMAP_COREGISTRATION,
+                    cuts=range(_render.N_CUTS),
+                    render=functools.partial(
+                        _render.get_fmap_coregistration,
+                        mask_nii=mask_nii,
+                        file_nii=file_nii,
+                        file2_nii=file2_nii,
+                    ),
+                    update=update,
+                )

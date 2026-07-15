@@ -8,13 +8,8 @@ from django_dirt_ratings import models, selectors
 
 @celery.shared_task
 def run_db_query_async(step: int, last_pk: int | None = None) -> dict[str, typing.Any]:
-    if last_pk is None:
-        image = sync.async_to_sync(selectors.get_image_with_fewest_ratings)(
-            step=models.Step(step)
-        )
-    else:
-        image = sync.async_to_sync(selectors.get_image_with_fewest_ratings)(
-            step=models.Step(step), exclude=last_pk
-        )
-
-    return image.to_dict()
+    """Find the next image to rate; return a JSON-safe reference to it."""
+    image = sync.async_to_sync(selectors.image_with_fewest_ratings)(
+        step=models.Step(step), exclude=last_pk
+    )
+    return {"id": image.pk, "step": image.step}

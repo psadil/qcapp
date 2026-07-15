@@ -25,7 +25,9 @@ def eager_celery_and_test_cache(settings):
 @pytest.mark.skip
 @pytest.mark.django_db(transaction=True)
 def test_index_and_theme_toggling(
-    live_server: live_server_helper.LiveServer, page: Page
+    live_server: live_server_helper.LiveServer,
+    page: Page,
+    eager_celery_and_test_cache,
 ):
     """Test landing step selection page and the reactive theme switcher."""
     page.on("console", lambda msg: print(f"CONSOLE: {msg.text}"))
@@ -67,7 +69,10 @@ def test_index_and_theme_toggling(
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("hotkey", ["p", "u", "f"])
 def test_rating_hotkeys(
-    live_server: live_server_helper.LiveServer, page: Page, hotkey: str
+    live_server: live_server_helper.LiveServer,
+    page: Page,
+    hotkey: str,
+    eager_celery_and_test_cache,
 ):
     """Test selecting values with hotkeys, and submitting."""
     # Seed DB
@@ -107,7 +112,7 @@ def test_rating_hotkeys(
     r = models.Rating.objects.first()
     assert (
         models.Rating.objects.count() == 1
-        and isinstance(r, models.Ratings)
+        and isinstance(r, models.Rating)
         and r.rating == expected
         and r.image_id == img1.pk
     )
@@ -115,7 +120,7 @@ def test_rating_hotkeys(
 
 @pytest.mark.skip
 @pytest.mark.django_db(transaction=True)
-def test_canvas_clicking_flow(live_server, page: Page):
+def test_canvas_clicking_flow(live_server, page: Page, eager_celery_and_test_cache):
     """Test clicking on the canvas to add coordinates and submitting."""
     # Seed DB with MASK images
     valid_png = __import__("base64").b64decode(
@@ -144,7 +149,7 @@ def test_canvas_clicking_flow(live_server, page: Page):
     assert box is not None
     page.mouse.click(box["x"] + 100, box["y"] + 100)
 
-    assert models.ClickedCoordinate.objects.count() == 0
+    assert models.Annotation.objects.count() == 0
 
     # Press Enter to submit
     # no longer needed
@@ -154,12 +159,11 @@ def test_canvas_clicking_flow(live_server, page: Page):
     page.wait_for_load_state("networkidle")
     print("HTML AFTER ENTER:", page.content())
 
-    # ClickedCoordinate row should be saved
-    cc = models.ClickedCoordinate.objects.first()
+    # Annotation row should be saved
+    annotation = models.Annotation.objects.first()
     assert (
-        models.ClickedCoordinate.objects.count() == 1
-        and isinstance(cc, models.ClickedCoordinate)
-        and cc.image_id == img1.pk
-        and cc.x is not None
-        and cc.y is not None
+        models.Annotation.objects.count() == 1
+        and isinstance(annotation, models.Annotation)
+        and annotation.image_id == img1.pk
+        and annotation.geometry is not None
     )

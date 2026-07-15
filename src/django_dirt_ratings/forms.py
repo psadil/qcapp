@@ -25,6 +25,6 @@ class IndexForm(forms.ModelForm):
 
 class ClickForm(forms.ModelForm):
     class Meta:
-        model = models.ClickedCoordinate
+        model = models.Annotation
         fields = ["source_data_issue", "comments"]
         widgets = {"comments": Textarea, "source_data_issue": CheckboxInput}

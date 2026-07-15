@@ -1,4 +1,4 @@
-import asyncio
+import functools
 import logging
 import typing as t
 from pathlib import Path
@@ -9,7 +9,7 @@ from django_typer.management import TyperCommand
 
 from django_dirt_ratings import models
 
-from . import _private
+from . import _ingest, _render
 
 
 class Command(TyperCommand):
@@ -27,6 +27,9 @@ class Command(TyperCommand):
         ],
         include: t.Annotated[list[str] | None, typer.Option()] = None,
         exclude: t.Annotated[list[str] | None, typer.Option()] = None,
+        update: t.Annotated[
+            bool, typer.Option(help="Whether to update img in database")
+        ] = False,
     ):
         """
         Add surface localization figures
@@ -50,36 +53,17 @@ class Command(TyperCommand):
                 )
                 continue
 
-            brain_nii = _private.mgz_to_nifti(brain_mgz)
-            ribbon_nii = _private.mgz_to_nifti(ribbon_mgz)
-            file1 = str(ribbon_mgz.relative_to(subjects_dir))
-            logging.info(f"{file1=}")
-            for display_mode in models.DisplayMode.choices:
-                logging.info(f"{display_mode=}")
-                for cut in range(_private.N_CUTS):
-                    logging.info(f"{cut=}")
-                    if models.Image.objects.filter(
-                        slice=cut,
-                        display=display_mode[0],
-                        step=models.Step.SURFACE_LOCALIZATION,
-                        file1=file1,
-                    ).exists():
-                        logging.info("Found object. Skipping")
-                        continue
-
-                    i = _private.get_surface_localization(
-                        cut=cut,
-                        display_mode=models.DisplayMode(display_mode[0]),
-                        brain_nii=brain_nii,
-                        ribbon_nii=ribbon_nii,
-                    )
-                    asyncio.run(
-                        models.Image.objects.acreate(
-                            img=i,
-                            slice=cut,
-                            display=display_mode[0],
-                            step=models.Step.SURFACE_LOCALIZATION,
-                            file1=file1,
-                            file2=str(brain_mgz.relative_to(subjects_dir)),
-                        )
-                    )
+            brain_nii = _render.mgz_to_nifti(brain_mgz)
+            ribbon_nii = _render.mgz_to_nifti(ribbon_mgz)
+            _ingest.ingest_series(
+                file1=str(ribbon_mgz.relative_to(subjects_dir)),
+                file2=str(brain_mgz.relative_to(subjects_dir)),
+                step=models.Step.SURFACE_LOCALIZATION,
+                cuts=range(_render.N_CUTS),
+                render=functools.partial(
+                    _render.get_surface_localization,
+                    brain_nii=brain_nii,
+                    ribbon_nii=ribbon_nii,
+                ),
+                update=update,
+            )

@@ -96,12 +96,12 @@ class TestRateViewPost:
     @patch(
         "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
     )
-    def test_invalid_rating_returns_404(self, mock_task, client):
+    def test_invalid_rating_rerenders_form(self, mock_task, client):
         response = client.post(
             reverse(FMAP_COREGISTRATION_VIEW),
             data={},  # missing required 'rating' field
         )
-        assert response.status_code == 404
+        assert response.status_code == 200  # form re-rendered with errors
         assert Rating.objects.count() == 0
 
 
