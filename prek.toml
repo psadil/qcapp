@@ -1,5 +1,8 @@
 # A plain `prek install` wires up both git shims (see the commit-msg hook below).
 default_install_hook_types = ["pre-commit", "commit-msg"]
+# Lint/format hooks only run pre-commit; the commit-msg stage is reserved for
+# the Conventional Commits check, so lint hooks never scan the commit message.
+default_stages = ["pre-commit"]
 
 [[repos]]
 repo = "https://github.com/astral-sh/ruff-pre-commit"
@@ -20,7 +23,9 @@ hooks = [
 [[repos]]
 repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.1"
-hooks = [{ id = "codespell" }]
+# Generated lock files aren't prose; skip them (they trip codespell on
+# package names that look like typos).
+hooks = [{ id = "codespell", exclude = '\.lock$' }]
 
 # Enforce Conventional Commits (https://www.conventionalcommits.org) on every
 # commit message. Runs at the commit-msg stage, so it needs the commit-msg shim
