@@ -34,11 +34,11 @@ pixi run -e docs docs-serve     # live-reload preview
 pixi run -e docs docs-build     # one-off build (also the CI gate)
 ```
 
-`docs-serve`/`docs-build` first regenerate the API-reference pages (`docs-gen`): an
-`ast`-based script (`tools/gen_reference.py`) writes the `docs/reference/` module pages, and
-`manage export_openapi` writes the REST-API page from the live django-ninja schema. Those
-generated pages are not checked in — do not edit them by hand; edit the source or the
-generator.
+The module reference pages (`docs/reference/`) render from source docstrings via
+[mkdocstrings](https://zensical.org/docs/setup/extensions/mkdocstrings) (`::: module`
+directives) — edit the docstrings, not the pages. The REST-API page and OpenAPI schema are
+generated from the live django-ninja API by `manage export_openapi`, which `docs-serve` /
+`docs-build` run first (via `docs-gen`); those two files are not checked in.
 
 ## Branches and pull requests
 

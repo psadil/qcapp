@@ -45,6 +45,10 @@ docs = [
     # (django + django-ninja) via the editable install, so `manage export_openapi`
     # can introspect the API without the heavy `manage` neuro stack.
     "zensical",
+    # Python API reference via Zensical's mkdocstrings integration. The python
+    # handler uses griffe's *static* analysis (parses source, no import), so the
+    # models document without a Django settings bootstrap.
+    "mkdocstrings[python]",
 ]
 
 
@@ -128,6 +132,6 @@ bidslake = { path = "../bidslake/crates/bidslake-py", editable = true }
 [tool.pixi.feature.docs.tasks]
 # Regenerate the auto-built reference pages (ast-based; no Django needed) and the
 # django-ninja OpenAPI schema, then build/serve with Zensical (reads mkdocs.yml).
-docs-gen = { cmd = "python tools/gen_reference.py && manage export_openapi", env = { DJANGO_SECRET_KEY = "docs-build-not-a-secret" } }
+docs-gen = { cmd = "manage export_openapi", env = { DJANGO_SECRET_KEY = "docs-build-not-a-secret" } }
 docs-build = { cmd = "zensical build --strict", depends-on = ["docs-gen"] }
 docs-serve = { cmd = "zensical serve", depends-on = ["docs-gen"] }

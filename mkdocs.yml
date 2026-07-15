@@ -40,6 +40,21 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
 
+plugins:
+  # Python API reference. griffe's static analysis parses the source, so no
+  # Django settings bootstrap is needed to document the models.
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: false
+            show_signature_annotations: true
+            separate_signature: true
+            show_if_no_docstring: true
+            members_order: source
+            docstring_section_style: list
+
 nav:
   - Home: index.md
   - Getting started:
