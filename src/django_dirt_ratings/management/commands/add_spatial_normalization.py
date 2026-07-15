@@ -53,8 +53,7 @@ class Command(TyperCommand):
             df = df.filter(pl.col("res") == res)
 
         anats: list[str] = (
-            df
-            .with_columns(anat=pl.col("root") + "/" + pl.col("path"))
+            df.with_columns(anat=pl.col("root") + "/" + pl.col("path"))
             .select("anat")
             .to_series()
             .to_list()

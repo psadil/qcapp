@@ -44,9 +44,15 @@ class Command(TyperCommand):
 
             img = _render.get_dtifit(
                 nii=nb.nifti1.Nifti1Image.load(fa),
-                v1=nb.nifti1.Nifti1Image.load(fa.with_name(fa.name.replace("FA", "V1"))),
-                v2=nb.nifti1.Nifti1Image.load(fa.with_name(fa.name.replace("FA", "V2"))),
-                v3=nb.nifti1.Nifti1Image.load(fa.with_name(fa.name.replace("FA", "V3"))),
+                v1=nb.nifti1.Nifti1Image.load(
+                    fa.with_name(fa.name.replace("FA", "V1"))
+                ),
+                v2=nb.nifti1.Nifti1Image.load(
+                    fa.with_name(fa.name.replace("FA", "V2"))
+                ),
+                v3=nb.nifti1.Nifti1Image.load(
+                    fa.with_name(fa.name.replace("FA", "V3"))
+                ),
             )
             services.image_upsert(
                 img=img,

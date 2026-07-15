@@ -175,7 +175,5 @@ class TestAnnotationModel:
         assert saved.geometry.y == pytest.approx(20.3)
 
     def test_nullable_geometry(self, mask_image, mask_session):
-        annotation = Annotation.objects.create(
-            image=mask_image, session=mask_session
-        )
+        annotation = Annotation.objects.create(image=mask_image, session=mask_session)
         assert annotation.geometry is None

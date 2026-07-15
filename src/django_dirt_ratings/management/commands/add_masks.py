@@ -50,8 +50,7 @@ class Command(TyperCommand):
             df = df.filter(pl.col("res") == res)
 
         masks: list[str] = (
-            df
-            .with_columns(masks=pl.col("root") + "/" + pl.col("path"))
+            df.with_columns(masks=pl.col("root") + "/" + pl.col("path"))
             .select("masks")
             .to_series()
             .to_list()

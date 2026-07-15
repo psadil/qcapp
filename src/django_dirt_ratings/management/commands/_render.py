@@ -50,11 +50,13 @@ def cuts_from_bbox_ijk(
     # I have manually found that for the axial view requiring 30%
     # of the slice elements to be masked drops almost empty boxes
     # in the mosaic of axial planes (and also addresses #281)
-    ijk_th = np.ceil([
-        (mask_data.shape[1] * mask_data.shape[2]) * 0.2,  # sagittal
-        (mask_data.shape[0] * mask_data.shape[2]) * 0.1,  # coronal
-        (mask_data.shape[0] * mask_data.shape[1]) * 0.3,  # axial
-    ]).astype(int)
+    ijk_th = np.ceil(
+        [
+            (mask_data.shape[1] * mask_data.shape[2]) * 0.2,  # sagittal
+            (mask_data.shape[0] * mask_data.shape[2]) * 0.1,  # coronal
+            (mask_data.shape[0] * mask_data.shape[1]) * 0.3,  # axial
+        ]
+    ).astype(int)
 
     vox_coords = np.zeros((4, cuts), dtype=np.float32)
     vox_coords[-1, :] = 1.0

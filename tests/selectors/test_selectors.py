@@ -91,9 +91,7 @@ class TestImageWithFewestRatings:
         session = Session.objects.create(step=Step.FMAP_COREGISTRATION)
         Rating.objects.create(image=img_rated, session=session, rating=Ratings.PASS)
 
-        result = async_to_sync(image_with_fewest_ratings)(
-            step=Step.FMAP_COREGISTRATION
-        )
+        result = async_to_sync(image_with_fewest_ratings)(step=Step.FMAP_COREGISTRATION)
         assert result.pk == img_unrated.pk
 
     def test_raises_on_empty_db(self):

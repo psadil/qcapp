@@ -107,9 +107,7 @@ ASGI_APPLICATION = "dirt.asgi.application"
 # manage createcachetable --database cache).
 
 DB_PATH = Path(env.str("DB", default=str(BASE_DIR.parent / "db" / "dirt.db")))
-CACHE_DB_PATH = Path(
-    env.str("CACHE_DB", default=str(DB_PATH.parent / "cache.sqlite3"))
-)
+CACHE_DB_PATH = Path(env.str("CACHE_DB", default=str(DB_PATH.parent / "cache.sqlite3")))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 CACHE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
