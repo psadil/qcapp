@@ -29,20 +29,27 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.addEventListener('keydown', function (e) {
-        // Ignore if typing in a textarea or input
-        if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-
+        const tag = document.activeElement.tagName;
         const key = e.key.toLowerCase();
-        if (hotkeyMap[key]) {
-            selectRadio(hotkeyMap[key]);
-            e.preventDefault();
-        } else if (key === 'enter') {
-            // Only submit if a rating is selected
+
+        if (key === 'enter') {
+            // Enter submits once a rating is chosen. Choosing a rating by
+            // hotkey focuses its radio, so we must allow Enter from a focused
+            // input here; only the comments textarea should get a newline.
+            if (tag === 'TEXTAREA') return;
             const checked = radios.find(r => r.checked);
             if (checked) {
                 form.requestSubmit ? form.requestSubmit() : form.submit();
                 e.preventDefault();
             }
+            return;
+        }
+
+        // Rating hotkeys should not fire while typing in a field.
+        if (['INPUT', 'TEXTAREA'].includes(tag)) return;
+        if (hotkeyMap[key]) {
+            selectRadio(hotkeyMap[key]);
+            e.preventDefault();
         }
     });
 
