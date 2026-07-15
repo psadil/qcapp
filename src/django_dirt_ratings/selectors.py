@@ -35,6 +35,14 @@ def image_exists(
     ).exists()
 
 
+def image_file_exists(*, file1: str, step: int) -> bool:
+    """Whether any Image for this source file + step exists.
+
+    Used by ingest to skip re-rendering a whole file's series when not updating.
+    """
+    return models.Image.objects.filter(file1=file1, step=step).exists()
+
+
 def image_list(
     *, step: models.Step | None = None, limit: int = 100
 ) -> dm.QuerySet[models.Image]:

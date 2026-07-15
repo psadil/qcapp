@@ -17,6 +17,7 @@ from django_dirt_ratings.services import (
     image_create,
     image_delete,
     image_upsert,
+    image_upsert_many,
     rating_create,
     session_create,
 )
@@ -134,6 +135,39 @@ class TestImageServices:
         assert updated.pk == created.pk
         assert Image.objects.count() == 1
         assert bytes(Image.objects.get().img) == b"second"
+
+    def test_image_upsert_many_creates_then_updates(self):
+        rows = [
+            {
+                "img": b"a",
+                "file1": "f.nii.gz",
+                "file2": None,
+                "display": DisplayMode.X,
+                "step": Step.MASK,
+                "slice": s,
+            }
+            for s in (0, 1)
+        ]
+        image_upsert_many(images=rows)
+        assert Image.objects.count() == 2
+
+        first = Image.objects.get(file1="f.nii.gz", slice=0)
+        # Re-upsert one identity with new bytes -> update in place (ON CONFLICT).
+        image_upsert_many(
+            images=[
+                {
+                    "img": b"A",
+                    "file1": "f.nii.gz",
+                    "file2": None,
+                    "display": DisplayMode.X,
+                    "step": Step.MASK,
+                    "slice": 0,
+                }
+            ]
+        )
+        assert Image.objects.count() == 2  # no duplicate
+        first.refresh_from_db()
+        assert bytes(first.img) == b"A"
 
 
 @pytest.mark.django_db

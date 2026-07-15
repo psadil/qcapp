@@ -61,6 +61,30 @@ def image_upsert(
     return instance
 
 
+def image_upsert_many(*, images: typing.Sequence[dict]) -> None:
+    """Create or refresh many Images in one INSERT ... ON CONFLICT.
+
+    Each dict is the fields of one Image (``img``, ``file1``, ``file2``,
+    ``display``, ``step``, ``slice``). On conflict against the ``image_meta``
+    unique key the bytes are refreshed in place, preserving the primary key (and
+    hence ratings) and ``n_reviews``. Only valid for non-null ``slice`` rows:
+    SQLite treats NULLs as distinct in a unique index, so ON CONFLICT would not
+    dedup them (the single-image DTIFIT step uses :func:`image_upsert` instead).
+    """
+    instances = [models.Image(**fields) for fields in images]
+    for instance in instances:
+        # Skip the unique/constraint checks — the image_meta uniqueness is what
+        # ON CONFLICT resolves below (validate_constraints would reject the very
+        # rows we intend to upsert). Field validation still runs.
+        instance.full_clean(validate_unique=False, validate_constraints=False)
+    models.Image.objects.bulk_create(
+        instances,
+        update_conflicts=True,
+        unique_fields=["slice", "file1", "display", "step"],
+        update_fields=["img", "file2"],
+    )
+
+
 def session_create(*, step: int, user: str | None = None) -> models.Session:
     session = models.Session(step=step, user=user)
     session.full_clean()

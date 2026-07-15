@@ -13,6 +13,7 @@ from django_dirt_ratings.models import (
 )
 from django_dirt_ratings.selectors import (
     image_exists,
+    image_file_exists,
     image_get,
     image_list,
     image_with_fewest_ratings,
@@ -54,6 +55,10 @@ class TestImageExistsAndList:
 
     def test_image_exists_false_for_unknown(self):
         assert not image_exists(file1="nope.nii.gz", display=0, step=Step.MASK, slice=0)
+
+    def test_image_file_exists(self, mask_image):
+        assert image_file_exists(file1=mask_image.file1, step=mask_image.step)
+        assert not image_file_exists(file1="nope.nii.gz", step=Step.MASK)
 
     def test_image_list_filters_by_step(self):
         _make_image(step=Step.MASK)
