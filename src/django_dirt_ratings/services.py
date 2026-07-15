@@ -9,6 +9,7 @@ writes to the database.
 import typing
 
 from django.db import transaction
+from django.db.models import F
 
 from django_dirt_ratings import models
 
@@ -75,15 +76,18 @@ def rating_create(
     source_data_issue: bool = False,
     comments: str = "",
 ) -> models.Rating:
-    instance = models.Rating(
-        image=image,
-        session=session,
-        rating=rating,
-        source_data_issue=source_data_issue,
-        comments=comments,
-    )
-    instance.full_clean()
-    instance.save()
+    with transaction.atomic():
+        instance = models.Rating(
+            image=image,
+            session=session,
+            rating=rating,
+            source_data_issue=source_data_issue,
+            comments=comments,
+        )
+        instance.full_clean()
+        instance.save()
+        # Maintain the denormalized review counter (see Image.n_reviews).
+        models.Image.objects.filter(pk=image.pk).update(n_reviews=F("n_reviews") + 1)
     return instance
 
 
@@ -124,5 +128,9 @@ def annotation_create(
         for instance in instances:
             instance.full_clean(validate_constraints=False)
         models.AnnotationCell.objects.bulk_create(instances)
+
+        # One increment per submission (see Image.n_reviews): an annotation marked
+        # with many cells still counts as a single review.
+        models.Image.objects.filter(pk=image.pk).update(n_reviews=F("n_reviews") + 1)
 
     return annotation

@@ -1,0 +1,63 @@
+# Zensical reads this mkdocs.yml natively (theme name `material` -> Zensical's
+# built-in theme). See https://zensical.org/docs/get-started/.
+site_name: DIRT — Derived Imaging Review Tool
+site_description: Manual QC of neuroimaging preprocessing derivatives at consortium scale
+repo_url: https://github.com/psadil/dirt
+repo_name: psadil/dirt
+# Emit page.html rather than page/index.html so relative links (and the
+# generated api/openapi.json) resolve the same locally and under the
+# GitHub Pages sub-path.
+use_directory_urls: false
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Tutorials:
+      - Review a local dataset: tutorials/review-local-dataset.md
+  - Concepts:
+      - How data flows: concepts/data-flow.md
+      - Review ordering: concepts/review-ordering.md
+      - Two kinds of review: concepts/interaction-types.md
+      - Data model: concepts/data-model.md
+  - Deployment: deployment.md
+  - Contributing: contributing.md
+  - Reference:
+      - Overview: reference/index.md
+      - Services: reference/services.md
+      - Selectors: reference/selectors.md
+      - Models: reference/models.md
+      - Command line: reference/cli.md
+      - REST API: reference/api.md

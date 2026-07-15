@@ -8,10 +8,8 @@ dependencies = [
     "django>=6.0.0",
     "django-typer",
     "django-environ>=0.12.0,<0.13",
-    "celery>=5.5.0",
     "django-ninja>=1.2.0",
     "orjson>=3.11.1",
-    "django-celery-results>=2.5.1,<3",
 ]
 
 [project.scripts]
@@ -24,7 +22,6 @@ dev = [
     "playwright",
     "pytest-playwright",
     "pywatchman>=3.0.0,<4",
-    "celery-types>=0.23.0",
     "django-stubs>=5.2.2",
     "jupyter>=1.1.1",
     "pytest>=8.0",
@@ -42,6 +39,13 @@ manage = [
     "nitransforms>=25.0.0",
     "numpy>=2.3.1",
     "polars>=1.31.0",
+]
+docs = [
+    # Zensical: the Material for MkDocs team's successor static site generator.
+    # Reads mkdocs.yml natively. The `docs` env also gets the base `dirt` app
+    # (django + django-ninja) via the editable install, so `manage export_openapi`
+    # can introspect the API without the heavy `manage` neuro stack.
+    "zensical",
 ]
 
 
@@ -71,18 +75,10 @@ dirt = { path = ".", editable = true }
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 manage = { features = ["manage"] }
+# Own solve group: keep zensical (alpha) out of the default/dev/manage solve.
+docs = { features = ["docs"] }
 
 [tool.pixi.tasks]
-serve-rabbitmq = { cmd = ["rabbitmq-server", "-detached"] }
-start-rabbitmq-workers = { cmd = [
-    "celery",
-    "-A",
-    "dirt",
-    "worker",
-    "--detach",
-], depends-on = [
-    "serve-rabbitmq",
-] }
 runserver = { cmd = [
     "granian",
     "dirt.asgi:application",
@@ -97,12 +93,9 @@ runserver = { cmd = [
     "st",
     "--loop",
     "uvloop",
-], depends-on = [
-    "start-rabbitmq-workers",
 ] }
 
 [tool.pixi.dependencies]
-rabbitmq-server = ">=4.1.1,<5"
 granian = ">=2.6.0,<3"
 uvloop = ">=0.22.1,<0.23"
 
@@ -114,3 +107,25 @@ jupyter = ">=1.1.1,<2"
 
 [tool.pixi.feature.manage.tasks]
 devsetup = "./tools/devsetup.sh"
+
+[tool.pixi.feature.manage.dependencies]
+# devsetup.sh (and the dataset-download tutorials) shell out to `aws s3 sync`.
+awscli = "*"
+# Build toolchain for bidslake (PyO3/maturin); satisfies its build at install
+# time so Dockerfile.manage needs no apt Rust.
+rust = "*"
+maturin = ">=1.7,<2"
+
+[tool.pixi.feature.manage.pypi-dependencies]
+# bidslake is a sibling checkout under neuro/; editable so the ingest specs and
+# the bidslake adapters (crates/*/data) iterate together. bidslake pins
+# requires-python >=3.14, which lifts the whole manage env to Python 3.14.
+# For CI/release, pin to a git rev or a published wheel instead of a local path.
+bidslake = { path = "../bidslake/crates/bidslake-py", editable = true }
+
+[tool.pixi.feature.docs.tasks]
+# Regenerate the auto-built reference pages (ast-based; no Django needed) and the
+# django-ninja OpenAPI schema, then build/serve with Zensical (reads mkdocs.yml).
+docs-gen = { cmd = "python tools/gen_reference.py && manage export_openapi", env = { DJANGO_SECRET_KEY = "docs-build-not-a-secret" } }
+docs-build = { cmd = "zensical build --strict", depends-on = ["docs-gen"] }
+docs-serve = { cmd = "zensical serve", depends-on = ["docs-gen"] }

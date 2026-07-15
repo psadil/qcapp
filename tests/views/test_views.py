@@ -1,7 +1,6 @@
 """Tests for django_dirt_ratings views."""
 
 import json
-from unittest.mock import MagicMock, patch
 
 import pytest
 from django.urls import reverse
@@ -23,13 +22,6 @@ from django_dirt_ratings.views import (
 )
 
 
-def _mock_task():
-    """Return a MagicMock that looks like a Celery AsyncResult."""
-    mock = MagicMock()
-    mock.delay.return_value = MagicMock(id="fake-task-id")
-    return mock
-
-
 @pytest.mark.django_db
 class TestLayoutView:
     def test_get_renders_index_template(self, client):
@@ -37,18 +29,12 @@ class TestLayoutView:
         assert response.status_code == 200
         assert "index.html" in [t.name for t in response.templates]
 
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
-    def test_post_with_mask_step_redirects(self, mock_task, client):
+    def test_post_with_mask_step_redirects(self, client):
         response = client.post(reverse("index"), data={"step": Step.MASK})
         assert response.status_code == 302
         assert MASK_VIEW in response.url
 
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
-    def test_post_creates_session(self, mock_task, client):
+    def test_post_creates_session(self, client):
         assert Session.objects.count() == 0
         client.post(reverse("index"), data={"step": Step.MASK})
         assert Session.objects.count() == 1
@@ -60,18 +46,12 @@ class TestLayoutView:
 
 @pytest.mark.django_db
 class TestRateViewGet:
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
-    def test_fmap_coregistration_renders_rate_template(self, mock_task, client):
+    def test_fmap_coregistration_renders_rate_template(self, client):
         response = client.get(reverse(FMAP_COREGISTRATION_VIEW))
         assert response.status_code == 200
         assert "rate.html" in [t.name for t in response.templates]
 
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
-    def test_mask_renders_click_template(self, mock_task, client):
+    def test_mask_renders_click_template(self, client):
         response = client.get(reverse(MASK_VIEW))
         assert response.status_code == 200
         assert "click.html" in [t.name for t in response.templates]
@@ -79,12 +59,7 @@ class TestRateViewGet:
 
 @pytest.mark.django_db
 class TestRateViewPost:
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
-    def test_valid_rating_creates_rating(
-        self, mock_task, client, fmap_image, fmap_session
-    ):
+    def test_valid_rating_creates_rating(self, client, fmap_image, fmap_session):
         # Set up session data (simulate prior GET flow)
         session = client.session
         session["image_id"] = fmap_image.pk
@@ -101,10 +76,7 @@ class TestRateViewPost:
         assert rating.rating == Ratings.PASS
         assert rating.image_id == fmap_image.pk
 
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
-    def test_invalid_rating_rerenders_form(self, mock_task, client):
+    def test_invalid_rating_rerenders_form(self, client):
         response = client.post(
             reverse(FMAP_COREGISTRATION_VIEW),
             data={},  # missing required 'rating' field
@@ -115,11 +87,8 @@ class TestRateViewPost:
 
 @pytest.mark.django_db
 class TestClickViewPost:
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
     def test_cells_payload_creates_annotation_and_cells(
-        self, mock_task, client, mask_image, mask_session
+        self, client, mask_image, mask_session
     ):
         session = client.session
         session["image_id"] = mask_image.pk
@@ -142,11 +111,8 @@ class TestClickViewPost:
         assert annotation.grid_cols == 28
         assert AnnotationCell.objects.count() == 2
 
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
     def test_empty_cells_creates_annotation_without_cells(
-        self, mock_task, client, mask_image, mask_session
+        self, client, mask_image, mask_session
     ):
         session = client.session
         session["image_id"] = mask_image.pk
@@ -164,6 +130,25 @@ class TestClickViewPost:
 
 
 @pytest.mark.django_db
+class TestRatePartial:
+    def test_serves_least_reviewed_image(self, client, mask_image, mask_session):
+        """With a step in session, the partial renders the next image to review."""
+        session = client.session
+        session["step"] = Step.MASK
+        session["session_id"] = mask_session.pk
+        session.save()
+
+        response = client.get(reverse("rate_partial"))
+        assert response.status_code == 200
+        # image_id is now tracked for the next transition.
+        assert client.session["image_id"] == mask_image.pk
+
+    def test_no_session_step_is_404(self, client):
+        response = client.get(reverse("rate_partial"))
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
 class TestLayoutViewStepRouting:
     @pytest.mark.parametrize(
         "step, expected_view",
@@ -175,12 +160,7 @@ class TestLayoutViewStepRouting:
             (Step.DTIFIT, DTIFIT_VIEW),
         ],
     )
-    @patch(
-        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
-    )
-    def test_step_redirects_to_correct_view(
-        self, mock_task, step, expected_view, client
-    ):
+    def test_step_redirects_to_correct_view(self, step, expected_view, client):
         response = client.post(reverse("index"), data={"step": step})
         assert response.status_code == 302
         assert response.url == reverse(expected_view)

@@ -2,13 +2,11 @@
 
 import pytest
 
+from django_dirt_ratings import services
 from django_dirt_ratings.exceptions import ApplicationError, NotFound
 from django_dirt_ratings.models import (
-    Annotation,
-    AnnotationCell,
     DisplayMode,
     Image,
-    Rating,
     Ratings,
     Session,
     Step,
@@ -87,7 +85,7 @@ class TestImageWithFewestRatings:
         img_rated = _make_image()
         img_unrated = _make_image()
         session = Session.objects.create(step=Step.FMAP_COREGISTRATION)
-        Rating.objects.create(image=img_rated, session=session, rating=Ratings.PASS)
+        services.rating_create(image=img_rated, session=session, rating=Ratings.PASS)
 
         result = image_with_fewest_ratings(step=Step.FMAP_COREGISTRATION)
         assert result.pk == img_unrated.pk
@@ -117,8 +115,8 @@ class TestImageWithFewestRatings:
         img_clicked = _make_image(step=Step.MASK)
         img_unclicked = _make_image(step=Step.MASK)
         session = Session.objects.create(step=Step.MASK)
-        Annotation.objects.create(
-            image=img_clicked, session=session, grid_cols=28, grid_rows=21
+        services.annotation_create(
+            image=img_clicked, session=session, grid_cols=28, grid_rows=21, cells=[]
         )
 
         result = image_with_fewest_ratings(step=Step.MASK)
@@ -130,16 +128,16 @@ class TestImageWithFewestRatings:
         img_one_review = _make_image(step=Step.MASK)
         session = Session.objects.create(step=Step.MASK)
         # img_many_cells: one submission, but many marked cells.
-        annotation = Annotation.objects.create(
-            image=img_many_cells, session=session, grid_cols=28, grid_rows=21
-        )
-        AnnotationCell.objects.bulk_create(
-            AnnotationCell(annotation=annotation, col=c, row=0, rating=Ratings.FAIL)
-            for c in range(10)
+        services.annotation_create(
+            image=img_many_cells,
+            session=session,
+            grid_cols=28,
+            grid_rows=21,
+            cells=[(c, 0, Ratings.FAIL) for c in range(10)],
         )
         # img_one_review: one submission, zero cells (still one review).
-        Annotation.objects.create(
-            image=img_one_review, session=session, grid_cols=28, grid_rows=21
+        services.annotation_create(
+            image=img_one_review, session=session, grid_cols=28, grid_rows=21, cells=[]
         )
 
         # Both have exactly one submission, so a third image with none is next.

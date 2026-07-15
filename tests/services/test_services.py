@@ -68,6 +68,36 @@ class TestRatingCreate:
 
 
 @pytest.mark.django_db
+class TestReviewCounter:
+    """Image.n_reviews is maintained by the services layer (see selectors)."""
+
+    def test_rating_increments_counter(self, fmap_image, fmap_session):
+        assert fmap_image.n_reviews == 0
+        rating_create(image=fmap_image, session=fmap_session, rating=Ratings.PASS)
+        rating_create(image=fmap_image, session=fmap_session, rating=Ratings.FAIL)
+        fmap_image.refresh_from_db()
+        assert fmap_image.n_reviews == 2
+
+    def test_annotation_counts_once_regardless_of_cells(self, mask_image, mask_session):
+        annotation_create(
+            image=mask_image,
+            session=mask_session,
+            grid_cols=28,
+            grid_rows=21,
+            cells=[(c, 0, Ratings.FAIL) for c in range(5)],
+        )
+        mask_image.refresh_from_db()
+        # One submission == one review, even though five cells were marked.
+        assert mask_image.n_reviews == 1
+
+    def test_invalid_rating_does_not_increment(self, fmap_image, fmap_session):
+        with pytest.raises(ValidationError):
+            rating_create(image=fmap_image, session=fmap_session, rating=999)
+        fmap_image.refresh_from_db()
+        assert fmap_image.n_reviews == 0
+
+
+@pytest.mark.django_db
 class TestImageServices:
     def test_image_create(self):
         image = image_create(

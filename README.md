@@ -5,6 +5,10 @@ control (QC) of neuroimaging derivatives at the scale of large consortia. It
 was built for the Acute to Chronic Pain Signatures (A2CPS) project, which is
 collecting scans from more than 2,800 participants.
 
+📖 **Full documentation:** <https://psadil.github.io/dirt/> — including a
+[quickstart](https://psadil.github.io/dirt/getting-started/quickstart.html) and a
+walkthrough for [reviewing your own dataset](https://psadil.github.io/dirt/tutorials/review-local-dataset.html).
+
 ## Why
 
 Neuroimaging preprocessing pipelines fail on some fraction of scans. At
@@ -53,7 +57,7 @@ to fail:
 DIRT is deliberately easy to stand up. It can run on cloud infrastructure, but
 it also runs as a single container on one machine — a laptop, a shared lab
 workstation, or a cluster login node — storing images and ratings in a local
-SQLite/SpatiaLite database that needs no separate database server. That keeps
+SQLite database that needs no separate database server. That keeps
 the barrier to entry low for teams without dedicated web-backend resources. It
 is in production on A2CPS Release 2.0 (~29 TB across ~2.2 million derivative
 files).
@@ -61,7 +65,7 @@ files).
 ## Running
 
 The following assumes a file `.env` providing at least `DJANGO_SECRET_KEY`, and
-optionally `DB` (the path to the SpatiaLite database file; defaults to
+optionally `DB` (the path to the SQLite database file; defaults to
 `db/dirt.db`). See [.env.example](.env.example) for the full list of variables.
 
 The database and its WAL sidecar files live in a `db/` directory that must be
@@ -113,32 +117,31 @@ create a database, and generate quality control images.
 
 ## Deployment notes
 
-DIRT runs the database, the cache, and the Celery result store all on
-SQLite/SpatiaLite in a single container, following
+DIRT runs the database and the cache on SQLite in a single container, following
 [the alldjango guide to SQLite in production](https://alldjango.com/articles/definitive-guide-to-using-django-sqlite-in-production).
 The database connection uses WAL journaling and `IMMEDIATE` transactions so the
-web workers and the Celery worker can share the one file. Because the whole
-state is a directory of files, back it up (or replicate it, e.g. with
-Litestream) by copying the mounted `db/` volume.
+web workers can share the one file. Because the whole state is a directory of
+files, back it up (or replicate it, e.g. with Litestream) by copying the mounted
+`db/` volume.
 
 ## Tips
 
 ### sqlite3
 
-The dev database is a SpatiaLite file at `db/dirt.db`.
+The dev database is a SQLite file at `db/dirt.db`.
 
 #### Check tables
 
 ```shell
 $ sqlite3 db/dirt.db .tables
-auth_group                        django_dirt_ratings_annotation
-auth_group_permissions            django_dirt_ratings_image
-auth_permission                   django_dirt_ratings_rating
-auth_user                         django_dirt_ratings_session
-auth_user_groups                  django_migrations
-auth_user_user_permissions        django_session
-django_admin_log                  spatial_ref_sys
-django_content_type               ...
+auth_group                          django_dirt_ratings_annotation
+auth_group_permissions              django_dirt_ratings_annotationcell
+auth_permission                     django_dirt_ratings_image
+auth_user                           django_dirt_ratings_rating
+auth_user_groups                    django_dirt_ratings_session
+auth_user_user_permissions          django_migrations
+django_admin_log                    django_session
+django_content_type                 ...
 ```
 
 #### Look through some basic ratings
@@ -149,11 +152,14 @@ $ sqlite3 -header db/dirt.db "SELECT id, rating, source_data_issue, created_at, 
 
 #### Look through location annotations
 
-Clicked points are stored as geometries in `django_dirt_ratings_annotation`;
-use SpatiaLite's `ST_X`/`ST_Y` to read pixel coordinates back out:
+Click-to-mark reviews are stored as a grid: each `django_dirt_ratings_annotation`
+row records the grid it used (`grid_cols`, `grid_rows`) for one image/session, and
+each marked cell is a `django_dirt_ratings_annotationcell` row (`col`, `row`,
+`rating`, where `rating` is 1 = unsure or 2 = fail; unmarked cells are an implied
+pass). Join the two to read the marked cells back out:
 
 ```shell
-$ sqlite3 -header db/dirt.db "SELECT id, ST_X(geometry) AS x, ST_Y(geometry) AS y, image_id, session_id FROM django_dirt_ratings_annotation LIMIT 10;"
+$ sqlite3 -header db/dirt.db "SELECT c.col, c.row, c.rating, a.grid_cols, a.grid_rows, a.image_id, a.session_id FROM django_dirt_ratings_annotationcell c JOIN django_dirt_ratings_annotation a ON a.id = c.annotation_id LIMIT 10;"
 ```
 
 #### Get Ratings and Metadata

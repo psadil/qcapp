@@ -2,8 +2,8 @@
 Django settings for the dirt project.
 
 Configuration is environment-driven (django-environ): every deployment knob
-is an env var with a development-friendly default. The database, the cache,
-and the celery result store all run on SQLite, following
+is an env var with a development-friendly default. The database and the cache
+both run on SQLite, following
 https://alldjango.com/articles/definitive-guide-to-using-django-sqlite-in-production
 """
 
@@ -40,7 +40,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_typer",
-    "django_celery_results",
 ]
 
 MIDDLEWARE = [
@@ -109,7 +108,8 @@ DATABASES = {
         "OPTIONS": _sqlite_options(),
     },
     "cache": {
-        # Plain sqlite3: the cache table has no GIS columns.
+        # A separate SQLite file so ephemeral cache data stays out of backups
+        # of the main database (see the DatabaseCache note above).
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": CACHE_DB_PATH,
         "OPTIONS": _sqlite_options(),
@@ -197,16 +197,3 @@ if DEPLOYED:
     # also needed because this is behind traefik
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
-
-# Celery: rabbitmq broker; results go through the Django cache, which is the
-# DatabaseCache configured above (provided by django_celery_results).
-CELERY_BROKER_URL = env.str(
-    "CELERY_BROKER_URL", default="amqp://guest:guest@localhost:5672//"
-)
-CELERY_RESULT_BACKEND = "django-cache"
-CELERY_CACHE_BACKEND = "default"
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_ENABLE_UTC = True
-# Store results even when tasks run eagerly (CELERY_TASK_ALWAYS_EAGER), so the
-# view's AsyncResult(id).get() can read them back in tests / broker-less runs.
-CELERY_TASK_STORE_EAGER_RESULT = True
