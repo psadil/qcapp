@@ -34,6 +34,10 @@ echo '{
 }' >"$DATA_DIR/dataset_description.json"
 
 echo "Indexing dataset with bidslake..."
+# Start from a fresh catalog so re-running devsetup is idempotent: `bidslake
+# index` accumulates into an existing catalog (CREATE TABLE IF NOT EXISTS), so
+# re-indexing the same dataset would hit duplicate primary keys.
+rm -f "$CATALOG" "${CATALOG}.wal"
 pixi run -e manage bidslake index -i "$DATA_DIR" -o "$CATALOG"
 # FreeSurfer recon-all is standardized but not BIDS; index it as its own dataset
 # with the adapter (the sourcedata/ nesting defeats the term-map anchor otherwise).
