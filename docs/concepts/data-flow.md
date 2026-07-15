@@ -7,10 +7,11 @@ structure.
 ```
 preprocessed dataset (BIDS derivatives)
         │
-        │  index            bids2table / bidslake  →  a catalog of derivative files
+        │  bidslake index   →  a queryable DuckDB catalog of derivative files
         ▼
-   image generation         the `manage` environment (nibabel, nilearn, dipy, matplotlib)
-        │                    renders a compact set of QC figures per derivative
+   image generation         `manage render` in the `manage` environment (nibabel,
+        │                    nilearn, dipy, matplotlib): discovers derivatives by BIDS
+        │                    concept and renders a compact set of QC figures for each
         ▼
    SQLite database          each figure is stored as PNG/APNG bytes on an `Image` row
         │

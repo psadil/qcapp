@@ -6,7 +6,7 @@ PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$PROJECT_ROOT"
 
 DATA_DIR="data/ds007070-fmriprep"
-INDEX_FILE="data/ds007070_index.parquet"
+CATALOG="data/ds007070.duckdb"
 
 echo "Downloading sample data from OpenNeuro (ds007070)..."
 mkdir -p "$DATA_DIR"
@@ -33,8 +33,8 @@ echo '{
     "GeneratedBy": [{"Name": "fmriprep"}]
 }' >"$DATA_DIR/dataset_description.json"
 
-echo "Indexing dataset with bids2table..."
-pixi run -e manage b2t2 index --output "$INDEX_FILE" --workers 2 "$DATA_DIR"
+echo "Indexing dataset with bidslake..."
+pixi run -e manage bidslake index -i "$DATA_DIR" -o "$CATALOG"
 
 echo "Applying database migrations..."
 # Set up env vars for local sqlite (WAL sidecar files live in db/ too)
@@ -54,18 +54,11 @@ User = get_user_model();
 User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@example.com', 'admin')
 "
 
-echo "Populating database with images (this may take a minute)..."
-echo "  -> Adding masks..."
-pixi run -e manage manage add_masks "$INDEX_FILE"
-
-echo "  -> Adding spatial normalization..."
-pixi run -e manage manage add_spatial_normalization "$INDEX_FILE"
-
-echo "  -> Adding surface localization..."
-pixi run -e manage manage add_surface_localization "$DATA_DIR/sourcedata/freesurfer"
-
-echo "  -> Adding fmap coregistration..."
-pixi run -e manage manage add_fmap_coregistration "$INDEX_FILE"
+echo "Rendering QC images from the catalog (this may take a minute)..."
+# `render` auto-discovers which steps have files present in the catalog. The
+# sample covers masks, spatial normalization, and fmap coregistration (it has no
+# DWI; surface localization awaits the FreeSurfer bidslake adapter).
+pixi run -e manage manage render "$CATALOG"
 
 echo ""
 echo "Setup complete! You can now run the development server using Docker:"

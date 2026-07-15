@@ -28,7 +28,6 @@ dev = [
     "pytest-django>=4.9",
 ]
 manage = [
-    "bids2table>=2.1.0,<3",
     "django-stubs>=5.2.2",
     "neurorm @ git+https://github.com/psadil/neurorm.git",
     "dipy>=1.11.0",
@@ -107,6 +106,9 @@ jupyter = ">=1.1.1,<2"
 
 [tool.pixi.feature.manage.tasks]
 devsetup = "./tools/devsetup.sh"
+# The bidslake indexer CLI, built from the sibling checkout (needs the manage
+# env's rust). Usage: pixi run -e manage bidslake index -i <dataset> -o study.duckdb
+bidslake = "cargo run --release --manifest-path ../bidslake/Cargo.toml --bin bidslake --"
 
 [tool.pixi.feature.manage.dependencies]
 # devsetup.sh (and the dataset-download tutorials) shell out to `aws s3 sync`.

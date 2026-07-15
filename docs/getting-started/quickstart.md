@@ -22,14 +22,15 @@ This single command:
 1. downloads a two-subject subset of OpenNeuro [`ds007070`](https://openneuro.org/datasets/ds007070)
    into `data/ds007070-fmriprep/`,
 2. writes a `dataset_description.json` so the indexer treats it as a derivative dataset,
-3. indexes it with `bids2table` into `data/ds007070_index.parquet`,
+3. indexes it with `bidslake` into `data/ds007070.duckdb`,
 4. applies database migrations and creates the cache table,
 5. creates an admin user (`admin` / `admin`), and
-6. renders QC images for masks, spatial normalization, surface localization, and field-map
-   coregistration.
+6. runs `manage render`, which renders QC images for every step it finds in the catalog.
 
 !!! note
-    The sample has no diffusion data, so the DTI-fit step is intentionally skipped.
+    For this sample that is masks, spatial normalization, and field-map coregistration.
+    The sample has no diffusion data (no DTI-fit), and surface localization needs the
+    FreeSurfer bidslake adapter — see [Review a local dataset](../tutorials/review-local-dataset.md).
 
 ## 2. Build and run the web app
 

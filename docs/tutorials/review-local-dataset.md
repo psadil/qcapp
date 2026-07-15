@@ -28,47 +28,43 @@ derivative dataset, e.g.:
 
 ## 2. Index the dataset
 
+DIRT discovers derivatives through [bidslake](https://github.com/psadil/bidslake), which
+builds a queryable DuckDB catalog of a dataset. Index once:
+
 ```shell
-pixi run -e manage b2t2 index --output my_index.parquet --workers 4 /path/to/derivatives/fmriprep
+pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep -o study.duckdb
 ```
 
 ## 3. Render the QC images
 
-Parquet-driven steps take the index; the FreeSurfer- and DTI-based steps point at a
-directory:
+One command renders every step whose files are present in the catalog:
 
 ```shell
-pixi run -e manage manage add_masks my_index.parquet
-pixi run -e manage manage add_spatial_normalization my_index.parquet
-pixi run -e manage manage add_fmap_coregistration my_index.parquet
-pixi run -e manage manage add_surface_localization /path/to/derivatives/freesurfer
-pixi run -e manage manage add_dtifit /path/to/derivatives/qsirecon_fsl_dtifit/dtifit/multishell
+pixi run -e manage manage render study.duckdb
 ```
 
 Useful flags:
 
+- `--step masks` (repeatable) renders only the named step(s); the default is every step
+  found. Choices: `masks`, `spatial_normalization`, `surface_localization`,
+  `fmap_coregistration`, `dtifit`.
 - `--update` re-renders image bytes in place, preserving any ratings already collected.
-- `--res` filters to a specific resolution (masks and spatial normalization only).
+- `--sub` / `--res` filter to a subject label or resolution.
+- `--workers` sets the number of render worker processes (default: CPU count).
+
+`render` finds each derivative and its related files by BIDS concept — the brain mask's
+same-space T1w, the field map's `IntendedFor` bold targets and their boldref / mask /
+transform — rather than by string-matching filenames, so it is robust to the exact naming
+a pipeline emits. Derivatives it can't resolve are skipped with a log line.
 
 For a real cluster example (SLURM + `apptainer run docker://psadil/dirt:manage`), see
 [`tools/write_imgs`](https://github.com/psadil/dirt/blob/main/tools/write_imgs).
 
-!!! warning "The current commands assume fMRIPrep naming"
-    Image discovery today relies on specific filename conventions:
-    `add_spatial_normalization` only picks up `space-MNI152NLin2009cAsym, desc-preproc`;
-    `add_masks` expects a `desc-brain_mask` with a `desc-preproc_T1w` partner;
-    `add_fmap_coregistration` expects `desc-preproc_fieldmap` / `desc-epi`, reads
-    `IntendedFor`, and looks for a boldref→fieldmap transform;
-    `add_surface_localization` needs `<sub>/mri/brain.mgz` + `ribbon.mgz`; and
-    `add_dtifit` expects `*dwi_FA.nii.gz` with sibling `V1`/`V2`/`V3`. Derivatives that
-    differ are silently skipped.
-
-!!! note "Coming soon: bidslake"
-    A refactor is underway to replace the separate index step and the five `add_*`
-    commands with a single `manage render` command driven by
-    [bidslake](https://github.com/psadil/bidslake), which discovers derivatives by BIDS
-    concept rather than by filename string-matching. When it lands, steps 2–3 collapse to
-    `bidslake index … --output study.duckdb` followed by `manage render study.duckdb`.
+!!! note "FreeSurfer and DTI-fit"
+    `surface_localization` and `dtifit` read standardized but non-BIDS outputs
+    (FreeSurfer `recon-all`, qsirecon FSL-dtifit). These are taught to bidslake with
+    **adapters**; index those trees with the matching `bidslake index --adapter <name>`
+    (see the bidslake docs) so `render` can discover them.
 
 ## 4. Serve and review
 
