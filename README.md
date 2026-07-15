@@ -1,5 +1,63 @@
 # DIRT
 
+**DIRT** (the Derived Imaging Review Tool) is a web application for quality
+control (QC) of neuroimaging derivatives at the scale of large consortia. It
+was built for the Acute to Chronic Pain Signatures (A2CPS) project, which is
+collecting scans from more than 2,800 participants.
+
+## Why
+
+Neuroimaging preprocessing pipelines fail on some fraction of scans. At
+consortium scale, even a low failure rate means hundreds of affected scans, and
+automated failure detection is not yet reliable enough to replace human
+inspection — but manual QC is hard to carry out at that scale. DIRT exists to
+make thorough manual review fast enough to keep up.
+
+## How it works
+
+DIRT has three parts:
+
+- **Image generation.** Given a preprocessed dataset in
+  [BIDS](https://bids.neuroimaging.io/) layout, DIRT uses the BIDS metadata to
+  locate derivatives and render a compact set of QC images for each one — for a
+  brain mask, for example, five informative slices in each of three
+  orientations. Where a failure is best seen across a whole volume, the image is
+  animated.
+- **A review-ordering algorithm.** During a session, images are served one at a
+  time using a *breadth-first* strategy: the next image comes from whichever
+  scan has been reviewed the fewest times, and scans already judged to have
+  failed are skipped. Effort is spread across the whole dataset first, then
+  deepens per scan as time allows.
+- **A review platform.** A mobile-friendly Django web app presents the images,
+  collects ratings, and stores everything in a SQL database, so several
+  reviewers can work on the same dataset at once. A little session metadata (who
+  reviewed, and when) is recorded alongside each rating.
+
+### Two kinds of review
+
+Each derivative is reviewed with whichever interaction best matches how it tends
+to fail:
+
+- **Click to mark a location** — for problems that show up in a specific spot (a
+  mask that includes skull, a cortical surface that strays into gray matter).
+  The reviewer clicks directly on each problem area, producing a set of
+  coordinates per image; more clicks generally means lower quality, and the
+  marked locations can hint at which parts of a derivative remain usable. Used
+  for **brain masks**, **spatial normalization**, and **surface localization**.
+- **Rate the whole image** — for problems that are not tied to one location (a
+  globally noisy tensor-fit map, a coregistration that failed to align two
+  images). The reviewer chooses **pass**, **unsure**, or **fail** (scored 0 / 1
+  / 2); a single *fail* can be enough to exclude a derivative. Used for
+  **field-map coregistration** and **diffusion tensor fitting**.
+
+DIRT is deliberately easy to stand up. It can run on cloud infrastructure, but
+it also runs as a single container on one machine — a laptop, a shared lab
+workstation, or a cluster login node — storing images and ratings in a local
+SQLite/SpatiaLite database that needs no separate database server. That keeps
+the barrier to entry low for teams without dedicated web-backend resources. It
+is in production on A2CPS Release 2.0 (~29 TB across ~2.2 million derivative
+files).
+
 ## Running
 
 The following assumes a file `.env` providing at least `DJANGO_SECRET_KEY`, and
@@ -111,3 +169,9 @@ docker build -t psadil/dirt:prod --provenance=true --platform=linux/amd64 .
 ```
 
 Note that we're not pushing this to dockerhub. Everything will be run locally.
+
+## Citation
+
+DIRT is described in a manuscript in preparation by Patrick Sadil, James C. Ford,
+Micah A. Johnson, Martin A. Lindquist, and the Acute to Chronic Pain Signatures
+(A2CPS) Consortium.
