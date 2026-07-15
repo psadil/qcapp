@@ -1,3 +1,6 @@
+# A plain `prek install` wires up both git shims (see the commit-msg hook below).
+default_install_hook_types = ["pre-commit", "commit-msg"]
+
 [[repos]]
 repo = "https://github.com/astral-sh/ruff-pre-commit"
 rev = "v0.15.21"
@@ -18,3 +21,11 @@ hooks = [
 repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.1"
 hooks = [{ id = "codespell" }]
+
+# Enforce Conventional Commits (https://www.conventionalcommits.org) on every
+# commit message. Runs at the commit-msg stage, so it needs the commit-msg shim
+# installed (handled by default_install_hook_types above).
+[[repos]]
+repo = "https://github.com/compilerla/conventional-pre-commit"
+rev = "v4.4.0"
+hooks = [{ id = "conventional-pre-commit", stages = ["commit-msg"] }]
