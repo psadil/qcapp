@@ -234,3 +234,6 @@ data/*
 
 
 **/.DS_Store
+
+# created during dev setups
+static/
