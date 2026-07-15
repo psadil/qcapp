@@ -715,8 +715,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/urllib3-2.6.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/wcwidth-0.2.14-pyhd8ed1ab_0.conda
-      - pypi: ../bidslake/crates/bidslake-py
       - pypi: ./
+      - pypi: git+https://github.com/psadil/bidslake.git?subdirectory=crates%2Fbidslake-py&rev=051381e6eccad7cb253cc245e9f400b8bb1748d6#051381e6eccad7cb253cc245e9f400b8bb1748d6
       - pypi: git+https://github.com/psadil/neurorm.git#708ee57e5a043784ab072998ca5ee16c8c2b5ca4
       - pypi: https://files.pythonhosted.org/packages/04/5f/9ff93450ba96b09c7c2b3f81c94de31c89f92292f1380261bd7195bea4ea/contourpy-1.3.3-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/06/a2/c01db32be2ae7d6a1689972f3c492b149ee4e164b12fdfd9f64b50888215/types_pyyaml-6.0.12.20260518-py3-none-any.whl
@@ -835,8 +835,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-h892fb3f_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/uvloop-0.22.1-py314h0612a62_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - pypi: ../bidslake/crates/bidslake-py
       - pypi: ./
+      - pypi: git+https://github.com/psadil/bidslake.git?subdirectory=crates%2Fbidslake-py&rev=051381e6eccad7cb253cc245e9f400b8bb1748d6#051381e6eccad7cb253cc245e9f400b8bb1748d6
       - pypi: git+https://github.com/psadil/neurorm.git#708ee57e5a043784ab072998ca5ee16c8c2b5ca4
       - pypi: https://files.pythonhosted.org/packages/06/a2/c01db32be2ae7d6a1689972f3c492b149ee4e164b12fdfd9f64b50888215/types_pyyaml-6.0.12.20260518-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0a/93/fab9da803fd80d9e83ef88c20932f637a10bc611b20415fc322eec84bc44/polars_runtime_32-1.41.2-cp310-abi3-macosx_11_0_arm64.whl
@@ -4920,13 +4920,6 @@ packages:
     - zstd >=1.5.7,<1.6.0a0
   size: 433413
   timestamp: 1764777166076
-- pypi: ../bidslake/crates/bidslake-py
-  name: bidslake
-  requires_dist:
-  - polars>=1.9
-  - universal-pathlib
-  - s3fs ; extra == 's3'
-  requires_python: '>=3.14'
 - pypi: ./
   name: dirt
   requires_dist:
@@ -4936,6 +4929,14 @@ packages:
   - django-ninja>=1.2.0
   - orjson>=3.11.1
   requires_python: '>=3.12'
+- pypi: git+https://github.com/psadil/bidslake.git?subdirectory=crates%2Fbidslake-py&rev=051381e6eccad7cb253cc245e9f400b8bb1748d6#051381e6eccad7cb253cc245e9f400b8bb1748d6
+  name: bidslake
+  version: 0.1.0
+  requires_dist:
+  - polars>=1.9
+  - universal-pathlib
+  - s3fs ; extra == 's3'
+  requires_python: '>=3.14'
 - pypi: git+https://github.com/psadil/neurorm.git#708ee57e5a043784ab072998ca5ee16c8c2b5ca4
   name: neurorm
   version: 0.1.0

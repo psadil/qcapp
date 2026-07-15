@@ -30,6 +30,9 @@ dev = [
 manage = [
     "django-stubs>=5.2.2",
     "neurorm @ git+https://github.com/psadil/neurorm.git",
+    # bidslake query layer, pinned to a rev (built from git via maturin/rust at
+    # install time). Keep the rev in sync with BIDSLAKE_REV in Dockerfile.manage.
+    "bidslake @ git+https://github.com/psadil/bidslake.git@051381e6eccad7cb253cc245e9f400b8bb1748d6#subdirectory=crates/bidslake-py",
     "dipy>=1.11.0",
     "imageio>=2.37.0",
     "matplotlib>=3.10.3",
@@ -110,24 +113,19 @@ jupyter = ">=1.1.1,<2"
 
 [tool.pixi.feature.manage.tasks]
 devsetup = "./tools/devsetup.sh"
-# The bidslake indexer CLI, built from the sibling checkout (needs the manage
-# env's rust). Usage: pixi run -e manage bidslake index -i <dataset> -o study.duckdb
+# The bidslake indexer CLI. For local development it runs from a sibling checkout
+# (fast incremental builds while iterating on bidslake); the Docker image ships
+# the CLI built from the pinned rev instead (see Dockerfile.manage). Usage:
+# pixi run -e manage bidslake index -i <dataset> -o study.duckdb
 bidslake = "cargo run --release --manifest-path ../bidslake/Cargo.toml --bin bidslake --"
 
 [tool.pixi.feature.manage.dependencies]
 # devsetup.sh (and the dataset-download tutorials) shell out to `aws s3 sync`.
 awscli = "*"
-# Build toolchain for bidslake (PyO3/maturin); satisfies its build at install
-# time so Dockerfile.manage needs no apt Rust.
+# Build toolchain for bidslake (PyO3/maturin): builds the pinned git dependency
+# at install time, so Dockerfile.manage needs no apt Rust.
 rust = "*"
 maturin = ">=1.7,<2"
-
-[tool.pixi.feature.manage.pypi-dependencies]
-# bidslake is a sibling checkout under neuro/; editable so the ingest specs and
-# the bidslake adapters (crates/*/data) iterate together. bidslake pins
-# requires-python >=3.14, which lifts the whole manage env to Python 3.14.
-# For CI/release, pin to a git rev or a published wheel instead of a local path.
-bidslake = { path = "../bidslake/crates/bidslake-py", editable = true }
 
 [tool.pixi.feature.docs.tasks]
 # Regenerate the auto-built reference pages (ast-based; no Django needed) and the
