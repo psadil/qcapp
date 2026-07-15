@@ -29,7 +29,6 @@ dev = [
 ]
 manage = [
     "django-stubs>=5.2.2",
-    "neurorm @ git+https://github.com/psadil/neurorm.git",
     # bidslake query layer, pinned to a rev (built from git via maturin/rust at
     # install time). Keep the rev in sync with BIDSLAKE_REV in Dockerfile.manage.
     "bidslake @ git+https://github.com/psadil/bidslake.git@051381e6eccad7cb253cc245e9f400b8bb1748d6#subdirectory=crates/bidslake-py",
