@@ -15,13 +15,13 @@ derivatives=${release}/derivatives
 # Index every derivative tree into one bidslake catalog. Related files (a mask's
 # T1w, a field map's IntendedFor bold + boldref + transform) are then resolved by
 # BIDS concept at render time, across trees, from this single catalog. FreeSurfer
-# and FSL-dtifit are non-BIDS layouts, so they use their bidslake adapters (and a
-# nested sourcedata/freesurfer tree indexes as its own dataset).
+# recon-all is non-BIDS, so it uses the bidslake FreeSurfer adapter and indexes as
+# its own dataset (its sourcedata/ nesting defeats the term-map anchor otherwise).
 catalog=/scratch/08266/psadil/qcapp/a2cps.duckdb
 bidslake index -i "${derivatives}/fmriprep" -o "${catalog}"
 bidslake index -i "${derivatives}/synthstrip" -o "${catalog}"
 bidslake index -i "${derivatives}/qsirecon_fsl_dtifit/dtifit/multishell" \
-	--adapter fsl_dtifit -o "${catalog}"
+	--dataset-id dtifit -o "${catalog}"
 bidslake index -i "${derivatives}/freesurfer" --adapter freesurfer \
 	--dataset-id freesurfer -o "${catalog}"
 

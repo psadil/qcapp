@@ -1,37 +1,51 @@
 """Surface-localization QC: the FreeSurfer white/pial ribbon over the brain volume.
 
-Depends on the ``freesurfer`` bidslake adapter (Phase 2d), extended to catalog
-the ``mri/brain.mgz`` and ``mri/ribbon.mgz`` volumes (the stock adapter projects
-only the tabular ``stats`` outputs). Note the anchor behavior: a FreeSurfer tree
-nested at ``sourcedata/freesurfer`` must be indexed as its own dataset
-(``bidslake index --input <...>/sourcedata/freesurfer --adapter freesurfer``).
-Until the volumes are cataloged, ``discover`` yields no jobs.
+FreeSurfer `recon-all` output is standardized but not BIDS, so it is indexed with
+bidslake's FreeSurfer adapter (which catalogs the ``mri/*.mgz`` volumes) — mind
+the anchor gotcha: a tree nested at ``sourcedata/freesurfer`` must be indexed as
+its own dataset::
+
+    bidslake index -i <...>/sourcedata/freesurfer --adapter freesurfer \\
+        --dataset-id freesurfer -o study.duckdb
+
+The volumes carry no BIDS entities in their names (``brain.mgz``, ``ribbon.mgz``
+are fixed FreeSurfer filenames), and bidslake's ``scans`` concept columns are
+derived from the path, so we pair them by their filename and subject rather than
+by a BIDS suffix.
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from django_dirt_ratings import models
 
-from .. import bids, render
+from .. import render
 from ..registry import RenderJob, StepSpec, register
+
+_VOLUMES = {"brain.mgz": "brain", "ribbon.mgz": "ribbon"}
 
 
 def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
+    # Gather the brain/ribbon volumes, keyed by subject (+ session).
+    by_subject: dict[tuple, dict[str, Any]] = defaultdict(dict)
+    for f in lake.get(extension=".mgz", **filters):
+        role = _VOLUMES.get(Path(f.file_path).name)
+        if role is None:
+            continue
+        by_subject[(f.entities.get("sub"), f.entities.get("ses"))][role] = f
+
     jobs: list[RenderJob] = []
-    for ribbon in lake.get(suffix="ribbon", extension=".mgz", **filters):
-        e = ribbon.entities
-        brain = bids.first(
-            lake, suffix="brain", extension=".mgz", sub=e.get("sub"), ses=e.get("ses")
-        )
-        if brain is None:
+    for pair in by_subject.values():
+        ribbon, brain = pair.get("ribbon"), pair.get("brain")
+        if ribbon is None or brain is None:
             continue
         jobs.append(
             RenderJob(
-                file1=Path(ribbon.file_path).name,
-                file2=Path(brain.file_path).name,
+                file1=ribbon.file_path,
+                file2=brain.file_path,
                 render_key="surface_localization",
                 inputs={
                     "ribbon": str(ribbon.local_path),

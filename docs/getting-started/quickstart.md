@@ -28,9 +28,8 @@ This single command:
 6. runs `manage render`, which renders QC images for every step it finds in the catalog.
 
 !!! note
-    For this sample that is masks, spatial normalization, and field-map coregistration.
-    The sample has no diffusion data (no DTI-fit), and surface localization needs the
-    FreeSurfer bidslake adapter — see [Review a local dataset](../tutorials/review-local-dataset.md).
+    For this sample that is masks, spatial normalization, surface localization, and
+    field-map coregistration. The sample has no diffusion data, so DTI-fit is skipped.
 
 ## 2. Build and run the web app
 

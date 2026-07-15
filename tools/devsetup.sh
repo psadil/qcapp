@@ -35,6 +35,10 @@ echo '{
 
 echo "Indexing dataset with bidslake..."
 pixi run -e manage bidslake index -i "$DATA_DIR" -o "$CATALOG"
+# FreeSurfer recon-all is standardized but not BIDS; index it as its own dataset
+# with the adapter (the sourcedata/ nesting defeats the term-map anchor otherwise).
+pixi run -e manage bidslake index -i "$DATA_DIR/sourcedata/freesurfer" \
+	--adapter freesurfer --dataset-id freesurfer -o "$CATALOG"
 
 echo "Applying database migrations..."
 # Set up env vars for local sqlite (WAL sidecar files live in db/ too)
@@ -56,8 +60,8 @@ User.objects.filter(username='admin').exists() or User.objects.create_superuser(
 
 echo "Rendering QC images from the catalog (this may take a minute)..."
 # `render` auto-discovers which steps have files present in the catalog. The
-# sample covers masks, spatial normalization, and fmap coregistration (it has no
-# DWI; surface localization awaits the FreeSurfer bidslake adapter).
+# sample covers masks, spatial normalization, surface localization, and fmap
+# coregistration (it has no DWI, so DTI-fit is skipped).
 pixi run -e manage manage render "$CATALOG"
 
 echo ""

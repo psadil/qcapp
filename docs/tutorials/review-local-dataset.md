@@ -60,11 +60,22 @@ a pipeline emits. Derivatives it can't resolve are skipped with a log line.
 For a real cluster example (SLURM + `apptainer run docker://psadil/dirt:manage`), see
 [`tools/write_imgs`](https://github.com/psadil/dirt/blob/main/tools/write_imgs).
 
-!!! note "FreeSurfer and DTI-fit"
-    `surface_localization` and `dtifit` read standardized but non-BIDS outputs
-    (FreeSurfer `recon-all`, qsirecon FSL-dtifit). These are taught to bidslake with
-    **adapters**; index those trees with the matching `bidslake index --adapter <name>`
-    (see the bidslake docs) so `render` can discover them.
+!!! note "FreeSurfer (surface localization)"
+    FreeSurfer `recon-all` output is standardized but not BIDS, so index it with the
+    FreeSurfer adapter — and, because a `sourcedata/freesurfer` nesting defeats the
+    term-map anchor, as its own dataset:
+
+    ```shell
+    pixi run -e manage bidslake index -i /path/to/derivatives/freesurfer \
+        --adapter freesurfer --dataset-id freesurfer -o study.duckdb
+    ```
+
+    Add it to the same `study.duckdb` and `render` will pick up `surface_localization`.
+
+!!! note "DTI-fit"
+    `dtifit` reads FSL-dtifit outputs (e.g. from qsirecon). Index that derivatives tree
+    like any other; `render` discovers the FA map and its V1/V2/V3 eigenvectors by
+    entity. This step is not yet exercised by the sample dataset.
 
 ## 4. Serve and review
 

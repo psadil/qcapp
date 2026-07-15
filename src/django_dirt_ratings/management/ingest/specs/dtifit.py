@@ -1,9 +1,10 @@
 """DTI-fit QC: an RGB-encoded principal-diffusion-direction animation.
 
-Depends on the ``fsl_dtifit`` bidslake adapter (Phase 2d), which maps the
-qsirecon FSL-dtifit outputs onto BIDS concepts so the FA map and its V1/V2/V3
-eigenvector siblings pair by shared entities. Until that adapter indexes the
-tree, ``discover`` finds nothing and yields no jobs.
+The FSL-dtifit outputs (e.g. from qsirecon) are ordinary ``.nii.gz`` volumes, so
+bidslake catalogs them without a custom adapter; this spec pairs the FA map with
+its V1/V2/V3 eigenvector siblings by shared entities. The exact ``suffix`` bidslake
+parses from the filenames depends on the qsirecon naming — verify it against your
+tree if ``discover`` finds nothing (the sample dataset has no DWI to exercise it).
 """
 
 from __future__ import annotations
