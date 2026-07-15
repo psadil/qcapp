@@ -207,3 +207,6 @@ CELERY_RESULT_BACKEND = "django-cache"
 CELERY_CACHE_BACKEND = "default"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_ENABLE_UTC = True
+# Store results even when tasks run eagerly (CELERY_TASK_ALWAYS_EAGER), so the
+# view's AsyncResult(id).get() can read them back in tests / broker-less runs.
+CELERY_TASK_STORE_EAGER_RESULT = True

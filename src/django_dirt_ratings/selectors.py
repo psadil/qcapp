@@ -18,14 +18,6 @@ def image_get(*, image_id: int) -> models.Image:
         raise exceptions.NotFound(f"Image {image_id} not found") from e
 
 
-async def image_aget(*, image_id: int) -> models.Image:
-    """Async twin of :func:`image_get`."""
-    try:
-        return await models.Image.objects.aget(pk=image_id)
-    except models.Image.DoesNotExist as e:
-        raise exceptions.NotFound(f"Image {image_id} not found") from e
-
-
 def session_get(*, session_id: int) -> models.Session:
     """Fetch a single Session; raises :class:`exceptions.NotFound`."""
     try:
@@ -77,12 +69,12 @@ def _fewest_ratings_qs(
     )
 
 
-async def image_with_fewest_ratings(
+def image_with_fewest_ratings(
     *, step: models.Step, exclude: int | None = None
 ) -> models.Image:
     """The next image to rate for a step: the one with fewest submissions."""
-    image = await _fewest_ratings_qs(step=step, exclude_pk=exclude).afirst()
+    image = _fewest_ratings_qs(step=step, exclude_pk=exclude).first()
     if image is None:
         raise exceptions.ApplicationError("No image found")
 
-    return await models.Image.objects.aget(pk=image.get("id"))
+    return models.Image.objects.get(pk=image.get("id"))

@@ -1,7 +1,6 @@
 """Tests for django_dirt_ratings selectors."""
 
 import pytest
-from asgiref.sync import async_to_sync
 
 from django_dirt_ratings.exceptions import ApplicationError, NotFound
 from django_dirt_ratings.models import (
@@ -90,19 +89,19 @@ class TestImageWithFewestRatings:
         session = Session.objects.create(step=Step.FMAP_COREGISTRATION)
         Rating.objects.create(image=img_rated, session=session, rating=Ratings.PASS)
 
-        result = async_to_sync(image_with_fewest_ratings)(step=Step.FMAP_COREGISTRATION)
+        result = image_with_fewest_ratings(step=Step.FMAP_COREGISTRATION)
         assert result.pk == img_unrated.pk
 
     def test_raises_on_empty_db(self):
         with pytest.raises(ApplicationError, match="No image found"):
-            async_to_sync(image_with_fewest_ratings)(step=Step.FMAP_COREGISTRATION)
+            image_with_fewest_ratings(step=Step.FMAP_COREGISTRATION)
 
     def test_excludes_last_pk(self):
         """image_with_fewest_ratings should skip the excluded image."""
         img1 = _make_image()
         img2 = _make_image()
 
-        result = async_to_sync(image_with_fewest_ratings)(
+        result = image_with_fewest_ratings(
             step=Step.FMAP_COREGISTRATION, exclude=img1.pk
         )
         assert result.pk == img2.pk
@@ -111,9 +110,7 @@ class TestImageWithFewestRatings:
         """Excluding the only image should raise ApplicationError."""
         img = _make_image()
         with pytest.raises(ApplicationError, match="No image found"):
-            async_to_sync(image_with_fewest_ratings)(
-                step=Step.FMAP_COREGISTRATION, exclude=img.pk
-            )
+            image_with_fewest_ratings(step=Step.FMAP_COREGISTRATION, exclude=img.pk)
 
     def test_click_step_uses_annotation(self):
         """For MASK step, submissions are Annotations, not Ratings."""
@@ -124,7 +121,7 @@ class TestImageWithFewestRatings:
             image=img_clicked, session=session, grid_cols=28, grid_rows=21
         )
 
-        result = async_to_sync(image_with_fewest_ratings)(step=Step.MASK)
+        result = image_with_fewest_ratings(step=Step.MASK)
         assert result.pk == img_unclicked.pk
 
     def test_counts_submissions_not_cells(self):
@@ -147,5 +144,5 @@ class TestImageWithFewestRatings:
 
         # Both have exactly one submission, so a third image with none is next.
         img_unreviewed = _make_image(step=Step.MASK)
-        result = async_to_sync(image_with_fewest_ratings)(step=Step.MASK)
+        result = image_with_fewest_ratings(step=Step.MASK)
         assert result.pk == img_unreviewed.pk

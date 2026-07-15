@@ -33,26 +33,29 @@ TASK_TIMEOUT_SEC = 30
 class RatePartial(views.View):
     template_name = f"{RATE_PARTIAL}.html"
 
-    async def get(self, request: http.HttpRequest) -> http.HttpResponse:
-        img_task = await request.session.aget(IMG_TASK)
+    def get(self, request: http.HttpRequest) -> http.HttpResponse:
+        img_task = request.session.get(IMG_TASK)
         if img_task is None:
             raise http.Http404("no img_task found")
 
+        # This is a sync view on purpose: AsyncResult.get() blocks until the
+        # prefetched result is ready. Under ASGI it runs in a thread pool, so
+        # the wait (usually instant, since the task ran while the reviewer
+        # annotated the previous image) never blocks the event loop.
         try:
             # ApplicationError is how the task reports "no image left to
             # rate"; it is re-raised locally by AsyncResult.get.
             payload = result.AsyncResult(img_task).get(timeout=TASK_TIMEOUT_SEC)
-            image = await selectors.image_aget(image_id=payload["id"])
-        except (TimeoutError, exceptions.ApplicationError):
+            image = selectors.image_get(image_id=payload["id"])
+        except (TimeoutError, exceptions.ApplicationError, exceptions.NotFound):
             return http.HttpResponse(
                 "There has been an issue. Please return to the homepage."
             )
 
-        logging.info("starting img_next task")
+        # Prefetch the next image while the reviewer works on this one.
         next_task = tasks.run_db_query_async.delay(step=image.step, last_pk=image.pk)
-        await request.session.aset(IMG_TASK, next_task.id)
-        await request.session.aset("image_id", image.pk)
-        logging.info(f"rendering {image.pk}")
+        request.session[IMG_TASK] = next_task.id
+        request.session["image_id"] = image.pk
         return shortcuts.render(
             request,
             self.template_name,
