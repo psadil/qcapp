@@ -159,12 +159,9 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/stable/howto/static-files/
-
-if DEBUG:
-    STATIC_URL = "static/"
-else:
-    # granian: matches --static-path-route
-    STATIC_URL = "/static/"
+# Absolute so it resolves correctly on sub-path pages (e.g. /mask/), not just
+# the site root; also matches granian's --static-path-route in the container.
+STATIC_URL = "/static/"
 
 # granian: must be mounted with --static-path-mount
 STATIC_ROOT = BASE_DIR.parent / "static"
