@@ -18,7 +18,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The `dev` env is the web app + test tooling only — no neuro/bidslake
       # stack (the tests are all web-side, using synthetic images).
       - uses: prefix-dev/setup-pixi@v0.8.14
