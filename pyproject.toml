@@ -12,7 +12,6 @@ dependencies = [
     "django-ninja>=1.2.0",
     "orjson>=3.11.1",
     "django-celery-results>=2.5.1,<3",
-    "datastar-py>=1.0.2,<2",
 ]
 
 [project.scripts]
@@ -49,6 +48,10 @@ manage = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "dirt.settings"
 pythonpath = ["src"]
+
+[tool.ruff]
+# Django writes migrations in its own style; leave the generated files alone.
+extend-exclude = ["**/migrations/**"]
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
