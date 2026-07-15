@@ -7,7 +7,6 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
-      - "tools/gen_reference.py"
       - "src/django_dirt_ratings/**"
       - ".github/workflows/docs.yml"
 
