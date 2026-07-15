@@ -188,6 +188,12 @@ LOGGING = {
     },
 }
 
+# Django defaults this to "same-origin", which browsers then log a warning about
+# on insecure origins (reviewing over http on a LAN IP, say) where the header is
+# ignored anyway. Drop it in dev for a clean console; deployments (https) below
+# restore it.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+
 if DEPLOYED:
     SESSION_COOKIE_SECURE = True
     SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
@@ -197,3 +203,4 @@ if DEPLOYED:
     # also needed because this is behind traefik
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"

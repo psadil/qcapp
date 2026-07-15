@@ -64,6 +64,15 @@ echo "Rendering QC images from the catalog (this may take a minute)..."
 # coregistration (it has no DWI, so DTI-fit is skipped).
 pixi run -e manage manage render "$CATALOG"
 
+# Write the env file the docker run below uses. DB points at the container's
+# mount (/app/db), so the container serves the database populated above rather
+# than a fresh, empty one. (.env.docker is gitignored, so it is generated here.)
+cat >"${PROJECT_ROOT}/.env.docker" <<'ENVEOF'
+DJANGO_SECRET_KEY='django-insecure-dev-key-do-not-use-in-prod'
+DB=/app/db/dirt.db
+DJANGO_DEBUG=True
+ENVEOF
+
 echo ""
 echo "Setup complete! You can now run the development server using Docker:"
 echo "  docker buildx build -t psadil/dirt --platform=linux/amd64 --provenance=true ."
