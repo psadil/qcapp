@@ -27,8 +27,8 @@ bidslake index -i "${derivatives}/freesurfer" --adapter freesurfer \
 
 # Render every step present in the catalog, updating in place. One process is the
 # sole SQLite writer; rendering fans out across worker processes internally.
-# NOTE: the psadil/dirt:manage image must ship the `bidslake` CLI and depend on
-# bidslake via a git rev / wheel (not the local editable path used for dev).
+# The psadil/dirt:manage image ships the `bidslake` CLI and depends on bidslake by
+# git rev, so `bidslake index` above can also run inside the container if desired.
 apptainer run \
 	--bind /scratch/08266/psadil/qcapp/a2cps.duckdb:/tmp/a2cps.duckdb \
 	--bind "${a2cps}" \

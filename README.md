@@ -170,8 +170,16 @@ $ sqlite3 -header db/dirt.db "SELECT rating, file1 FROM django_dirt_ratings_rati
 
 ## Build
 
+Both images build from the single `Dockerfile`, selected by the `ENVIRONMENT`
+build argument (default = the web app):
+
 ```shell
+# web app
 docker build -t psadil/dirt:prod --provenance=true --platform=linux/amd64 .
+
+# image-generation CLI (manage environment; also ships the bidslake indexer)
+docker build --build-arg ENVIRONMENT=manage -t psadil/dirt:manage \
+  --provenance=true --platform=linux/amd64 .
 ```
 
 Note that we're not pushing this to dockerhub. Everything will be run locally.

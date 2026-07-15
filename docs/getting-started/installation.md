@@ -49,14 +49,21 @@ See [`.env.example`](https://github.com/psadil/dirt/blob/main/.env.example) for 
 
 ## With Docker
 
-Two images are built from this repo:
+Both images build from a single `Dockerfile`, selected by the `ENVIRONMENT` build
+argument:
 
-- **`psadil/dirt`** — the web app. Serves the reviewer UI.
-- **`psadil/dirt:manage`** — the image-generation CLI (the `manage` environment).
+- **`psadil/dirt`** — the web app (default). Serves the reviewer UI.
+- **`psadil/dirt:manage`** — the image-generation CLI (the `manage` environment;
+  also ships the `bidslake` indexer).
 
 ```shell
+# web app (ENVIRONMENT defaults to "default")
 docker buildx build -t psadil/dirt --platform=linux/amd64 --provenance=true .
 docker run --rm -it -v $PWD/db:/app/db --env-file=.env -p 8000:8000 psadil/dirt
+
+# image-generation CLI
+docker buildx build --build-arg ENVIRONMENT=manage \
+  -t psadil/dirt:manage --platform=linux/amd64 --provenance=true .
 ```
 
 The `db/` directory holds the SQLite database and its WAL sidecar files; mount it as a
