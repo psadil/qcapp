@@ -1,3 +1,4 @@
+import functools
 import logging
 import typing as t
 from pathlib import Path
@@ -10,7 +11,7 @@ from django_typer.management import TyperCommand
 
 from django_dirt_ratings import models
 
-from . import _private
+from . import _ingest, _render
 
 
 class Command(TyperCommand):
@@ -49,8 +50,7 @@ class Command(TyperCommand):
             df = df.filter(pl.col("res") == res)
 
         masks: list[str] = (
-            df
-            .with_columns(masks=pl.col("root") + "/" + pl.col("path"))
+            df.with_columns(masks=pl.col("root") + "/" + pl.col("path"))
             .select("masks")
             .to_series()
             .to_list()
@@ -64,36 +64,13 @@ class Command(TyperCommand):
                 anat = mask.replace("desc-brain_mask", "T1w")
             mask_nii = nb.nifti1.Nifti1Image.load(mask)
             file_nii = nb.nifti1.Nifti1Image.load(anat)
-            file1 = Path(mask).name
-            for display_mode in models.DisplayMode.choices:
-                logging.info(f"{display_mode=}")
-                for cut in range(_private.N_CUTS):
-                    logging.info(f"{cut=}")
-                    if (
-                        image := models.Image.objects.filter(
-                            slice=cut,
-                            display=display_mode[0],
-                            step=models.Step.MASK,
-                            file1=file1,
-                        )
-                    ).exists():
-                        if not update:
-                            logging.info("Found object. Skipping")
-                            continue
-                        else:
-                            image.delete()
-
-                    i = _private.get_mask(
-                        cut=cut,
-                        display_mode=models.DisplayMode(display_mode[0]),
-                        mask_nii=mask_nii,
-                        file_nii=file_nii,
-                    )
-                    models.Image.objects.create(
-                        img=i,
-                        slice=cut,
-                        display=display_mode[0],
-                        step=models.Step.MASK,
-                        file1=file1,
-                        file2=Path(anat).name,
-                    )
+            _ingest.ingest_series(
+                file1=Path(mask).name,
+                file2=Path(anat).name,
+                step=models.Step.MASK,
+                cuts=range(_render.N_CUTS),
+                render=functools.partial(
+                    _render.get_mask, mask_nii=mask_nii, file_nii=file_nii
+                ),
+                update=update,
+            )

@@ -39,9 +39,6 @@ ENV MAMBA_USER_GID=$MAMBA_USER_GID
 COPY --chmod=0544 docker/_dockerfile_initialize_user_accounts.sh /usr/local/bin/_dockerfile_initialize_user_accounts.sh
 RUN /usr/local/bin/_dockerfile_initialize_user_accounts.sh
 
-# difficult
-RUN apt-get update && apt-get install -y memcached
-
 USER $MAMBA_USER
 
 WORKDIR /app

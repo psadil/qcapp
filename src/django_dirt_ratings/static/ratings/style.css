@@ -66,6 +66,9 @@ img.img-fluid {
     cursor: crosshair;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     max-width: 100%;
+    /* Let the canvas own touch gestures so a drag paints instead of
+       scrolling / pinch-zooming the page. */
+    touch-action: none;
 }
 
 .responsive-canvas:hover {

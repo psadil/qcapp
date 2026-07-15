@@ -1,80 +1,128 @@
 """
-Services module — business logic for the django_dirt_ratings app.
+Services module — write-side business logic for the django_dirt_ratings app.
 
-Following the Django Styleguide, services are functions that take care of
-writing things to the database. Business logic that was previously embedded
-in model methods or views is consolidated here.
+Following the Django Styleguide, services take keyword-only data arguments
+(never a request), validate with ``full_clean``, and are the only layer that
+writes to the database.
 """
 
-import json
-import logging
+import typing
 
-from django import http, shortcuts
+from django.db import transaction
 
 from django_dirt_ratings import models
 
 
-def _get_image_and_session_from_request(
-    request: http.HttpRequest,
-) -> tuple[models.Image, models.Session]:
-    """Look up the current Image and Session from the request session."""
-    image = shortcuts.get_object_or_404(
-        models.Image, pk=request.session.get("image_id")
+def image_create(
+    *,
+    img: bytes,
+    file1: str,
+    display: int,
+    step: int,
+    slice: int | None = None,
+    file2: str | None = None,
+) -> models.Image:
+    instance = models.Image(
+        img=img, file1=file1, display=display, step=step, slice=slice, file2=file2
     )
-    session = shortcuts.get_object_or_404(
-        models.Session, pk=request.session.get("session_id")
-    )
-    return image, session
-
-
-def rating_create(*, instance: models.Rating, request: http.HttpRequest) -> None:
-    """
-    Populate a Rating instance with request-derived fields and save it.
-
-    The instance is expected to come from a form (``form.save(commit=False)``),
-    with user-submitted fields already set. This service adds the image and
-    session references obtained from the request session.
-    """
-    image, session = _get_image_and_session_from_request(request)
-    instance.image = image
-    instance.session = session
-
-    logging.info("saving rating via service")
     instance.full_clean()
     instance.save()
+    return instance
 
 
-def clicked_coordinate_create(
-    *, instance: models.ClickedCoordinate, request: http.HttpRequest
-) -> None:
+def image_delete(*, image: models.Image) -> None:
+    image.delete()
+
+
+def image_upsert(
+    *,
+    img: bytes,
+    file1: str,
+    display: int,
+    step: int,
+    slice: int | None = None,
+    file2: str | None = None,
+) -> models.Image:
+    """Create the Image identified by its unique metadata, or refresh its bytes.
+
+    The lookup fields are the ``image_meta`` unique constraint; updating in
+    place preserves the primary key and hence any ratings already collected.
     """
-    Populate a ClickedCoordinate from form + request data and save.
+    instance = models.Image.objects.filter(
+        slice=slice, file1=file1, display=display, step=step
+    ).first()
+    if instance is None:
+        instance = models.Image(slice=slice, file1=file1, display=display, step=step)
+    instance.img = img
+    instance.file2 = file2
+    instance.full_clean(validate_unique=False)
+    instance.save()
+    return instance
 
-    Handles the special case where the POST contains a ``points`` JSON
-    payload: each point becomes a separate ClickedCoordinate row via
-    ``bulk_create``.
+
+def session_create(*, step: int, user: str | None = None) -> models.Session:
+    session = models.Session(step=step, user=user)
+    session.full_clean()
+    session.save()
+    return session
+
+
+def rating_create(
+    *,
+    image: models.Image,
+    session: models.Session,
+    rating: int,
+    source_data_issue: bool = False,
+    comments: str = "",
+) -> models.Rating:
+    instance = models.Rating(
+        image=image,
+        session=session,
+        rating=rating,
+        source_data_issue=source_data_issue,
+        comments=comments,
+    )
+    instance.full_clean()
+    instance.save()
+    return instance
+
+
+def annotation_create(
+    *,
+    image: models.Image,
+    session: models.Session,
+    grid_cols: int,
+    grid_rows: int,
+    cells: typing.Sequence[tuple[int, int, int]],
+    source_data_issue: bool = False,
+    comments: str = "",
+) -> models.Annotation:
+    """Record one annotation submission and the grid cells it marked.
+
+    ``cells`` is a sequence of ``(col, row, rating)`` tuples. An empty
+    ``cells`` still creates the Annotation (with no related cells): it records
+    a submission whose only content is the flags/comments.
     """
-    image, session = _get_image_and_session_from_request(request)
-    instance.image = image
-    instance.session = session
+    with transaction.atomic():
+        annotation = models.Annotation(
+            image=image,
+            session=session,
+            grid_cols=grid_cols,
+            grid_rows=grid_rows,
+            source_data_issue=source_data_issue,
+            comments=comments,
+        )
+        annotation.full_clean()
+        annotation.save()
 
-    points_raw = request.POST.get("points")
-    points: list[dict] = [] if points_raw is None else json.loads(points_raw)
-
-    if len(points) == 0:
-        instance.save()
-    else:
-        # Collect all concrete, non-auto fields to replicate across points
-        common_fields: dict = {}
-        for field in instance._meta.get_fields():
-            if (
-                field.concrete
-                and not field.auto_created
-                and field.name not in ("id", "pk")
-            ):
-                common_fields[field.name] = getattr(instance, field.name)
-
-        objs = [
-            models.ClickedCoordinate(**{**common_fields, **point}) for point in points
+        instances = [
+            models.AnnotationCell(
+                annotation=annotation, col=col, row=row, rating=rating
+            )
+            for col, row, rating in cells
         ]
-        models.ClickedCoordinate.objects.bulk_create(objs)
+        for instance in instances:
+            instance.full_clean(validate_constraints=False)
+        models.AnnotationCell.objects.bulk_create(instances)
+
+    return annotation

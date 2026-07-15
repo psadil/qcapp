@@ -5,16 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "connectorx>=0.4.2",
     "django>=6.0.0",
     "django-typer",
     "django-environ>=0.12.0,<0.13",
     "celery>=5.5.0",
     "django-ninja>=1.2.0",
     "orjson>=3.11.1",
-    "psycopg>=3.2.9,<4",
     "django-celery-results>=2.5.1,<3",
-    "datastar-py>=1.0.2,<2",
 ]
 
 [project.scripts]
@@ -52,6 +49,10 @@ manage = [
 DJANGO_SETTINGS_MODULE = "dirt.settings"
 pythonpath = ["src"]
 
+[tool.ruff]
+# Django writes migrations in its own style; leave the generated files alone.
+extend-exclude = ["**/migrations/**"]
+
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
 skip = '.git*,*.lock'
@@ -72,7 +73,6 @@ dev = { features = ["dev"], solve-group = "default" }
 manage = { features = ["manage"] }
 
 [tool.pixi.tasks]
-memcached = { cmd = ["memcached", "-vd", "-s", "/tmp/memcached.sock"] }
 serve-rabbitmq = { cmd = ["rabbitmq-server", "-detached"] }
 start-rabbitmq-workers = { cmd = [
     "celery",
@@ -103,7 +103,6 @@ runserver = { cmd = [
 
 [tool.pixi.dependencies]
 rabbitmq-server = ">=4.1.1,<5"
-pymemcache = ">=4.0.0,<5"
 granian = ">=2.6.0,<3"
 uvloop = ">=0.22.1,<0.23"
 
@@ -112,9 +111,6 @@ test = { cmd = ["pytest", "-v"] }
 
 [tool.pixi.feature.dev.dependencies]
 jupyter = ">=1.1.1,<2"
-
-[tool.pixi.feature.manage.dependencies]
-postgresql = ">=18.2,<19"
 
 [tool.pixi.feature.manage.tasks]
 devsetup = "./tools/devsetup.sh"

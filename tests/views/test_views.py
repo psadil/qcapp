@@ -1,11 +1,19 @@
 """Tests for django_dirt_ratings views."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.urls import reverse
 
-from django_dirt_ratings.models import Rating, Ratings, Session, Step
+from django_dirt_ratings.models import (
+    Annotation,
+    AnnotationCell,
+    Rating,
+    Ratings,
+    Session,
+    Step,
+)
 from django_dirt_ratings.views import (
     DTIFIT_VIEW,
     FMAP_COREGISTRATION_VIEW,
@@ -96,13 +104,63 @@ class TestRateViewPost:
     @patch(
         "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
     )
-    def test_invalid_rating_returns_404(self, mock_task, client):
+    def test_invalid_rating_rerenders_form(self, mock_task, client):
         response = client.post(
             reverse(FMAP_COREGISTRATION_VIEW),
             data={},  # missing required 'rating' field
         )
-        assert response.status_code == 404
+        assert response.status_code == 200  # form re-rendered with errors
         assert Rating.objects.count() == 0
+
+
+@pytest.mark.django_db
+class TestClickViewPost:
+    @patch(
+        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
+    )
+    def test_cells_payload_creates_annotation_and_cells(
+        self, mock_task, client, mask_image, mask_session
+    ):
+        session = client.session
+        session["image_id"] = mask_image.pk
+        session["session_id"] = mask_session.pk
+        session.save()
+
+        response = client.post(
+            reverse(MASK_VIEW),
+            data={
+                "grid_cols": 28,
+                "grid_rows": 21,
+                "cells": json.dumps([[3, 5, Ratings.FAIL], [3, 6, Ratings.UNSURE]]),
+            },
+        )
+
+        assert response.status_code == 302
+        assert Annotation.objects.count() == 1
+        annotation = Annotation.objects.first()
+        assert annotation.image_id == mask_image.pk
+        assert annotation.grid_cols == 28
+        assert AnnotationCell.objects.count() == 2
+
+    @patch(
+        "django_dirt_ratings.views.tasks.run_db_query_async", new_callable=_mock_task
+    )
+    def test_empty_cells_creates_annotation_without_cells(
+        self, mock_task, client, mask_image, mask_session
+    ):
+        session = client.session
+        session["image_id"] = mask_image.pk
+        session["session_id"] = mask_session.pk
+        session.save()
+
+        response = client.post(
+            reverse(MASK_VIEW),
+            data={"grid_cols": 28, "grid_rows": 21, "cells": "[]"},
+        )
+
+        assert response.status_code == 302
+        assert Annotation.objects.count() == 1
+        assert AnnotationCell.objects.count() == 0
 
 
 @pytest.mark.django_db
