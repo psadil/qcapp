@@ -35,11 +35,11 @@ class TestStepChoices:
     @pytest.mark.parametrize(
         "step, expected",
         [
-            (Step.MASK, "png"),
-            (Step.SPATIAL_NORMALIZATION, "png"),
-            (Step.SURFACE_LOCALIZATION, "png"),
-            (Step.FMAP_COREGISTRATION, "apng"),
-            (Step.DTIFIT, "apng"),
+            (Step.MASK, "avif"),
+            (Step.SPATIAL_NORMALIZATION, "avif"),
+            (Step.SURFACE_LOCALIZATION, "avif"),
+            (Step.FMAP_COREGISTRATION, "avif"),
+            (Step.DTIFIT, "avif"),
         ],
     )
     def test_image_type(self, step, expected):

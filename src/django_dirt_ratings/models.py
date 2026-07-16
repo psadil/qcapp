@@ -14,12 +14,13 @@ class Step(models.IntegerChoices):
 
     @property
     def image_type(self) -> str:
-        """MIME subtype of the figures stored for this step."""
-        match self:
-            case Step.FMAP_COREGISTRATION | Step.DTIFIT:
-                return "apng"
-            case _:
-                return "png"
+        """MIME subtype of the figures stored for this step.
+
+        Every step stores lossless AVIF: a single frame for the static views
+        (mask, spatial normalization, surface localization) and an animation for
+        the multi-frame views (fmap coregistration, dtifit).
+        """
+        return "avif"
 
     @property
     def related_name(self) -> str:

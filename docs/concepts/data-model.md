@@ -7,7 +7,7 @@ auto-generated field listing lives in the [Models reference](../reference/models
 
 - **`Step`** — an enumeration of the processing steps DIRT can review: mask, spatial
   normalization, surface localization, field-map coregistration, DTI-fit. Each step knows
-  its image type (PNG or animated APNG) and which interaction it uses.
+  its image type (a static or animated AVIF) and which interaction it uses.
 - **`Image`** — one rendered QC figure, stored as bytes (`img`) together with the metadata
   that identifies it: the source file(s), the display orientation, the slice, and the step.
   A uniqueness constraint on `(slice, file1, display, step)` means re-rendering updates a
