@@ -17,11 +17,8 @@ from __future__ import annotations
 import functools
 import io
 import tempfile
-import time
 from collections.abc import Sequence
-from datetime import datetime
 from pathlib import Path
-from wsgiref import handlers
 
 import imageio.v3 as iio
 import nibabel as nb
@@ -104,13 +101,12 @@ def cuts_from_bbox(
 
 
 def _savefig(p: displays.OrthoSlicer, dst: io.BytesIO) -> None:
-    now = datetime.now()
-    stamp = time.mktime(now.timetuple())
+    """Write the slicer to ``dst`` as a lossless AVIF — the stored QC image."""
     p.savefig(
         dst,
-        metadata={"Creation Time": handlers.format_date_time(stamp)},
         backend="Agg",
-        pil_kwargs={"compress_level": 6},
+        format="avif",
+        pil_kwargs={"lossless": True},
     )
 
 
@@ -243,7 +239,9 @@ def _draw_fmap_frames(
             p0.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
         except ValueError:
             pass
-        _savefig(p0, frame0)
+        # Frames are throwaway intermediates decoded straight to arrays below, so
+        # keep them as fast lossless PNG; only the stitched animation is AVIF.
+        p0.savefig(frame0, backend="Agg", format="png")
         plt.close(f0)
 
         p1: displays.OrthoSlicer = plotting.plot_anat(
@@ -264,7 +262,7 @@ def _draw_fmap_frames(
             p1.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
         except ValueError:
             pass
-        _savefig(p1, frame1)
+        p1.savefig(frame1, backend="Agg", format="png")
         plt.close(f1)
 
         frames = np.stack(
@@ -272,7 +270,7 @@ def _draw_fmap_frames(
             axis=0,
         )
     with io.BytesIO() as buf:
-        iio.imwrite(buf, frames, extension=".apng", loop=0, duration=300)
+        iio.imwrite(buf, frames, extension=".avif", loop=0, duration=300)
         return buf.getvalue()
 
 
@@ -392,7 +390,7 @@ def render_dtifit(*, inputs: dict[str, str], cuts, displays_) -> _Blobs:
         frames = np.stack([iio.imread(img) for img in images + images[-2:1:-1]], axis=0)
 
     with io.BytesIO() as buf:
-        iio.imwrite(buf, frames, extension=".apng", loop=0, duration=200)
+        iio.imwrite(buf, frames, extension=".avif", loop=0, duration=200)
         return {(models.DisplayMode.Z, None): buf.getvalue()}
 
 
