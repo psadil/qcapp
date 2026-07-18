@@ -30,8 +30,10 @@ dev = [
 manage = [
     "django-stubs>=5.2.2",
     # bidslake query layer, pinned to a rev (built from git via maturin/rust at
-    # install time). Keep the rev in sync with BIDSLAKE_REV in Dockerfile.manage.
-    "bidslake @ git+https://github.com/psadil/bidslake.git@051381e6eccad7cb253cc245e9f400b8bb1748d6#subdirectory=crates/bidslake-py",
+    # install time). This is the *reader* only; the indexer CLI is a separate crate
+    # in the same repo, and the Dockerfile's manage stage reads the rev back out of
+    # this line to build it — so this pin is the single source of truth for both.
+    "bidslake @ git+https://github.com/psadil/bidslake.git@b7b3c099ec4ecf6d5c2017390b4c63729dc34fc1#subdirectory=crates/bidslake-py",
     "dipy>=1.11.0",
     "imageio>=2.37.0",
     # matplotlib 3.11 is the first release whose Agg backend can savefig AVIF

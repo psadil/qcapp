@@ -16,8 +16,6 @@
 ARG PIXI_VERSION=0.72.2
 ARG BASE_IMAGE=ubuntu:24.04
 ARG ENVIRONMENT=default
-# bidslake indexer CLI rev; keep in sync with the pinned bidslake dep in pyproject.toml.
-ARG BIDSLAKE_REV=051381e6eccad7cb253cc245e9f400b8bb1748d6
 
 # --------------------------------------------------------------------------
 # Shared builder — the official pixi image (pixi preinstalled, multi-arch).
@@ -48,15 +46,25 @@ RUN pixi install --locked -e ${ENVIRONMENT}
 # ---- web (default) builder: nothing extra ----
 FROM builder-base AS builder-default
 
-# ---- manage builder: also ship the bidslake indexer CLI, built from the pinned
-# rev into the env's bin. Run cargo via `pixi run` so it uses the env's own rust
-# toolchain (a bare cargo could pick up a mismatched rustc from PATH). ----
+# ---- manage builder: also ship the bidslake indexer CLI into the env's bin.
+# `pixi install` above provides only the bidslake *reader* — the maturin-built
+# `bidslake-py` python package, which opens catalogs but cannot build them. The
+# indexer is a separate crate in the same repo and ships no wheel, so it needs its
+# own cargo build. Its rev is read from the dep pyproject.toml already pins rather
+# than repeated here, so the CLI and the reader cannot drift apart. Run cargo via
+# `pixi run` so it uses the env's own rust toolchain (a bare cargo could pick up a
+# mismatched rustc from PATH). ----
 FROM builder-base AS builder-manage
 ARG ENVIRONMENT
-ARG BIDSLAKE_REV
-RUN pixi run -e ${ENVIRONMENT} cargo install \
-    --git https://github.com/psadil/bidslake.git --rev ${BIDSLAKE_REV} \
-    --locked --bin bidslake --root /app/.pixi/envs/${ENVIRONMENT} bidslake
+RUN set -eu; \
+    REV="$(grep -oE 'bidslake\.git@[0-9a-f]+' pyproject.toml | head -1 | cut -d@ -f2)"; \
+    # grep's exit status is hidden by the pipe, so check the result, or a pyproject
+    # reformat would silently build `--rev ""` (i.e. the default branch).
+    [ -n "$REV" ] || { echo 'ERROR: no bidslake rev found in pyproject.toml' >&2; exit 1; }; \
+    echo "Building bidslake indexer CLI at rev $REV"; \
+    pixi run -e ${ENVIRONMENT} cargo install \
+        --git https://github.com/psadil/bidslake.git --rev "$REV" \
+        --locked --bin bidslake --root /app/.pixi/envs/${ENVIRONMENT} bidslake
 
 # ---- select the builder by ENVIRONMENT (ARG-in-FROM; needs BuildKit) ----
 FROM builder-${ENVIRONMENT} AS builder
