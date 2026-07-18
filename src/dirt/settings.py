@@ -28,6 +28,11 @@ ALLOWED_HOSTS = env.list(
     default=["localhost", "127.0.0.1", "[::1]", "0.0.0.0"],
 )
 
+# Optional default path to a review plan (dirt.toml) for `manage plan`. The web app
+# reads the *active* plan from the database, not this file; this is only a
+# convenience default so `manage plan` (and a Docker entrypoint) can apply it.
+DIRT_PLAN = env.str("DIRT_PLAN", default=None)
+
 
 # Application definition
 

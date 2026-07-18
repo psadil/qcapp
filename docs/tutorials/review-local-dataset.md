@@ -77,7 +77,38 @@ For a real cluster example (SLURM + `apptainer run docker://psadil/dirt:manage`)
     like any other; `render` discovers the FA map and its V1/V2/V3 eigenvectors by
     entity. This step is not yet exercised by the sample dataset.
 
-## 4. Serve and review
+## 4. Order by quality metrics (optional)
+
+By default images are served **breadth-first** (fewest reviews first). To surface unusual
+scans sooner, write a [review plan](../concepts/review-ordering.md) and apply it *before*
+rendering. For example, to see the most atypically-sized brain masks first:
+
+```toml
+# dirt.toml
+[ordering]
+strategy = "anomaly_first"
+
+[steps.masks]
+order_by = "volume_mm3"
+direction = "two_sided"     # atypically large OR small is worth a look
+subgroup = ["space"]
+
+  [[steps.masks.measures]]
+  name = "volume_mm3"
+  compute = "mask_volume"
+```
+
+```shell
+pixi run -e manage manage plan dirt.toml     # validate + activate (before render)
+pixi run -e manage manage render study.duckdb
+pixi run -e manage manage prioritize         # z-score the measures into the ordering key
+```
+
+The metric only *reorders* — it never hides an image, and it is invisible to reviewers. Rerun
+`manage prioritize` after adding data. See [Review ordering](../concepts/review-ordering.md)
+for the strategies (`breadth_first`, `anomaly_first`, `triage`) and the full schema.
+
+## 5. Serve and review
 
 Point the web app at the same `db/` directory:
 

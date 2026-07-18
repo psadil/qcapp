@@ -11,7 +11,7 @@ import typing
 from django.db import transaction
 from django.db.models import F
 
-from django_dirt_ratings import models
+from django_dirt_ratings import models, plan
 
 
 def image_create(
@@ -43,11 +43,15 @@ def image_upsert(
     step: int,
     slice: int | None = None,
     file2: str | None = None,
+    raw_metrics: dict | None = None,
+    review_plan_id: int | None = None,
 ) -> models.Image:
     """Create the Image identified by its unique metadata, or refresh its bytes.
 
     The lookup fields are the ``image_meta`` unique constraint; updating in
-    place preserves the primary key and hence any ratings already collected.
+    place preserves the primary key (hence any ratings) and ``priority``
+    (recomputed by ``prioritize``), while refreshing the bytes, measures, and the
+    plan the image was rendered under.
     """
     instance = models.Image.objects.filter(
         slice=slice, file1=file1, display=display, step=step
@@ -56,6 +60,8 @@ def image_upsert(
         instance = models.Image(slice=slice, file1=file1, display=display, step=step)
     instance.img = img
     instance.file2 = file2
+    instance.raw_metrics = raw_metrics
+    instance.review_plan_id = review_plan_id
     instance.full_clean(validate_unique=False)
     instance.save()
     return instance
@@ -65,11 +71,12 @@ def image_upsert_many(*, images: typing.Sequence[dict]) -> None:
     """Create or refresh many Images in one INSERT ... ON CONFLICT.
 
     Each dict is the fields of one Image (``img``, ``file1``, ``file2``,
-    ``display``, ``step``, ``slice``). On conflict against the ``image_meta``
-    unique key the bytes are refreshed in place, preserving the primary key (and
-    hence ratings) and ``n_reviews``. Only valid for non-null ``slice`` rows:
-    SQLite treats NULLs as distinct in a unique index, so ON CONFLICT would not
-    dedup them (the single-image DTIFIT step uses :func:`image_upsert` instead).
+    ``display``, ``step``, ``slice``, ``raw_metrics``, ``review_plan_id``). On
+    conflict against the ``image_meta`` unique key the bytes/measures/plan are
+    refreshed in place, preserving the primary key (and hence ratings), ``n_reviews``
+    and ``priority``. Only valid for non-null ``slice`` rows: SQLite treats NULLs as
+    distinct in a unique index, so ON CONFLICT would not dedup them (the single-image
+    DTIFIT step uses :func:`image_upsert` instead).
     """
     instances = [models.Image(**fields) for fields in images]
     for instance in instances:
@@ -81,12 +88,40 @@ def image_upsert_many(*, images: typing.Sequence[dict]) -> None:
         instances,
         update_conflicts=True,
         unique_fields=["slice", "file1", "display", "step"],
-        update_fields=["img", "file2"],
+        update_fields=["img", "file2", "raw_metrics", "review_plan"],
     )
 
 
+def plan_apply(*, name: str, text: str) -> models.ReviewPlan:
+    """Persist a review plan's TOML and make it the sole active plan.
+
+    Idempotent by content: identical text reuses its :class:`models.ReviewPlan`
+    row (dedup on ``content_hash``) and is simply re-activated. Editing the file
+    makes a new row, so images/sessions stamped under the old plan keep their
+    provenance.
+    """
+    digest = plan.content_hash(text)
+    with transaction.atomic():
+        record, _ = models.ReviewPlan.objects.get_or_create(
+            content_hash=digest, defaults={"name": name, "toml": text}
+        )
+        models.ReviewPlan.objects.exclude(pk=record.pk).update(is_active=False)
+        if not record.is_active:
+            record.is_active = True
+            record.save(update_fields=["is_active"])
+    return record
+
+
 def session_create(*, step: int, user: str | None = None) -> models.Session:
-    session = models.Session(step=step, user=user)
+    # Pin the active plan's serving facet onto the session so ordering is stable for
+    # its whole lifetime, even if the plan is re-applied mid-review.
+    active = plan.active()
+    session = models.Session(
+        step=step,
+        user=user,
+        strategy=active.strategy,
+        triage_depth=active.triage_depth,
+    )
     session.full_clean()
     session.save()
     return session

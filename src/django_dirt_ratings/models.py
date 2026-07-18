@@ -40,6 +40,34 @@ class Step(models.IntegerChoices):
         """
         return DEFAULT_GRID_COLS
 
+    @property
+    def cli_name(self) -> str:
+        """The step's CLI/plan token (matches its ``StepSpec`` name).
+
+        Canonical, web-safe name↔Step mapping so the review plan (``plan.py``)
+        and forms can resolve step tokens without importing the ingest registry
+        (which pulls in the neuro stack).
+        """
+        match self:
+            case Step.MASK:
+                return "masks"
+            case Step.SPATIAL_NORMALIZATION:
+                return "spatial_normalization"
+            case Step.SURFACE_LOCALIZATION:
+                return "surface_localization"
+            case Step.FMAP_COREGISTRATION:
+                return "fmap_coregistration"
+            case Step.DTIFIT:
+                return "dtifit"
+
+    @classmethod
+    def from_cli_name(cls, name: str) -> "Step":
+        """The Step for a CLI/plan token; raises ``ValueError`` if unknown."""
+        for step in cls:
+            if step.cli_name == name:
+                return step
+        raise ValueError(f"unknown step {name!r}")
+
 
 class Ratings(models.IntegerChoices):
     PASS = 0
@@ -53,6 +81,29 @@ class DisplayMode(models.IntegerChoices):
     Z = 2
 
 
+class ReviewStrategy(models.TextChoices):
+    """How the next image to review is chosen (see ``ordering.py``).
+
+    ``TextChoices`` (str-valued, with ``.choices``/``.values``) so the same enum
+    serves both the review-plan TOML validation and the ``Session.strategy`` field.
+    """
+
+    # fewest reviews first (the default)
+    BREADTH_FIRST = "breadth_first"
+    # breadth backbone, most-atypical re-ranked within a review-depth band
+    ANOMALY_FIRST = "anomaly_first"
+    # anomaly_first restricted to under-reviewed images (a failure hunt)
+    TRIAGE = "triage"
+
+
+class MetricDirection(models.TextChoices):
+    """Which values of a measure are "atypical" (drive ``Image.priority``)."""
+
+    TWO_SIDED = "two_sided"  # atypical either way is suspect (e.g. mask volume)
+    HIGHER_WORSE = "higher_worse"  # larger is more suspect (e.g. motion fd_mean)
+    LOWER_WORSE = "lower_worse"  # smaller is more suspect (e.g. snr, cnr)
+
+
 class BaseModel(models.Model):
     created_at = models.DateTimeField(db_index=True, default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -61,9 +112,31 @@ class BaseModel(models.Model):
         abstract = True
 
 
+class ReviewPlan(BaseModel):
+    """A persisted ``dirt.toml`` review plan — the QC provenance for a dataset.
+
+    Stored verbatim (``toml``) with a ``content_hash`` so re-applying an identical
+    plan is idempotent. ``render`` stamps each :class:`Image` it produces with the
+    active plan (the "pipeline facet": what was measured); a rating :class:`Session`
+    copies the plan's serving facet (strategy/triage_depth) onto itself. Exactly one
+    plan is ``is_active`` at a time.
+    """
+
+    name = models.TextField(default="", blank=True)
+    content_hash = models.TextField(unique=True)
+    toml = models.TextField()
+    is_active = models.BooleanField(default=False)
+
+
 class Session(BaseModel):
     step = models.IntegerField(choices=Step.choices)
     user = models.TextField(default=None, null=True, blank=True)
+    # Serving facet of the active ReviewPlan, pinned at session start so editing the
+    # plan mid-review never disturbs an in-flight session.
+    strategy = models.TextField(
+        choices=ReviewStrategy.choices, default=ReviewStrategy.BREADTH_FIRST
+    )
+    triage_depth = models.PositiveIntegerField(default=1)
 
 
 class Image(BaseModel):
@@ -82,6 +155,35 @@ class Image(BaseModel):
             "aggregate scan over every image of a step."
         ),
     )
+    priority = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Advisory ordering key for the anomaly_first/triage strategies, computed "
+            "by `manage prioritize` as a robust within-subgroup modified z-score "
+            "(MAD-based; |z| for two-sided measures). Larger = more atypical, "
+            "surfaced earlier; 0.0 = typical (including a subgroup with no "
+            "meaningful spread); NULL = no measure (sorts after scored images, i.e. "
+            "breadth-first fallback). Only ever reorders — it never filters or hides "
+            "an image."
+        ),
+    )
+    raw_metrics = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Measured values + rational-subgroup entities harvested at ingest, e.g. "
+            "{'volume_mm3': 1.23e6, 'space': 'MNI152NLin2009cAsym'}. The source "
+            "`manage prioritize` recomputes `priority` from."
+        ),
+    )
+    review_plan = models.ForeignKey(
+        "ReviewPlan",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        help_text="The plan under which this image was rendered and measured.",
+    )
 
     class Meta:
         constraints = [
@@ -90,9 +192,15 @@ class Image(BaseModel):
             )
         ]
         indexes = [
-            # Serves selectors.image_with_fewest_ratings: filter by step, order by
+            # Serves the breadth_first strategy: filter by step, order by
             # (n_reviews, id) — an index range seek returning one leaf entry.
             models.Index(fields=["step", "n_reviews", "id"], name="image_next"),
+            # Serves anomaly_first/triage: order by (n_reviews, priority desc nulls
+            # last, id). -priority matches F("priority").desc(nulls_last=True) so the
+            # whole order is a covering forward scan — a single leaf seek, no sort.
+            models.Index(
+                fields=["step", "n_reviews", "-priority", "id"], name="image_priority"
+            ),
         ]
 
 

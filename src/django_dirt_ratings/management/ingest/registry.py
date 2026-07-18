@@ -72,6 +72,10 @@ class RenderJob:
     inputs: dict[str, str]
     cuts: Sequence[int | None]
     displays: Sequence[models.DisplayMode]
+    # Catalog-derived values attached at discovery: rational-subgroup entities
+    # (e.g. ``{"space": "MNI152..."}``) and any ``catalog`` measures. Merged with the
+    # computed extractors into the resulting Image's ``raw_metrics``.
+    metrics: Mapping[str, float | str | None] | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

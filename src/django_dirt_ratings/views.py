@@ -9,6 +9,7 @@ from django_dirt_ratings import (
     formatters,
     forms,
     models,
+    ordering,
     selectors,
     services,
 )
@@ -30,17 +31,24 @@ class RatePartial(views.View):
         if step is None:
             raise http.Http404("no active rating session")
 
-        # Serve the next image synchronously. Backed by the image_next index,
-        # image_with_fewest_ratings is a sub-millisecond seek, so there is no
-        # slow query to hide behind a background prefetch — excluding the image
-        # just shown gives the next one in the breadth-first order.
+        # Serve the next image synchronously under the session's pinned strategy
+        # (cached in the cookie at session start). Every strategy is a single index
+        # seek, so there is no slow query to hide behind a prefetch; excluding the
+        # image just shown gives the next one in order.
+        strategy = ordering.OrderingStrategy.build(
+            request.session.get("strategy", models.ReviewStrategy.BREADTH_FIRST),
+            triage_depth=request.session.get("triage_depth", 1),
+        )
         try:
-            image = selectors.image_with_fewest_ratings(
-                step=models.Step(step), exclude=request.session.get("image_id")
+            image = selectors.next_image(
+                step=models.Step(step),
+                strategy=strategy,
+                exclude=request.session.get("image_id"),
             )
         except exceptions.ApplicationError:
+            # No image left to serve — an exhausted triage pool, or an empty step.
             return http.HttpResponse(
-                "There has been an issue. Please return to the homepage."
+                "Review complete for this step. Please return to the homepage."
             )
 
         request.session["image_id"] = image.pk
@@ -185,4 +193,8 @@ class LayoutView(edit.FormView):
         )
         self.request.session["session_id"] = session.pk
         self.request.session["step"] = session.step
+        # Pin the serving strategy in the cookie so the partial loop needs no DB
+        # read for it (mirrors how `step` is cached).
+        self.request.session["strategy"] = session.strategy
+        self.request.session["triage_depth"] = session.triage_depth
         return http.HttpResponseRedirect(self.get_success_url())

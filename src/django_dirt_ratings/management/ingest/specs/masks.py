@@ -8,10 +8,10 @@ from typing import Any
 from django_dirt_ratings import models
 
 from .. import bids, render
-from ..registry import RenderJob, StepSpec, register
+from ..registry import Lake, RenderJob, StepSpec, register
 
 
-def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
+def discover(lake: Lake, filters: dict[str, Any]) -> list[RenderJob]:
     query = {
         "datatype": "anat",
         "suffix": "mask",
@@ -50,6 +50,9 @@ def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
                 inputs={"mask": str(mask.local_path), "anat": str(anat.local_path)},
                 cuts=list(range(render.N_CUTS)),
                 displays=list(models.DisplayMode),
+                # Rational-subgroup entities: prioritize z-scores mask volume within a
+                # space (a native-space volume isn't comparable to an MNI-space one).
+                metrics=dict(shared),
             )
         )
     return jobs
