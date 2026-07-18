@@ -62,6 +62,7 @@ nav:
       - Quickstart: getting-started/quickstart.md
   - Tutorials:
       - Review a local dataset: tutorials/review-local-dataset.md
+      - Order coregistrations by RMS: tutorials/order-coregistration-by-rms.md
   - Concepts:
       - How data flows: concepts/data-flow.md
       - Review ordering: concepts/review-ordering.md

@@ -5,9 +5,13 @@ import json
 import pytest
 from django.urls import reverse
 
+from django_dirt_ratings import services
+from django_dirt_ratings.forms import IndexForm
 from django_dirt_ratings.models import (
     Annotation,
     AnnotationCell,
+    DisplayMode,
+    Image,
     Rating,
     Ratings,
     Session,
@@ -146,6 +150,52 @@ class TestRatePartial:
     def test_no_session_step_is_404(self, client):
         response = client.get(reverse("rate_partial"))
         assert response.status_code == 404
+
+    def test_anomaly_strategy_serves_highest_priority(self, client, fmap_session):
+        """The cookie-pinned strategy threads through to next_image."""
+        Image.objects.create(
+            img=b"\x89PNG",
+            file1="lo.nii.gz",
+            slice=0,
+            display=DisplayMode.X,
+            step=Step.FMAP_COREGISTRATION,
+            priority=0.2,
+        )
+        worst = Image.objects.create(
+            img=b"\x89PNG",
+            file1="hi.nii.gz",
+            slice=1,
+            display=DisplayMode.X,
+            step=Step.FMAP_COREGISTRATION,
+            priority=5.0,
+        )
+        session = client.session
+        session["step"] = Step.FMAP_COREGISTRATION
+        session["session_id"] = fmap_session.pk
+        session["strategy"] = "anomaly_first"
+        session["triage_depth"] = 1
+        session.save()
+
+        client.get(reverse("rate_partial"))
+        assert client.session["image_id"] == worst.pk
+
+
+@pytest.mark.django_db
+class TestIndexFormGating:
+    def test_offers_only_planned_steps(self):
+        services.plan_apply(name="t", text="[steps.masks]\n")
+        form = IndexForm()
+        offered = {
+            str(c[0]) for c in form.fields["step"].choices if c[0] not in ("", None)
+        }
+        assert offered == {str(Step.MASK.value)}
+
+    def test_all_steps_when_no_plan(self):
+        form = IndexForm()
+        offered = {
+            str(c[0]) for c in form.fields["step"].choices if c[0] not in ("", None)
+        }
+        assert offered == {str(s.value) for s in Step}
 
 
 @pytest.mark.django_db

@@ -169,6 +169,61 @@ class TestImageServices:
         first.refresh_from_db()
         assert bytes(first.img) == b"A"
 
+    def test_upsert_persists_metrics_and_preserves_priority(self):
+        from django_dirt_ratings.models import ReviewPlan
+
+        plan = ReviewPlan.objects.create(name="p", content_hash="h", toml="")
+        image_upsert_many(
+            images=[
+                {
+                    "img": b"a",
+                    "file1": "f.nii.gz",
+                    "file2": None,
+                    "display": DisplayMode.X,
+                    "step": Step.MASK,
+                    "slice": 0,
+                    "raw_metrics": {"space": "MNI", "volume_mm3": 100.0},
+                    "review_plan_id": plan.pk,
+                }
+            ]
+        )
+        img = Image.objects.get(file1="f.nii.gz", slice=0)
+        assert img.raw_metrics == {"space": "MNI", "volume_mm3": 100.0}
+        assert img.review_plan_id == plan.pk
+
+        # A prioritize run sets priority; a subsequent re-render must not clobber it.
+        Image.objects.filter(pk=img.pk).update(priority=2.5)
+        image_upsert_many(
+            images=[
+                {
+                    "img": b"A",
+                    "file1": "f.nii.gz",
+                    "file2": None,
+                    "display": DisplayMode.X,
+                    "step": Step.MASK,
+                    "slice": 0,
+                    "raw_metrics": {"space": "MNI", "volume_mm3": 150.0},
+                    "review_plan_id": plan.pk,
+                }
+            ]
+        )
+        img.refresh_from_db()
+        assert bytes(img.img) == b"A"  # bytes refreshed
+        assert img.raw_metrics["volume_mm3"] == 150.0  # measures refreshed
+        assert img.priority == 2.5  # priority preserved (not in update_fields)
+
+    def test_single_upsert_persists_metrics(self):
+        image = image_upsert(
+            img=b"x",
+            file1="g.nii.gz",
+            display=DisplayMode.X,
+            step=Step.DTIFIT,
+            slice=None,
+            raw_metrics={"fd_mean": 0.3},
+        )
+        image.refresh_from_db()
+        assert image.raw_metrics == {"fd_mean": 0.3}
+
 
 @pytest.mark.django_db
 class TestAnnotationCreate:

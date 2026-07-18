@@ -35,6 +35,7 @@ class BidsFile(Protocol):
     metadata: dict[str, Any]
     file_path: str
     uri: str
+    dataset_id: str
 
     @property
     def path(self) -> Any: ...  # UPath — local or remote
@@ -49,6 +50,10 @@ class Lake(Protocol):
     """The subset of a bidslake ``BidsLake`` the specs rely on."""
 
     def get(self, **filters: Any) -> Any: ...  # iterable of BidsFile
+
+    def related_datasets(
+        self, dataset_id: str, relation: Any = ...
+    ) -> list[str]: ...  # datasets sharing a source (cross-dataset catalog measures)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -72,6 +77,15 @@ class RenderJob:
     inputs: dict[str, str]
     cuts: Sequence[int | None]
     displays: Sequence[models.DisplayMode]
+    # Catalog-derived values attached at discovery: rational-subgroup entities
+    # (e.g. ``{"space": "MNI152..."}``) and any ``catalog`` measures. Merged with the
+    # computed extractors into the resulting Image's ``raw_metrics``.
+    metrics: Mapping[str, float | str | None] | None = None
+    # The primary source file's dataset_id and BIDS entities, so the orchestrator can
+    # harvest a cross-dataset catalog measure (an MRIQC IQM in a sibling dataset) paired
+    # to this file by entity. Populated by specs that carry catalog measures.
+    source_dataset_id: str | None = None
+    source_entities: Mapping[str, Any] | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
