@@ -72,17 +72,35 @@ min_cv = 0.01                   # optional: ignore subgroups varying < 1% (defau
   name = "volume_mm3"
   compute = "mask_volume"       # a metric DIRT computes itself
 
-# [steps.dtifit]                # an externally-derived metric (e.g. MRIQC motion),
-# order_by = "fd_mean"          # read straight from the bidslake catalog:
-# direction = "higher_worse"
-#   [[steps.dtifit.measures]]
-#   name = "fd_mean"
-#   catalog = "fd_mean"
+[steps.fmap_coregistration]     # order coregistrations worst-alignment first
+order_by = "coreg_mm"
+direction = "higher_worse"      # a bigger induced displacement is more suspect
+
+  [[steps.fmap_coregistration.measures]]
+  name = "coreg_mm"
+  compute = "affine_displacement"   # RMS mm the coregistration affine moves the brain
+
+  [[steps.fmap_coregistration.measures]]   # a metric from ANOTHER dataset (an MRIQC IQM)
+  name = "fd_mean"
+  catalog = "fd_mean"                       # the metadata key on the sibling record
+  catalog_suffix = "bold"                   # the sibling MRIQC record's suffix
+  match = ["sub", "ses", "task", "run"]     # entities that pair the two records
 ```
 
-Each measure has exactly one source: `compute` (a metric DIRT computes over the source files,
-e.g. brain-mask volume in mm³) or `catalog` (a bidslake sidecar metadata key, e.g. an MRIQC
-IQM). Volumes are stored in **mm³** so they compare across differing voxel sizes.
+Each measure has exactly one source: `compute` (a metric DIRT computes over the source files) or
+`catalog` (a metric read from the bidslake catalog). Two computed extractors ship today:
+
+- `mask_volume` — brain-mask volume in **mm³** (comparable across voxel sizes; two-sided).
+- `affine_displacement` — how far a coregistration affine moves the brain, in mm (Jenkinson RMS
+  over the brain, not the determinant, which misses translation and rotation; higher is worse).
+
+A `catalog` measure with `catalog_suffix` + `match` is **cross-dataset**: the metric is read from a
+record in a *sibling* dataset — one built from the same source (see the bidslake
+[cross-dataset links](https://github.com/psadil/bidslake)) — paired to this file by the `match`
+BIDS entities. That is how MRIQC IQMs (which live in a separate dataset) order an fMRIPrep review
+without the unsound cross-dataset entity join: DIRT only trusts the pairing because the shared
+source guarantees `sub-01` is the same subject in both. A missing or ambiguous match scores
+nothing (never a guess), so those images just fall back to the review's other ordering.
 
 ### Workflow
 

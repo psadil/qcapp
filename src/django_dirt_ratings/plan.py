@@ -35,19 +35,43 @@ class Measure:
     """One measured quantity to store in ``Image.raw_metrics`` under ``name``.
 
     Exactly one source: ``compute`` (a :class:`~management.ingest.measures.MetricExtractor`
-    ``key``, computed at ingest) or ``catalog`` (a bidslake sidecar metadata key,
-    harvested during discovery).
+    ``key``, computed at ingest) or ``catalog`` (a metadata key read from the bidslake
+    catalog).
+
+    A ``catalog`` measure can be **cross-dataset**: when ``catalog_suffix`` and ``match``
+    are set, the value is read from a record of that suffix in a *sibling* dataset (one
+    sharing a source, see the bidslake cross-dataset links), paired to this file by the
+    ``match`` BIDS entities. That is how MRIQC IQMs (in a separate dataset) order an
+    fMRIPrep review, e.g. ``catalog="fd_mean", catalog_suffix="bold",
+    match=["sub","ses","task","run"]``.
     """
 
     name: str
     compute: str | None = None
     catalog: str | None = None
+    catalog_suffix: str | None = None
+    match: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if bool(self.compute) == bool(self.catalog):
             raise PlanError(
                 f"measure {self.name!r}: set exactly one of `compute` or `catalog`"
             )
+        cross = self.catalog_suffix is not None or bool(self.match)
+        if cross and not self.catalog:
+            raise PlanError(
+                f"measure {self.name!r}: `catalog_suffix`/`match` apply only to a `catalog` measure"
+            )
+        if cross and (not self.catalog_suffix or not self.match):
+            raise PlanError(
+                f"measure {self.name!r}: a cross-dataset catalog measure needs both "
+                "`catalog_suffix` and a non-empty `match`"
+            )
+
+    @property
+    def is_cross_dataset(self) -> bool:
+        """Whether this catalog measure reads from a sibling dataset."""
+        return self.catalog_suffix is not None
 
 
 #: Default relative-variation floor: a subgroup whose spread is under 1% of its own
@@ -159,6 +183,8 @@ def parse(text: str) -> Plan:
                 name=m["name"],
                 compute=m.get("compute"),
                 catalog=m.get("catalog"),
+                catalog_suffix=m.get("catalog_suffix"),
+                match=tuple(m.get("match", [])),
             )
             for m in block.get("measures", [])
         )

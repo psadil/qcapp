@@ -61,3 +61,52 @@ class MaskVolume(MetricExtractor, key="mask_volume"):
         mask = loading.load_nifti(inputs["mask"])
         voxel_mm3 = float(abs(np.linalg.det(mask.affine[:3, :3])))
         return float(np.count_nonzero(np.asanyarray(mask.dataobj) > 0)) * voxel_mm3
+
+
+def _voxel_to_mm(affine: np.ndarray, ijk: np.ndarray) -> np.ndarray:
+    """Map voxel indices (N x 3) to mm coordinates via a NIfTI affine."""
+    return ijk @ affine[:3, :3].T + affine[:3, 3]
+
+
+def _brain_centroid_radius_mm(mask_location: str) -> tuple[np.ndarray, float] | None:
+    """The brain's centroid (mm) and bounding radius (mm) from a mask, or None if empty."""
+    mask = loading.load_nifti(mask_location)
+    ijk = np.argwhere(np.asanyarray(mask.dataobj) > 0)
+    if ijk.size == 0:
+        return None
+    xyz = _voxel_to_mm(mask.affine, ijk)
+    centroid = xyz.mean(axis=0)
+    radius = float(np.linalg.norm(xyz - centroid, axis=1).max())
+    return centroid, radius
+
+
+class AffineDisplacement(MetricExtractor, key="affine_displacement"):
+    """How far a coregistration affine moves the brain, in mm (higher is worse).
+
+    fMRIPrep writes the boldref->anat/B0 coregistration as an ITK/ANTs affine .txt.
+    The *determinant* is the wrong summary — it captures only volume scaling and
+    misses translation and rotation entirely. Instead use the RMS displacement the
+    transform induces over the brain (Jenkinson et al. 2002): for x -> Mx + t, with
+    A = M - I, over a sphere of radius R at the brain centroid c,
+
+        E_rms = sqrt( (1/5) R^2 * tr(A^T A) + |t + A c|^2 )   [mm]
+
+    which folds in rotation, translation, and the scale/shear of A together. A well
+    coregistered run barely moves (E ~ 0); a large E flags a suspect alignment.
+    """
+
+    def extract(self, inputs: Mapping[str, str]) -> float | None:
+        import nitransforms as nt
+
+        cr = _brain_centroid_radius_mm(inputs["mask"])
+        if cr is None:
+            return None
+        centroid, radius = cr
+        matrix = np.asarray(nt.linear.load(loading._local(inputs["transform"])).matrix)
+        a = matrix[:3, :3] - np.eye(3)
+        displacement = matrix[:3, 3] + a @ centroid
+        return float(
+            np.sqrt(
+                0.2 * radius**2 * np.trace(a.T @ a) + float(displacement @ displacement)
+            )
+        )

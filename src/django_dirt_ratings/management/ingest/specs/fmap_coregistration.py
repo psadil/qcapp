@@ -83,6 +83,10 @@ def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
                     },
                     cuts=list(range(render.N_CUTS)),
                     displays=list(models.DisplayMode),
+                    # The BOLD run's identity, so a cross-dataset catalog measure (an
+                    # MRIQC bold IQM in a sibling dataset) can be paired by entity.
+                    source_dataset_id=boldref.dataset_id,
+                    source_entities=dict(shared),
                 )
             )
     return jobs
