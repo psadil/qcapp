@@ -20,6 +20,7 @@ dev = [
     "codespell>=2.4.1",
     "prek",
     "ruff==0.16.4",
+    "ty==0.0.73",
     "playwright",
     "pytest-playwright",
     "pywatchman>=3.0.0,<4",
@@ -35,6 +36,11 @@ manage = [
     # in the same repo, and the Dockerfile's manage stage reads the rev back out of
     # this line to build it — so this pin is the single source of truth for both.
     "bidslake @ git+https://github.com/psadil/bidslake.git@ff643e173257f7dd84f6bfa71e7d3cc297e790ad#subdirectory=crates/bidslake-py",
+    { include-group = "neuro" },
+]
+# Split from `manage` so the dev env (Python 3.13, where the ty prek hook runs)
+# can include the pip-wheel neuro stack without bidslake, which needs 3.14 + cargo.
+neuro = [
     "dipy>=1.11.0",
     "imageio>=2.37.0",
     # matplotlib 3.11 is the first release whose Agg backend can savefig AVIF
@@ -58,6 +64,12 @@ docs = [
     "mkdocstrings[python]",
 ]
 
+
+[tool.ty.environment]
+# Type-check against the pixi dev env (the ty prek hook runs there via
+# `pixi run -e dev ty check`); dev includes the neuro group, so ingest code
+# resolves numpy/nibabel/… — bidslake alone stays unresolvable (see lake.py).
+python = ".pixi/envs/dev"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "dirt.settings"
@@ -83,7 +95,9 @@ dirt = { path = ".", editable = true }
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
+# dev also carries the neuro group so ty (and the ingest tests) resolve the
+# science stack; bidslake stays manage-only (needs Python 3.14 + a cargo build).
+dev = { features = ["dev", "neuro"], solve-group = "default" }
 manage = { features = ["manage"] }
 # Own solve group: keep zensical (alpha) out of the default/dev/manage solve.
 docs = { features = ["docs"] }

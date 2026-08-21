@@ -133,7 +133,10 @@ def rotate_affine(img, rot=None):
 @functools.lru_cache(maxsize=4)
 def _template_img(path: str) -> nb.nifti1.Nifti1Image:
     """The bundled ROI template, loaded once per process."""
-    return nb.load(path)
+    img = nb.load(path)
+    if not isinstance(img, nb.nifti1.Nifti1Image):  # nb.load promises FileBasedImage
+        raise TypeError(f"expected a NIfTI template at {path}, got {type(img)}")
+    return img
 
 
 # --------------------------------------------------------------------------- #

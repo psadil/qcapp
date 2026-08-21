@@ -83,11 +83,13 @@ class RateView(abc.ABC, edit.CreateView):
         self, request: http.HttpRequest
     ) -> tuple[models.Image, models.Session]:
         """Resolve the image/session the browser session points at, or 404."""
+        image_id = request.session.get("image_id")
+        session_id = request.session.get("session_id")
+        if image_id is None or session_id is None:
+            raise http.Http404("No active rating session")
         try:
-            image = selectors.image_get(image_id=request.session.get("image_id"))
-            session = selectors.session_get(
-                session_id=request.session.get("session_id")
-            )
+            image = selectors.image_get(image_id=image_id)
+            session = selectors.session_get(session_id=session_id)
         except exceptions.NotFound:
             raise http.Http404("No active rating session")
         return image, session

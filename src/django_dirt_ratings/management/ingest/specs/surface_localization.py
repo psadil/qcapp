@@ -17,6 +17,7 @@ suffix.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +29,7 @@ from ..registry import RenderJob, StepSpec, register
 _VOLUMES = {"brain.mgz": "brain", "ribbon.mgz": "ribbon"}
 
 
-def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
+def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
     # Gather the brain/ribbon volumes, keyed by subject (+ session).
     by_subject: dict[tuple, dict[str, Any]] = defaultdict(dict)
     for f in lake.get(extension=".mgz", **filters):

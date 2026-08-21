@@ -62,7 +62,8 @@ def test_affine_displacement_is_rms_mm(tmp_path):
     rot = np.eye(4)
     rot[:2, :2] = [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
     xfm = _itk_affine(tmp_path, rot, ref)
-    assert ext.extract({"mask": str(mask), "transform": str(xfm)}) > 0
+    displacement = ext.extract({"mask": str(mask), "transform": str(xfm)})
+    assert displacement is not None and displacement > 0
 
 
 def test_registered_under_key():

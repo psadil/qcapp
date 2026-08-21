@@ -60,7 +60,7 @@ def _write(
     raw = _measure(job=job, extractors=extractors)
     if catalog:
         raw = {**(raw or {}), **catalog}
-    rows = [
+    rows: list[services.ImageRow] = [
         {
             "img": data,
             "file1": job.file1,
@@ -102,6 +102,7 @@ def ingest_dataset(
         sp.step: [
             (m.name, measures.MetricExtractor.get(m.compute))
             for m in sp.computed_measures
+            if m.compute  # always true (computed_measures filters); narrows the type
         ]
         for sp in active.steps
     }

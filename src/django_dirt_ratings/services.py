@@ -67,10 +67,25 @@ def image_upsert(
     return instance
 
 
-def image_upsert_many(*, images: typing.Sequence[dict]) -> None:
+class ImageRow(typing.TypedDict):
+    """The fields of one Image as a plain row, for the upsert paths."""
+
+    img: bytes
+    file1: str
+    file2: str | None
+    display: int
+    step: int
+    slice: int | None
+    # Omitting these matches Image(**row) semantics: the model defaults (None)
+    # apply, which on conflict still refresh the stored values to NULL.
+    raw_metrics: typing.NotRequired[dict | None]
+    review_plan_id: typing.NotRequired[int | None]
+
+
+def image_upsert_many(*, images: typing.Sequence[ImageRow]) -> None:
     """Create or refresh many Images in one INSERT ... ON CONFLICT.
 
-    Each dict is the fields of one Image (``img``, ``file1``, ``file2``,
+    Each row holds the fields of one Image (``img``, ``file1``, ``file2``,
     ``display``, ``step``, ``slice``, ``raw_metrics``, ``review_plan_id``). On
     conflict against the ``image_meta`` unique key the bytes/measures/plan are
     refreshed in place, preserving the primary key (and hence ratings), ``n_reviews``

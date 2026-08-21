@@ -10,6 +10,7 @@ brain mask / boldref->fieldmap transform by entity query — including the corre
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,7 @@ from ..registry import RenderJob, StepSpec, register
 _TARGET_ENTITIES = ("sub", "ses", "task", "run", "acq")
 
 
-def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
+def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
     query = {
         "datatype": "fmap",
         "suffix": "fieldmap",
