@@ -13,6 +13,7 @@ from django_dirt_ratings.models import (
     Step,
 )
 from django_dirt_ratings.services import (
+    ImageRow,
     annotation_create,
     image_create,
     image_delete,
@@ -137,7 +138,7 @@ class TestImageServices:
         assert bytes(Image.objects.get().img) == b"second"
 
     def test_image_upsert_many_creates_then_updates(self):
-        rows = [
+        rows: list[ImageRow] = [
             {
                 "img": b"a",
                 "file1": "f.nii.gz",

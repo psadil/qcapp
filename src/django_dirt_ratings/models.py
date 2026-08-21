@@ -1,5 +1,13 @@
+from typing import TYPE_CHECKING
+
 from django.db import models
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    # Stub-only (django-stubs): the type of a reverse FK accessor. Declaring the
+    # accessors below as plain annotations gives them types without the mypy
+    # plugin; Django ignores un-assigned annotations, so no field is created.
+    from django.db.models.fields.related_descriptors import RelatedManager
 
 DEFAULT_GRID_COLS = 28
 """Default number of columns in the annotation grid (see ``Step.grid_cols``)."""
@@ -59,6 +67,7 @@ class Step(models.IntegerChoices):
                 return "fmap_coregistration"
             case Step.DTIFIT:
                 return "dtifit"
+        raise AssertionError(f"unhandled step {self!r}")
 
     @classmethod
     def from_cli_name(cls, name: str) -> "Step":
@@ -105,6 +114,7 @@ class MetricDirection(models.TextChoices):
 
 
 class BaseModel(models.Model):
+    id: int  # the auto pk (django-stubs declares only `pk` without the plugin)
     created_at = models.DateTimeField(db_index=True, default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -184,6 +194,7 @@ class Image(BaseModel):
         on_delete=models.PROTECT,
         help_text="The plan under which this image was rendered and measured.",
     )
+    review_plan_id: int | None
 
     class Meta:
         constraints = (
@@ -211,7 +222,9 @@ class FromRequest(BaseModel):
         abstract = True
 
     image = models.ForeignKey(Image, on_delete=models.CASCADE)
+    image_id: int
     session = models.ForeignKey(Session, on_delete=models.CASCADE)
+    session_id: int
     source_data_issue = models.BooleanField(
         default=False,
         verbose_name="I suspect there might be a problem with the image quality",
@@ -233,6 +246,7 @@ class Annotation(FromRequest):
 
     grid_cols = models.IntegerField()
     grid_rows = models.IntegerField()
+    cells: "RelatedManager[AnnotationCell]"
 
 
 class AnnotationCell(models.Model):

@@ -7,6 +7,7 @@ one constant instead of being split between a command's filter and the renderer.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ SPACE = "MNI152NLin2009cAsym"
 N_CUTS = 3
 
 
-def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
+def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
     query = {
         "datatype": "anat",
         "suffix": "T1w",

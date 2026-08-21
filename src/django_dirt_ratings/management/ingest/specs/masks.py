@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,7 @@ from .. import bids, render
 from ..registry import Lake, RenderJob, StepSpec, register
 
 
-def discover(lake: Lake, filters: dict[str, Any]) -> list[RenderJob]:
+def discover(lake: Lake, filters: Mapping[str, Any]) -> list[RenderJob]:
     query = {
         "datatype": "anat",
         "suffix": "mask",

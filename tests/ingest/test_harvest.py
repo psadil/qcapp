@@ -17,7 +17,7 @@ class _FakeLake:
         self._siblings = siblings
         self._records = records
 
-    def related_datasets(self, dataset_id, relation):
+    def related_datasets(self, dataset_id, relation=harvest.SHARES_SOURCE):
         return list(self._siblings.get(dataset_id, []))
 
     def get(self, **filters):

@@ -20,6 +20,16 @@ hooks = [
     ] },
 ]
 
+# Type check with ty out of the pixi dev env — pixi stays the only env manager
+# (the upstream ty-pre-commit hook wraps `uv check` instead). --locked refuses a
+# stale pixi.lock instead of mutating it mid-commit. Whole-project check (a change
+# in b.py can break a.py), so no filenames; always_run covers deletion-only commits.
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "ty", name = "ty", entry = "pixi run --locked -e dev ty check", language = "system", pass_filenames = false, always_run = true },
+]
+
 [[repos]]
 repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.1"

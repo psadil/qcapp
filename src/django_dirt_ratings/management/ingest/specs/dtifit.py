@@ -9,6 +9,7 @@ tree if ``discover`` finds nothing (the sample dataset has no DWI to exercise it
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -18,17 +19,17 @@ from .. import bids
 from ..registry import RenderJob, StepSpec, register
 
 
-def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
+def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
     query = {"suffix": "FA", "extension": ".nii.gz", **filters}
     jobs: list[RenderJob] = []
     for fa in lake.get(**query):
         e = fa.entities
         shared = {"sub": e.get("sub"), "ses": e.get("ses"), "run": e.get("run")}
-        vecs = {
-            p: bids.first(lake, suffix=p, extension=".nii.gz", **shared)
+        v1, v2, v3 = (
+            bids.first(lake, suffix=p, extension=".nii.gz", **shared)
             for p in ("V1", "V2", "V3")
-        }
-        if not all(vecs.values()):
+        )
+        if v1 is None or v2 is None or v3 is None:
             continue
         jobs.append(
             RenderJob(
@@ -37,9 +38,9 @@ def discover(lake: Any, filters: dict[str, Any]) -> list[RenderJob]:
                 render_key="dtifit",
                 inputs={
                     "fa": str(fa.local_path),
-                    "v1": str(vecs["V1"].local_path),
-                    "v2": str(vecs["V2"].local_path),
-                    "v3": str(vecs["V3"].local_path),
+                    "v1": str(v1.local_path),
+                    "v2": str(v2.local_path),
+                    "v3": str(v3.local_path),
                 },
                 cuts=[None],
                 displays=[models.DisplayMode.Z],

@@ -17,6 +17,8 @@ def open_lake(
     catalog: str | Path, *, base_dir: str | os.PathLike[str] | None = None
 ) -> Any:
     """Open the bidslake catalog at ``catalog`` (read-only)."""
-    import bidslake
+    # bidslake exists only in the manage env (Python 3.14 + cargo build); the dev
+    # env that type-checks this package never has it, hence the suppression.
+    import bidslake  # ty: ignore[unresolved-import]
 
     return bidslake.open(str(catalog), base_dir=base_dir)

@@ -1,8 +1,10 @@
 """Tests for django_dirt_ratings views."""
 
 import json
+from typing import cast
 
 import pytest
+from django import forms
 from django.urls import reverse
 
 from django_dirt_ratings import services
@@ -77,6 +79,7 @@ class TestRateViewPost:
         assert response.status_code == 302
         assert Rating.objects.count() == 1
         rating = Rating.objects.first()
+        assert rating is not None
         assert rating.rating == Ratings.PASS
         assert rating.image_id == fmap_image.pk
 
@@ -111,6 +114,7 @@ class TestClickViewPost:
         assert response.status_code == 302
         assert Annotation.objects.count() == 1
         annotation = Annotation.objects.first()
+        assert annotation is not None
         assert annotation.image_id == mask_image.pk
         assert annotation.grid_cols == 28
         assert AnnotationCell.objects.count() == 2
@@ -180,22 +184,22 @@ class TestRatePartial:
         assert client.session["image_id"] == worst.pk
 
 
+def _offered_steps(form: IndexForm) -> set[str]:
+    field = form.fields["step"]
+    assert isinstance(field, forms.ChoiceField)
+    # Django normalizes assigned choices, so reading back gives (value, label) pairs.
+    choices = cast("list[tuple[object, str]]", field.choices)
+    return {str(c[0]) for c in choices if c[0] not in ("", None)}
+
+
 @pytest.mark.django_db
 class TestIndexFormGating:
     def test_offers_only_planned_steps(self):
         services.plan_apply(name="t", text="[steps.masks]\n")
-        form = IndexForm()
-        offered = {
-            str(c[0]) for c in form.fields["step"].choices if c[0] not in ("", None)
-        }
-        assert offered == {str(Step.MASK.value)}
+        assert _offered_steps(IndexForm()) == {str(Step.MASK.value)}
 
     def test_all_steps_when_no_plan(self):
-        form = IndexForm()
-        offered = {
-            str(c[0]) for c in form.fields["step"].choices if c[0] not in ("", None)
-        }
-        assert offered == {str(s.value) for s in Step}
+        assert _offered_steps(IndexForm()) == {str(s.value) for s in Step}
 
 
 @pytest.mark.django_db

@@ -33,7 +33,9 @@ class TestParse:
         assert sp.order_by == "volume_mm3"
         assert sp.direction == models.MetricDirection.TWO_SIDED
         assert sp.subgroup == ("space",)
-        assert sp.order_measure.compute == "mask_volume"
+        order_measure = sp.order_measure
+        assert order_measure is not None
+        assert order_measure.compute == "mask_volume"
         assert sp.computed_measures and not sp.catalog_measures
         assert p.reviewable_steps == (models.Step.MASK,)
 
@@ -49,6 +51,7 @@ class TestParse:
             '[[steps.dtifit.measures]]\nname="fd_mean"\ncatalog="fd_mean"\n'
         )
         sp = p.step_plan(models.Step.DTIFIT)
+        assert sp is not None
         assert sp.catalog_measures[0].catalog == "fd_mean"
         assert not sp.computed_measures
 
@@ -85,7 +88,9 @@ class TestPersistence:
     def test_apply_persists_and_activates(self):
         record = services.plan_apply(name="demo", text=VALID)
         assert record.is_active
-        assert plan.active_record().pk == record.pk
+        active_record = plan.active_record()
+        assert active_record is not None
+        assert active_record.pk == record.pk
         assert plan.active().strategy == models.ReviewStrategy.ANOMALY_FIRST
 
     def test_apply_dedups_by_hash(self):
