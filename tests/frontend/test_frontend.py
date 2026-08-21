@@ -1,11 +1,13 @@
 """Frontend browser integration tests using Playwright."""
 
+import os
 import struct
 import zlib
+from collections.abc import Iterator
 from typing import NamedTuple
 
 import pytest
-from playwright.sync_api import FloatRect, Page, expect
+from playwright.sync_api import Browser, BrowserContext, FloatRect, Page, expect
 from pytest_django import live_server_helper
 
 from django_dirt_ratings import models
@@ -13,6 +15,55 @@ from django_dirt_ratings import models
 BOOTSWATCH = "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist"
 LIGHT_CSS = f"{BOOTSWATCH}/flatly/bootstrap.min.css"
 DARK_CSS = f"{BOOTSWATCH}/darkly/bootstrap.min.css"
+
+
+@pytest.fixture(scope="class")
+def live_server(
+    request: pytest.FixtureRequest,
+) -> Iterator[live_server_helper.LiveServer]:
+    """pytest-django's `live_server`, widened from per-test to per-class.
+
+    One server thread for the whole class, with the per-test flush happening
+    underneath it — the same lifetime Django's own LiveServerTestCase uses.
+    pytest-django's autouse `_live_server_helper` keys off the fixture *name*, so
+    it still pulls in `transactional_db` and toggles ALLOWED_HOSTS per test.
+    """
+    addr = (
+        request.config.getvalue("liveserver")
+        or os.getenv("DJANGO_LIVE_TEST_SERVER_ADDRESS")
+        or "localhost"
+    )
+    server = live_server_helper.LiveServer(addr)
+    yield server
+    server.stop()
+
+
+@pytest.fixture(scope="class")
+def class_context(
+    browser: Browser, browser_context_args: dict
+) -> Iterator[BrowserContext]:
+    """One browser context per class, replacing pytest-playwright's per-test one.
+
+    Building the context and page is most of these tests' setup cost, and every
+    test that shares one re-navigates from the landing page, which resets the
+    Django session cookie. Two things it costs:
+
+    - a class whose subject *is* persisted client state must not share one — see
+      TestThemeToggle, which keeps the per-test `page` fixture;
+    - it bypasses pytest-playwright's artifacts recorder, so --video, --tracing
+      and --screenshot capture nothing for the classes that share a context.
+    """
+    context = browser.new_context(**browser_context_args)
+    yield context
+    context.close()
+
+
+@pytest.fixture(scope="class")
+def class_page(class_context: BrowserContext) -> Iterator[Page]:
+    """One page per class, reused by every test in it."""
+    page = class_context.new_page()
+    yield page
+    page.close()
 
 
 def _make_png(width: int, height: int) -> bytes:
@@ -51,7 +102,7 @@ def _seed_images(step: models.Step, size: int) -> set[int]:
 
 
 @pytest.fixture
-def test_cache(settings):
+def locmem_cache(settings):
     """Use an in-memory cache so the live-server tests need no cache table."""
     settings.CACHES = {
         "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
@@ -60,7 +111,7 @@ def test_cache(settings):
 
 @pytest.fixture
 def index_page(
-    live_server: live_server_helper.LiveServer, page: Page, test_cache
+    live_server: live_server_helper.LiveServer, page: Page, locmem_cache
 ) -> Page:
     """The browser sitting on the landing step-selection page."""
     page.goto(live_server.url)
@@ -76,10 +127,15 @@ def dark_page(index_page: Page) -> Page:
 
 @pytest.mark.django_db(transaction=True)
 class TestThemeToggle:
-    """The theme switcher (themes.js) and its localStorage persistence."""
+    """The theme switcher (themes.js) and its localStorage persistence.
+
+    These deliberately keep pytest-playwright's per-test `page`: the stored
+    preference is the subject under test, so a context shared across the class
+    would carry one test's theme into the next one's arrange.
+    """
 
     def test_default_theme_is_light(
-        self, live_server: live_server_helper.LiveServer, page: Page, test_cache
+        self, live_server: live_server_helper.LiveServer, page: Page, locmem_cache
     ):
         page.goto(live_server.url)
 
@@ -132,14 +188,14 @@ HOTKEYS = [
 
 @pytest.fixture
 def rating_page(
-    live_server: live_server_helper.LiveServer, page: Page, test_cache
+    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache
 ) -> _RatingPage:
     """Two fmap images seeded, with the browser on the rating page and focused."""
     seeded = _seed_images(models.Step.FMAP_COREGISTRATION, size=64)
-    _start_review(live_server, page, models.Step.FMAP_COREGISTRATION)
-    expect(page).to_have_url(f"{live_server.url}/fmap_coregistration/")
-    page.click("body")
-    return _RatingPage(page=page, seeded=seeded)
+    _start_review(live_server, class_page, models.Step.FMAP_COREGISTRATION)
+    expect(class_page).to_have_url(f"{live_server.url}/fmap_coregistration/")
+    class_page.click("body")
+    return _RatingPage(page=class_page, seeded=seeded)
 
 
 def _rate_and_submit(rating_page: _RatingPage, hotkey: str) -> None:
@@ -188,22 +244,26 @@ class _CanvasPage(NamedTuple):
     seeded: set[int]
 
 
+# clicks.js sizes the canvas from the image inside img.onload; until that runs the
+# element still has its pre-load default box and painted cells would land in the
+# wrong grid squares. `style.width` is set by the same call that draws the grid.
+_GRID_DRAWN = "() => !!document.getElementById('canvas')?.style.width"
+
+
 @pytest.fixture
 def canvas_page(
-    live_server: live_server_helper.LiveServer, page: Page, test_cache
+    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache
 ) -> _CanvasPage:
     """Two mask images seeded, with the grid canvas drawn and ready to paint."""
     seeded = _seed_images(models.Step.MASK, size=200)
-    _start_review(live_server, page, models.Step.MASK)
-    expect(page).to_have_url(f"{live_server.url}/mask/")
+    _start_review(live_server, class_page, models.Step.MASK)
+    expect(class_page).to_have_url(f"{live_server.url}/mask/")
 
-    canvas = page.locator("#canvas")
-    expect(canvas).to_be_visible()  # a readiness wait, not the assertion under test
-    page.wait_for_timeout(500)  # let the image load and the grid draw
-    box = canvas.bounding_box()
+    class_page.wait_for_function(_GRID_DRAWN)
+    box = class_page.locator("#canvas").bounding_box()
     if box is None:
         pytest.fail("#canvas has no bounding box, so it cannot be painted")
-    return _CanvasPage(page=page, box=box, seeded=seeded)
+    return _CanvasPage(page=class_page, box=box, seeded=seeded)
 
 
 def _paint_two_cells(canvas_page: _CanvasPage) -> None:
