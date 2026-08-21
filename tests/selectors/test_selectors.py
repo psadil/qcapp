@@ -20,23 +20,34 @@ from django_dirt_ratings.selectors import (
     session_get,
 )
 
+RATED_STEP = Step.FMAP_COREGISTRATION  # submissions are Ratings
+CLICKED_STEP = Step.MASK  # submissions are Annotations
 
-def _make_image(step=Step.FMAP_COREGISTRATION, **kwargs):
-    defaults = {
-        "img": b"\x89PNG",
-        "file1": f"file_{Image.objects.count()}.nii.gz",
-        "display": DisplayMode.X,
-        "step": step,
-        "slice": Image.objects.count(),
-    }
-    defaults.update(kwargs)
-    return Image.objects.create(**defaults)
+
+@pytest.fixture
+def make_image(db):
+    """Create an Image with a fresh identity, overriding any field."""
+
+    def _make(step=RATED_STEP, **overrides) -> Image:
+        n = Image.objects.count()
+        fields = {
+            "img": b"\x89PNG",
+            "file1": f"file_{n}.nii.gz",
+            "display": DisplayMode.X,
+            "step": step,
+            "slice": n,
+        }
+        return Image.objects.create(**(fields | overrides))
+
+    return _make
 
 
 @pytest.mark.django_db
 class TestImageGet:
     def test_returns_image(self, mask_image):
-        assert image_get(image_id=mask_image.pk) == mask_image
+        found = image_get(image_id=mask_image.pk)
+
+        assert found == mask_image
 
     def test_missing_image_raises(self):
         with pytest.raises(NotFound):
@@ -44,39 +55,61 @@ class TestImageGet:
 
 
 @pytest.mark.django_db
-class TestImageExistsAndList:
-    def test_image_exists(self, mask_image):
-        assert image_exists(
+class TestImageExists:
+    def test_true_for_a_known_identity(self, mask_image):
+        exists = image_exists(
             file1=mask_image.file1,
             display=mask_image.display,
             step=mask_image.step,
             slice=mask_image.slice,
         )
 
-    def test_image_exists_false_for_unknown(self):
-        assert not image_exists(file1="nope.nii.gz", display=0, step=Step.MASK, slice=0)
+        assert exists
 
-    def test_image_file_exists(self, mask_image):
-        assert image_file_exists(file1=mask_image.file1, step=mask_image.step)
-        assert not image_file_exists(file1="nope.nii.gz", step=Step.MASK)
+    def test_false_for_an_unknown_identity(self):
+        exists = image_exists(file1="nope.nii.gz", display=0, step=Step.MASK, slice=0)
 
-    def test_image_list_filters_by_step(self):
-        _make_image(step=Step.MASK)
-        _make_image(step=Step.DTIFIT)
-        masks = image_list(step=Step.MASK)
-        assert all(img.step == Step.MASK for img in masks)
-        assert masks.count() == 1
+        assert not exists
 
-    def test_image_list_respects_limit(self):
+
+@pytest.mark.django_db
+class TestImageFileExists:
+    def test_true_for_a_known_file(self, mask_image):
+        exists = image_file_exists(file1=mask_image.file1, step=mask_image.step)
+
+        assert exists
+
+    def test_false_for_an_unknown_file(self):
+        exists = image_file_exists(file1="nope.nii.gz", step=Step.MASK)
+
+        assert not exists
+
+
+@pytest.mark.django_db
+class TestImageList:
+    def test_filters_by_step(self, make_image):
+        mask = make_image(step=Step.MASK)
+        make_image(step=Step.DTIFIT)
+
+        listed = image_list(step=Step.MASK)
+
+        assert [img.pk for img in listed] == [mask.pk]
+
+    def test_respects_limit(self, make_image):
         for _ in range(3):
-            _make_image(step=Step.MASK)
-        assert len(image_list(limit=2)) == 2
+            make_image(step=Step.MASK)
+
+        listed = image_list(limit=2)
+
+        assert len(listed) == 2
 
 
 @pytest.mark.django_db
 class TestSessionGet:
     def test_returns_session(self, mask_session):
-        assert session_get(session_id=mask_session.pk) == mask_session
+        found = session_get(session_id=mask_session.pk)
+
+        assert found == mask_session
 
     def test_missing_session_raises(self):
         with pytest.raises(NotFound):
@@ -85,67 +118,65 @@ class TestSessionGet:
 
 @pytest.mark.django_db
 class TestImageWithFewestRatings:
-    def test_returns_image_with_no_ratings(self):
-        """With two images, one rated and one not, returns the unrated one."""
-        img_rated = _make_image()
-        img_unrated = _make_image()
-        session = Session.objects.create(step=Step.FMAP_COREGISTRATION)
-        services.rating_create(image=img_rated, session=session, rating=Ratings.PASS)
+    def test_prefers_the_unrated_image(self, make_image):
+        rated = make_image()
+        unrated = make_image()
+        session = Session.objects.create(step=RATED_STEP)
+        services.rating_create(image=rated, session=session, rating=Ratings.PASS)
 
-        result = image_with_fewest_ratings(step=Step.FMAP_COREGISTRATION)
-        assert result.pk == img_unrated.pk
+        found = image_with_fewest_ratings(step=RATED_STEP)
+
+        assert found.pk == unrated.pk
 
     def test_raises_on_empty_db(self):
         with pytest.raises(ApplicationError, match="No image found"):
-            image_with_fewest_ratings(step=Step.FMAP_COREGISTRATION)
+            image_with_fewest_ratings(step=RATED_STEP)
 
-    def test_excludes_last_pk(self):
-        """image_with_fewest_ratings should skip the excluded image."""
-        img1 = _make_image()
-        img2 = _make_image()
+    def test_skips_the_excluded_image(self, make_image):
+        excluded = make_image()
+        other = make_image()
 
-        result = image_with_fewest_ratings(
-            step=Step.FMAP_COREGISTRATION, exclude=img1.pk
-        )
-        assert result.pk == img2.pk
+        found = image_with_fewest_ratings(step=RATED_STEP, exclude=excluded.pk)
 
-    def test_exclude_only_image_raises(self):
-        """Excluding the only image should raise ApplicationError."""
-        img = _make_image()
+        assert found.pk == other.pk
+
+    def test_excluding_the_only_image_raises(self, make_image):
+        only = make_image()
+
         with pytest.raises(ApplicationError, match="No image found"):
-            image_with_fewest_ratings(step=Step.FMAP_COREGISTRATION, exclude=img.pk)
+            image_with_fewest_ratings(step=RATED_STEP, exclude=only.pk)
 
-    def test_click_step_uses_annotation(self):
+    def test_click_step_counts_annotations(self, make_image):
         """For MASK step, submissions are Annotations, not Ratings."""
-        img_clicked = _make_image(step=Step.MASK)
-        img_unclicked = _make_image(step=Step.MASK)
-        session = Session.objects.create(step=Step.MASK)
+        clicked = make_image(step=CLICKED_STEP)
+        unclicked = make_image(step=CLICKED_STEP)
+        session = Session.objects.create(step=CLICKED_STEP)
         services.annotation_create(
-            image=img_clicked, session=session, grid_cols=28, grid_rows=21, cells=[]
+            image=clicked, session=session, grid_cols=28, grid_rows=21, cells=[]
         )
 
-        result = image_with_fewest_ratings(step=Step.MASK)
-        assert result.pk == img_unclicked.pk
+        found = image_with_fewest_ratings(step=CLICKED_STEP)
 
-    def test_counts_submissions_not_cells(self):
+        assert found.pk == unclicked.pk
+
+    def test_counts_submissions_not_cells(self, make_image):
         """An image marked with many cells in one review counts as one review."""
-        img_many_cells = _make_image(step=Step.MASK)
-        img_one_review = _make_image(step=Step.MASK)
-        session = Session.objects.create(step=Step.MASK)
-        # img_many_cells: one submission, but many marked cells.
+        many_cells = make_image(step=CLICKED_STEP)
+        no_cells = make_image(step=CLICKED_STEP)
+        unreviewed = make_image(step=CLICKED_STEP)
+        session = Session.objects.create(step=CLICKED_STEP)
         services.annotation_create(
-            image=img_many_cells,
+            image=many_cells,
             session=session,
             grid_cols=28,
             grid_rows=21,
             cells=[(c, 0, Ratings.FAIL) for c in range(10)],
         )
-        # img_one_review: one submission, zero cells (still one review).
         services.annotation_create(
-            image=img_one_review, session=session, grid_cols=28, grid_rows=21, cells=[]
+            image=no_cells, session=session, grid_cols=28, grid_rows=21, cells=[]
         )
 
-        # Both have exactly one submission, so a third image with none is next.
-        img_unreviewed = _make_image(step=Step.MASK)
-        result = image_with_fewest_ratings(step=Step.MASK)
-        assert result.pk == img_unreviewed.pk
+        found = image_with_fewest_ratings(step=CLICKED_STEP)
+
+        # Both reviewed images have exactly one submission, so the third is next.
+        assert found.pk == unreviewed.pk

@@ -2,12 +2,17 @@
 
 import struct
 import zlib
+from typing import NamedTuple
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import FloatRect, Page, expect
 from pytest_django import live_server_helper
 
 from django_dirt_ratings import models
+
+BOOTSWATCH = "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist"
+LIGHT_CSS = f"{BOOTSWATCH}/flatly/bootstrap.min.css"
+DARK_CSS = f"{BOOTSWATCH}/darkly/bootstrap.min.css"
 
 
 def _make_png(width: int, height: int) -> bytes:
@@ -31,6 +36,20 @@ def _make_png(width: int, height: int) -> bytes:
     )
 
 
+def _seed_images(step: models.Step, size: int) -> set[int]:
+    """Two images for `step` — enough that a "next" one exists after a review."""
+    return {
+        models.Image.objects.create(
+            img=_make_png(size, size),
+            slice=i,
+            file1=f"test_{step.value}_{i}.nii.gz",
+            display=models.DisplayMode.X,
+            step=step,
+        ).pk
+        for i in range(2)
+    }
+
+
 @pytest.fixture
 def test_cache(settings):
     """Use an in-memory cache so the live-server tests need no cache table."""
@@ -39,143 +58,192 @@ def test_cache(settings):
     }
 
 
-@pytest.mark.django_db(transaction=True)
-def test_index_and_theme_toggling(
-    live_server: live_server_helper.LiveServer,
-    page: Page,
-    test_cache,
-):
-    """Landing step-selection page and the theme switcher (themes.js)."""
+@pytest.fixture
+def index_page(
+    live_server: live_server_helper.LiveServer, page: Page, test_cache
+) -> Page:
+    """The browser sitting on the landing step-selection page."""
     page.goto(live_server.url)
+    return page
 
-    theme_css = page.locator("#theme-css")
-    expect(theme_css).to_have_attribute(
-        "href",
-        "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css",
-    )
 
-    page.locator("#theme-toggle").click()
-    expect(theme_css).to_have_attribute(
-        "href",
-        "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/darkly/bootstrap.min.css",
-    )
-
-    # State persists across reloads via localStorage.
-    page.reload()
-    expect(theme_css).to_have_attribute(
-        "href",
-        "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/darkly/bootstrap.min.css",
-    )
-
-    page.locator("#theme-toggle").click()
-    expect(theme_css).to_have_attribute(
-        "href",
-        "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css",
-    )
+@pytest.fixture
+def dark_page(index_page: Page) -> Page:
+    """The landing page after one theme toggle — i.e. switched to dark."""
+    index_page.locator("#theme-toggle").click()
+    return index_page
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("hotkey", ["p", "u", "f"])
-def test_rating_hotkeys(
-    live_server: live_server_helper.LiveServer,
-    page: Page,
-    hotkey: str,
-    test_cache,
-):
-    """Rating radios respond to p/u/f hotkeys and Enter submits (selects.js)."""
-    # Two images so there is a "next" image after the first is reviewed.
-    seeded = {
-        models.Image.objects.create(
-            img=_make_png(64, 64),
-            slice=i,
-            file1=f"test{i}.nii.gz",
-            display=models.DisplayMode.X,
-            step=models.Step.FMAP_COREGISTRATION,
-        ).pk
-        for i in range(2)
-    }
+class TestThemeToggle:
+    """The theme switcher (themes.js) and its localStorage persistence."""
 
-    # Start from the landing page so the session (session_id/step) is set up.
-    page.goto(live_server.url)
-    page.select_option("select[name=step]", str(models.Step.FMAP_COREGISTRATION.value))
-    page.click("button[type=submit]")
-    expect(page).to_have_url(f"{live_server.url}/fmap_coregistration/")
-
-    page.click("body")
-    page.keyboard.press(hotkey)
-
-    expected = {
-        "p": models.Ratings.PASS,
-        "u": models.Ratings.UNSURE,
-        "f": models.Ratings.FAIL,
-    }[hotkey]
-    expect(page.locator(f"input[value='{expected.value}']")).to_be_checked()
-
-    # Wait for the submit POST itself so the row is committed before we query.
-    with page.expect_response(
-        lambda r: (
-            r.request.method == "POST"
-            and r.url.rstrip("/").endswith("fmap_coregistration")
-        )
+    def test_default_theme_is_light(
+        self, live_server: live_server_helper.LiveServer, page: Page, test_cache
     ):
-        page.keyboard.press("Enter")
+        page.goto(live_server.url)
 
-    r = models.Rating.objects.first()
-    assert models.Rating.objects.count() == 1
-    assert r is not None and r.rating == expected and r.image_id in seeded
+        expect(page.locator("#theme-css")).to_have_attribute("href", LIGHT_CSS)
+
+    def test_toggle_switches_to_dark(self, index_page: Page):
+        index_page.locator("#theme-toggle").click()
+
+        expect(index_page.locator("#theme-css")).to_have_attribute("href", DARK_CSS)
+
+    def test_toggle_again_switches_back_to_light(self, dark_page: Page):
+        dark_page.locator("#theme-toggle").click()
+
+        expect(dark_page.locator("#theme-css")).to_have_attribute("href", LIGHT_CSS)
+
+    def test_theme_persists_across_reloads(self, dark_page: Page):
+        """State lives in localStorage, not the server session."""
+        dark_page.reload()
+
+        expect(dark_page.locator("#theme-css")).to_have_attribute("href", DARK_CSS)
+
+
+def _start_review(
+    live_server: live_server_helper.LiveServer, page: Page, step: models.Step
+) -> None:
+    """Walk the landing page so the browser session (session_id/step) is set up."""
+    page.goto(live_server.url)
+    page.select_option("select[name=step]", str(step.value))
+    page.click("button[type=submit]")
+
+
+def _posted_to(page: Page, path: str):
+    """Wait for the submit POST itself, so the row is committed before we query."""
+    return page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.rstrip("/").endswith(path)
+    )
+
+
+class _RatingPage(NamedTuple):
+    page: Page
+    seeded: set[int]
+
+
+HOTKEYS = [
+    ("p", models.Ratings.PASS),
+    ("u", models.Ratings.UNSURE),
+    ("f", models.Ratings.FAIL),
+]
+
+
+@pytest.fixture
+def rating_page(
+    live_server: live_server_helper.LiveServer, page: Page, test_cache
+) -> _RatingPage:
+    """Two fmap images seeded, with the browser on the rating page and focused."""
+    seeded = _seed_images(models.Step.FMAP_COREGISTRATION, size=64)
+    _start_review(live_server, page, models.Step.FMAP_COREGISTRATION)
+    expect(page).to_have_url(f"{live_server.url}/fmap_coregistration/")
+    page.click("body")
+    return _RatingPage(page=page, seeded=seeded)
+
+
+def _rate_and_submit(rating_page: _RatingPage, hotkey: str) -> None:
+    """Pick a verdict with its hotkey, then submit with Enter."""
+    rating_page.page.keyboard.press(hotkey)
+    with _posted_to(rating_page.page, "fmap_coregistration"):
+        rating_page.page.keyboard.press("Enter")
 
 
 @pytest.mark.django_db(transaction=True)
-def test_canvas_grid_paint_flow(
-    live_server: live_server_helper.LiveServer,
-    page: Page,
-    test_cache,
-):
-    """Paint cells on the grid at two levels and submit; cells persist."""
-    # Two images so there is a "next" image after the first is reviewed.
-    seeded = {
-        models.Image.objects.create(
-            img=_make_png(200, 200),
-            slice=i,
-            file1=f"test_mask{i}.nii.gz",
-            display=models.DisplayMode.X,
-            step=models.Step.MASK,
-        ).pk
-        for i in range(2)
-    }
+class TestRatingHotkeys:
+    """Rating radios respond to p/u/f hotkeys and Enter submits (selects.js)."""
 
-    page.goto(live_server.url)
-    page.select_option("select[name=step]", str(models.Step.MASK.value))
-    page.click("button[type=submit]")
+    @pytest.mark.parametrize("hotkey, expected", HOTKEYS)
+    def test_hotkey_checks_the_matching_radio(
+        self, rating_page: _RatingPage, hotkey: str, expected: models.Ratings
+    ):
+        rating_page.page.keyboard.press(hotkey)
 
+        expect(
+            rating_page.page.locator(f"input[value='{expected.value}']")
+        ).to_be_checked()
+
+    @pytest.mark.parametrize("hotkey, expected", HOTKEYS)
+    def test_enter_stores_the_chosen_verdict(
+        self, rating_page: _RatingPage, hotkey: str, expected: models.Ratings
+    ):
+        _rate_and_submit(rating_page, hotkey)
+
+        assert models.Rating.objects.get().rating == expected
+
+    def test_enter_submits_exactly_one_rating(self, rating_page: _RatingPage):
+        _rate_and_submit(rating_page, "p")
+
+        assert models.Rating.objects.count() == 1
+
+    def test_the_rating_is_attached_to_a_served_image(self, rating_page: _RatingPage):
+        _rate_and_submit(rating_page, "p")
+
+        assert models.Rating.objects.get().image_id in rating_page.seeded
+
+
+class _CanvasPage(NamedTuple):
+    page: Page
+    box: FloatRect
+    seeded: set[int]
+
+
+@pytest.fixture
+def canvas_page(
+    live_server: live_server_helper.LiveServer, page: Page, test_cache
+) -> _CanvasPage:
+    """Two mask images seeded, with the grid canvas drawn and ready to paint."""
+    seeded = _seed_images(models.Step.MASK, size=200)
+    _start_review(live_server, page, models.Step.MASK)
     expect(page).to_have_url(f"{live_server.url}/mask/")
+
     canvas = page.locator("#canvas")
-    expect(canvas).to_be_visible()
+    expect(canvas).to_be_visible()  # a readiness wait, not the assertion under test
     page.wait_for_timeout(500)  # let the image load and the grid draw
-
     box = canvas.bounding_box()
-    assert box is not None
+    if box is None:
+        pytest.fail("#canvas has no bounding box, so it cannot be painted")
+    return _CanvasPage(page=page, box=box, seeded=seeded)
 
-    # One cell at the default UNSURE level.
+
+def _paint_two_cells(canvas_page: _CanvasPage) -> None:
+    """Mark one cell at the default UNSURE level and a distinct one at FAIL."""
+    page, box = canvas_page.page, canvas_page.box
     page.mouse.click(box["x"] + 40, box["y"] + 40)
-    # Switch to FAIL and mark a second, distinct cell.
     page.keyboard.press("f")
     page.mouse.click(box["x"] + box["width"] - 40, box["y"] + box["height"] - 40)
 
-    expect(page.locator("#cell-count")).to_have_text("2")
-    assert models.Annotation.objects.count() == 0  # not submitted yet
 
-    # Wait for the submit POST itself so the row is committed before we query.
-    with page.expect_response(
-        lambda r: r.request.method == "POST" and r.url.rstrip("/").endswith("mask")
+@pytest.mark.django_db(transaction=True)
+class TestCanvasGridPaint:
+    """Paint cells on the grid at two levels and submit; cells persist."""
+
+    @pytest.fixture
+    def submitted(self, canvas_page: _CanvasPage) -> models.Annotation:
+        _paint_two_cells(canvas_page)
+        with _posted_to(canvas_page.page, "mask"):
+            canvas_page.page.click("#submit")
+        return models.Annotation.objects.get()
+
+    def test_painting_updates_the_cell_count(self, canvas_page: _CanvasPage):
+        _paint_two_cells(canvas_page)
+
+        expect(canvas_page.page.locator("#cell-count")).to_have_text("2")
+
+    def test_painting_alone_submits_nothing(self, canvas_page: _CanvasPage):
+        _paint_two_cells(canvas_page)
+
+        assert models.Annotation.objects.count() == 0
+
+    def test_submission_is_attached_to_a_served_image(
+        self, submitted: models.Annotation, canvas_page: _CanvasPage
     ):
-        page.click("#submit")
+        assert submitted.image_id in canvas_page.seeded
 
-    annotation = models.Annotation.objects.first()
-    assert annotation is not None
-    assert annotation.image_id in seeded
-    assert annotation.cells.count() == 2
-    assert set(annotation.cells.values_list("rating", flat=True)) == {
-        models.Ratings.UNSURE,
-        models.Ratings.FAIL,
-    }
+    def test_submission_stores_both_painted_cells(self, submitted: models.Annotation):
+        assert submitted.cells.count() == 2
+
+    def test_submission_keeps_each_cell_level(self, submitted: models.Annotation):
+        levels = set(submitted.cells.values_list("rating", flat=True))
+
+        assert levels == {models.Ratings.UNSURE, models.Ratings.FAIL}
