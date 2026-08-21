@@ -186,12 +186,12 @@ class Image(BaseModel):
     )
 
     class Meta:
-        constraints = [
+        constraints = (
             models.UniqueConstraint(
                 fields=["slice", "file1", "display", "step"], name="image_meta"
-            )
-        ]
-        indexes = [
+            ),
+        )
+        indexes = (
             # Serves the breadth_first strategy: filter by step, order by
             # (n_reviews, id) — an index range seek returning one leaf entry.
             models.Index(fields=["step", "n_reviews", "id"], name="image_next"),
@@ -201,7 +201,7 @@ class Image(BaseModel):
             models.Index(
                 fields=["step", "n_reviews", "-priority", "id"], name="image_priority"
             ),
-        ]
+        )
 
 
 class FromRequest(BaseModel):
@@ -251,11 +251,11 @@ class AnnotationCell(models.Model):
     rating = models.IntegerField(choices=Ratings.choices)
 
     class Meta:
-        constraints = [
+        constraints = (
             models.UniqueConstraint(
                 fields=["annotation", "col", "row"], name="annotation_cell"
-            )
-        ]
+            ),
+        )
 
 
 class Rating(FromRequest):

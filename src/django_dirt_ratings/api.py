@@ -70,7 +70,7 @@ class ImageOutSchema(ninja.ModelSchema):
 
     class Meta:
         model = models.Image
-        fields = ["id", "slice", "file1", "file2", "display", "step", "created_at"]
+        fields = ("id", "slice", "file1", "file2", "display", "step", "created_at")
 
     @staticmethod
     def resolve_img(obj: models.Image) -> str:
@@ -80,7 +80,7 @@ class ImageOutSchema(ninja.ModelSchema):
 class ImageCreatedSchema(ninja.ModelSchema):
     class Meta:
         model = models.Image
-        fields = ["id", "created_at"]
+        fields = ("id", "created_at")
 
 
 class DeleteResponseSchema(Schema):
@@ -94,7 +94,7 @@ class RatingOutSchema(ninja.ModelSchema):
 
     class Meta:
         model = models.Rating
-        fields = ["id", "rating", "source_data_issue", "created_at"]
+        fields = ("id", "rating", "source_data_issue", "created_at")
 
 
 # Endpoints

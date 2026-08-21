@@ -67,14 +67,6 @@ pythonpath = ["src"]
 # Django writes migrations in its own style; leave the generated files alone.
 extend-exclude = ["**/migrations/**"]
 
-[tool.ruff.lint]
-ignore = [
-    # Django assigns mutable class attributes by design (Meta.fields,
-    # ModelAdmin.list_display, ninja Schema config). RUF012's remedy is to wrap
-    # them in ClassVar[], which fights django-stubs and the framework metaclasses.
-    "RUF012",
-]
-
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
 skip = '.git*,*.lock'

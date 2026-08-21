@@ -29,6 +29,7 @@ from __future__ import annotations
 import collections
 import math
 import statistics
+from collections.abc import Sequence
 
 from django.core.management.base import BaseCommand
 
@@ -67,7 +68,7 @@ def _has_spread(
 
 
 def _priorities(
-    values: list[float | None],
+    values: Sequence[float | None],
     direction: MetricDirection,
     *,
     min_cv: float = plan.DEFAULT_MIN_CV,
