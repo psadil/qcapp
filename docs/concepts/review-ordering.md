@@ -105,7 +105,7 @@ nothing (never a guess), so those images just fall back to the review's other or
 ### Workflow
 
 ```
-bidslake index -i derivatives -o study.duckdb   # build the catalog
+bidslake index -i derivatives -o study.duckdb   # build the catalog (+ --adapter <name> if any dataset in it needs one — pass the union on every run)
 manage plan dirt.toml                            # validate → persist → activate the plan
 manage render study.duckdb                       # render + measure (stamps Image.review_plan)
 manage prioritize                                # measures → Image.priority (z-scores)

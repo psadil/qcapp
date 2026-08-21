@@ -9,9 +9,9 @@ its own dataset::
         --dataset-id freesurfer -o study.duckdb
 
 The volumes carry no BIDS entities in their names (``brain.mgz``, ``ribbon.mgz``
-are fixed FreeSurfer filenames), and bidslake's ``scans`` concept columns are
-derived from the path, so we pair them by their filename and subject rather than
-by a BIDS suffix.
+are fixed FreeSurfer filenames), and bidslake's concept columns are derived from
+the path, so we pair them by their filename and subject rather than by a BIDS
+suffix.
 """
 
 from __future__ import annotations

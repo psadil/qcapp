@@ -149,12 +149,19 @@ def ingest_dataset(
             except Exception:
                 logger.exception("render failed: %s (%s)", job.file1, job.render_key)
                 continue
-            catalog = harvest.harvest_catalog(
-                lake,
-                job.source_dataset_id,
-                job.source_entities,
-                catalog_by_step.get(step, []),
-            )
+            # A harvest failure (e.g. a catalog predating cross-dataset links,
+            # where bidslake raises RuntimeError) degrades to no catalog
+            # metrics rather than aborting the run mid-loop.
+            try:
+                catalog = harvest.harvest_catalog(
+                    lake,
+                    job.source_dataset_id,
+                    job.source_entities,
+                    catalog_by_step.get(step, []),
+                )
+            except RuntimeError:
+                logger.exception("catalog harvest failed for %s", job.file1)
+                catalog = {}
             _write(
                 step=step,
                 job=job,

@@ -33,7 +33,7 @@ manage = [
     # install time). This is the *reader* only; the indexer CLI is a separate crate
     # in the same repo, and the Dockerfile's manage stage reads the rev back out of
     # this line to build it — so this pin is the single source of truth for both.
-    "bidslake @ git+https://github.com/psadil/bidslake.git@b7b3c099ec4ecf6d5c2017390b4c63729dc34fc1#subdirectory=crates/bidslake-py",
+    "bidslake @ git+https://github.com/psadil/bidslake.git@ff643e173257f7dd84f6bfa71e7d3cc297e790ad#subdirectory=crates/bidslake-py",
     "dipy>=1.11.0",
     "imageio>=2.37.0",
     # matplotlib 3.11 is the first release whose Agg backend can savefig AVIF
@@ -116,11 +116,12 @@ jupyter = ">=1.1.1,<2"
 
 [tool.pixi.feature.manage.tasks]
 devsetup = "./tools/devsetup.sh"
-# The bidslake indexer CLI. For local development it runs from a sibling checkout
-# (fast incremental builds while iterating on bidslake); the Docker image ships
-# the CLI built from the pinned rev instead (see Dockerfile.manage). Usage:
+# The bidslake indexer CLI, via a wrapper that refuses to run unless the sibling
+# checkout at ../bidslake sits at the rev pinned above (BIDSLAKE_UNPINNED=1
+# bypasses, for iterating on bidslake itself). The Docker image ships the CLI
+# built from the pinned rev instead (see Dockerfile). Usage:
 # pixi run -e manage bidslake index -i <dataset> -o study.duckdb
-bidslake = "cargo run --release --manifest-path ../bidslake/Cargo.toml --bin bidslake --"
+bidslake = "./tools/bidslake.sh"
 
 [tool.pixi.feature.manage.dependencies]
 # devsetup.sh (and the dataset-download tutorials) shell out to `aws s3 sync`.

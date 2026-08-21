@@ -15,7 +15,12 @@ def parse_entities(name: str) -> dict[str, str]:
 
 
 def first(lake: Any, **filters: Any) -> Any | None:
-    """The first file matching ``filters``, or None (the expected-single lookup)."""
+    """The first file matching ``filters``, or None (the expected-single lookup).
+
+    ``lake.get`` iterates bidslake's full file registry — every walked file,
+    sidecars included — so callers pin ``extension`` to mean one format (all
+    current callers do).
+    """
     return next(iter(lake.get(**filters)), None)
 
 

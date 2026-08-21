@@ -34,11 +34,16 @@ echo '{
 }' >"$DATA_DIR/dataset_description.json"
 
 echo "Indexing dataset with bidslake..."
-# Start from a fresh catalog so re-running devsetup is idempotent: `bidslake
-# index` accumulates into an existing catalog (CREATE TABLE IF NOT EXISTS), so
-# re-indexing the same dataset would hit duplicate primary keys.
+# Start from a fresh catalog: bidslake re-index upserts these days, but a
+# catalog written by an older bidslake format is unreadable by the current
+# reader, so a clean rebuild keeps devsetup idempotent across bidslake bumps.
+# (`bidslake compact` reclaims space if you keep a catalog instead.)
 rm -f "$CATALOG" "${CATALOG}.wal"
-pixi run -e manage bidslake index -i "$DATA_DIR" -o "$CATALOG"
+# A shared catalog's physical shape is frozen by the run that creates it, and an
+# adapter widens it — so every index run into the catalog passes the union of
+# adapters any of its datasets needs (here: freesurfer), or bidslake refuses
+# the mismatched run.
+pixi run -e manage bidslake index -i "$DATA_DIR" --adapter freesurfer -o "$CATALOG"
 # FreeSurfer recon-all is standardized but not BIDS; index it as its own dataset
 # with the adapter (the sourcedata/ nesting defeats the term-map anchor otherwise).
 pixi run -e manage bidslake index -i "$DATA_DIR/sourcedata/freesurfer" \
