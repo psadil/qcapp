@@ -19,6 +19,7 @@ manage = "dirt.manage:main"
 dev = [
     "codespell>=2.4.1",
     "prek",
+    "ruff==0.16.4",
     "playwright",
     "pytest-playwright",
     "pywatchman>=3.0.0,<4",

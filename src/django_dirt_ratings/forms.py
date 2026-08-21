@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django import forms
 
 from django_dirt_ratings import models, plan
@@ -9,8 +11,8 @@ CheckboxInput = forms.CheckboxInput(attrs={"class": "form-check-input"})
 class RatingForm(forms.ModelForm):
     class Meta:
         model = models.Rating
-        fields = ["rating", "source_data_issue", "comments"]
-        widgets = {
+        fields = ("rating", "source_data_issue", "comments")
+        widgets: ClassVar[dict[str, forms.Widget]] = {
             "rating": forms.RadioSelect(attrs={"class": "btn-check"}),
             "comments": Textarea,
             "source_data_issue": CheckboxInput,
@@ -20,7 +22,7 @@ class RatingForm(forms.ModelForm):
 class IndexForm(forms.ModelForm):
     class Meta:
         model = models.Session
-        fields = ["step"]
+        fields = ("step",)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -38,5 +40,8 @@ class IndexForm(forms.ModelForm):
 class ClickForm(forms.ModelForm):
     class Meta:
         model = models.Annotation
-        fields = ["source_data_issue", "comments"]
-        widgets = {"comments": Textarea, "source_data_issue": CheckboxInput}
+        fields = ("source_data_issue", "comments")
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            "comments": Textarea,
+            "source_data_issue": CheckboxInput,
+        }

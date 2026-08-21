@@ -28,7 +28,7 @@ class OrderingStrategy(abc.ABC):
     """Base class + registry for review-ordering strategies."""
 
     key: ClassVar[str]
-    _registry: ClassVar[dict[str, type["OrderingStrategy"]]] = {}
+    _registry: ClassVar[dict[str, type[OrderingStrategy]]] = {}
 
     def __init_subclass__(cls, /, key: str, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -39,7 +39,7 @@ class OrderingStrategy(abc.ABC):
         self.triage_depth = triage_depth
 
     @classmethod
-    def build(cls, key: str, *, triage_depth: int = 1) -> "OrderingStrategy":
+    def build(cls, key: str, *, triage_depth: int = 1) -> OrderingStrategy:
         """Construct the strategy for a ``ReviewStrategy`` key (as stored on a Session)."""
         try:
             subclass = cls._registry[str(key)]

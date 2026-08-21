@@ -61,12 +61,18 @@ class TestParse:
             "[steps.bogus]\n",  # unknown step
             '[ordering]\nstrategy="wat"',  # unknown strategy
             "[ordering]\ntriage_depth=0",  # non-positive depth
-            '[steps.masks]\ndirection="sideways"\n'
-            '[[steps.masks.measures]]\nname="v"\ncompute="mask_volume"',  # bad direction
-            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncatalog="c"\n'
-            'catalog_suffix="bold"',  # cross-dataset measure with no match keys
-            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\n'
-            'match=["sub"]',  # match on a computed measure
+            (
+                '[steps.masks]\ndirection="sideways"\n'
+                '[[steps.masks.measures]]\nname="v"\ncompute="mask_volume"'
+            ),  # bad direction
+            (
+                '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncatalog="c"\n'
+                'catalog_suffix="bold"'
+            ),  # cross-dataset measure with no match keys
+            (
+                '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\n'
+                'match=["sub"]'
+            ),  # match on a computed measure
         ],
     )
     def test_invalid_raises_plan_error(self, text):

@@ -39,11 +39,15 @@ def _render_page(schema: dict) -> str:
     lines = [
         "# REST API",
         "",
-        "*Auto-generated from the django-ninja API by `manage export_openapi` — "
-        "do not edit by hand.*",
+        (
+            "*Auto-generated from the django-ninja API by `manage export_openapi` — "
+            "do not edit by hand.*"
+        ),
         "",
-        "The live app also serves interactive docs at `/api/docs`. The raw schema "
-        "is published alongside this site at `api/openapi.json`.",
+        (
+            "The live app also serves interactive docs at `/api/docs`. The raw schema "
+            "is published alongside this site at `api/openapi.json`."
+        ),
         "",
         *_endpoint_table(schema),
         "",

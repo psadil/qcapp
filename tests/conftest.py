@@ -9,9 +9,9 @@ import os
 # touches the database (import time, ahead of django_db_setup).
 os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
-import pytest  # noqa: E402
+import pytest
 
-from django_dirt_ratings.models import (  # noqa: E402
+from django_dirt_ratings.models import (
     DisplayMode,
     Image,
     Session,

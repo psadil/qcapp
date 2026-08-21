@@ -54,7 +54,7 @@ class TestDegeneracyFloor:
     ranked pristine masks above a native mask that was 6.5% off.
     """
 
-    MNI_LIKE = [1857776.0, 1860576.0, 1860792.0, 1857776.0]  # CV = 0.09%
+    MNI_LIKE = (1857776.0, 1860576.0, 1860792.0, 1857776.0)  # CV = 0.09%
 
     def test_near_degenerate_subgroup_is_all_typical(self):
         assert _priorities(self.MNI_LIKE, D.TWO_SIDED) == [0.0, 0.0, 0.0, 0.0]

@@ -25,7 +25,7 @@ class MetricExtractor(abc.ABC):
     """Base class + registry for computed measures."""
 
     key: ClassVar[str]
-    _registry: ClassVar[dict[str, type["MetricExtractor"]]] = {}
+    _registry: ClassVar[dict[str, type[MetricExtractor]]] = {}
 
     def __init_subclass__(cls, /, key: str, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -33,7 +33,7 @@ class MetricExtractor(abc.ABC):
         MetricExtractor._registry[key] = cls
 
     @classmethod
-    def get(cls, key: str) -> "MetricExtractor":
+    def get(cls, key: str) -> MetricExtractor:
         """Instantiate the extractor registered under ``key``."""
         try:
             return cls._registry[key]()
