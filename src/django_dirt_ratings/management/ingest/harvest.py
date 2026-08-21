@@ -38,8 +38,12 @@ def harvest_catalog(
 
     For each measure, look in every sibling (``shares_source``) dataset for a record of
     ``catalog_suffix`` paired to this file by the ``match`` entities, and read
-    ``catalog`` from its metadata. A missing or **ambiguous** (>1) match yields ``None``
-    — never a guessed value — so ordering only ever surfaces a metric we could pin
+    ``catalog`` from its metadata. Only records *carrying the measure's key* count as
+    candidates — ``lake.get`` iterates every walked file, so an ordinary ``.json``
+    sidecar beside a data file matches the query too, but its registry row owns no
+    metadata (``.metadata == {}``); a promoted metadata-only record (an MRIQC IQM
+    file) does. A missing or **ambiguous** (>1) candidate yields ``None`` — never a
+    guessed value — so ordering only ever surfaces a metric we could pin
     unambiguously to this acquisition.
     """
     cross = [m for m in measures if m.is_cross_dataset]
@@ -61,6 +65,14 @@ def harvest_catalog(
                     **filters,
                 )
             )
-        value = records[0].metadata.get(measure.catalog) if len(records) == 1 else None
-        out[measure.name] = value
+        # Candidates are the records that actually carry this measure's key: a
+        # promoted metadata-only record owns its sidecar metadata, while a plain
+        # sidecar's registry row reads {} (its contents live under the described
+        # data file's id). The never-guess rule applies among the candidates.
+        values = [
+            m[measure.catalog]
+            for m in (r.metadata for r in records)
+            if measure.catalog in m
+        ]
+        out[measure.name] = values[0] if len(values) == 1 else None
     return out

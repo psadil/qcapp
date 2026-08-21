@@ -58,6 +58,20 @@ def test_ambiguous_match_yields_none():
     }
 
 
+def test_plain_sidecar_row_is_not_a_candidate():
+    # `lake.get` iterates every walked file, so an ordinary bold .json sidecar
+    # in the sibling matches the query too — but its registry row owns no
+    # metadata (only the data file it describes does). The promoted record is
+    # the sole candidate, so the pair is not ambiguous.
+    lake = _FakeLake(
+        {"fmriprep": ["mriqc"]},
+        [(MATCH, _Rec({"fd_mean": 0.42})), (MATCH, _Rec({}))],
+    )
+    assert harvest.harvest_catalog(lake, "fmriprep", ENT, [CATALOG]) == {
+        "fd_mean": 0.42
+    }
+
+
 def test_same_dataset_catalog_measure_is_not_harvested_here():
     same = plan.Measure(name="x", catalog="x")  # no catalog_suffix -> not cross-dataset
     lake = _FakeLake({"fmriprep": ["mriqc"]}, [])

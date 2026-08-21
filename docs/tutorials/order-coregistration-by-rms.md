@@ -71,7 +71,7 @@ The plan must be **active before you render**, because rendering is what stamps 
 with the plan and computes its measures:
 
 ```shell
-pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep -o study.duckdb
+pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep --adapter freesurfer -o study.duckdb
 pixi run -e manage manage plan dirt.toml                        # validate → persist → activate
 pixi run -e manage manage render study.duckdb --step fmap_coregistration
 pixi run -e manage manage prioritize                            # measures → Image.priority

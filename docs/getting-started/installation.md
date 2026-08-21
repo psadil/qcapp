@@ -20,7 +20,7 @@ defined in `pyproject.toml`:
 | --- | --- |
 | `default` | the web app runtime |
 | `dev` | `default` plus test/lint tooling (`pixi run -e dev test`) |
-| `manage` | the image-generation stack (nibabel, nilearn, dipy, bids2table, …) |
+| `manage` | the image-generation stack (nibabel, nilearn, dipy, bidslake, …) |
 | `docs` | this documentation site (Zensical) |
 
 Install an environment with, for example:

@@ -32,8 +32,10 @@ DIRT discovers derivatives through [bidslake](https://github.com/psadil/bidslake
 builds a queryable DuckDB catalog of a dataset. Index once:
 
 ```shell
-pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep -o study.duckdb
+pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep --adapter freesurfer -o study.duckdb
 ```
+
+(`--adapter freesurfer` even on this non-FreeSurfer run: see the FreeSurfer note below.)
 
 ## 3. Render the QC images
 
@@ -71,6 +73,11 @@ For a real cluster example (SLURM + `apptainer run docker://psadil/dirt:manage`)
     ```
 
     Add it to the same `study.duckdb` and `render` will pick up `surface_localization`.
+
+    A shared catalog's physical shape is frozen by whichever index run creates it, and
+    an adapter widens it — so **every** index run into `study.duckdb` must pass the
+    union of adapters any of its datasets needs (here `--adapter freesurfer`, including
+    the fMRIPrep run in step 2), or bidslake refuses the mismatched run.
 
 !!! note "DTI-fit"
     `dtifit` reads FSL-dtifit outputs (e.g. from qsirecon). Index that derivatives tree

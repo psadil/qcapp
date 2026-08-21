@@ -17,11 +17,19 @@ derivatives=${release}/derivatives
 # BIDS concept at render time, across trees, from this single catalog. FreeSurfer
 # recon-all is non-BIDS, so it uses the bidslake FreeSurfer adapter and indexes as
 # its own dataset (its sourcedata/ nesting defeats the term-map anchor otherwise).
+# A shared catalog's physical shape is frozen by the run that creates it, and an
+# adapter widens it — so every index run into the catalog passes the union of
+# adapters any of its datasets needs (here: freesurfer), or bidslake refuses the
+# mismatched run.
 catalog=/scratch/08266/psadil/qcapp/a2cps.duckdb
-bidslake index -i "${derivatives}/fmriprep" -o "${catalog}"
-bidslake index -i "${derivatives}/synthstrip" -o "${catalog}"
+# Fresh catalog each run: a catalog written by an older bidslake format is
+# unreadable by the current reader, and the script re-scans all four trees
+# anyway, so a clean rebuild costs about the same as upserting into a stale one.
+rm -f "${catalog}" "${catalog}.wal"
+bidslake index -i "${derivatives}/fmriprep" --adapter freesurfer -o "${catalog}"
+bidslake index -i "${derivatives}/synthstrip" --adapter freesurfer -o "${catalog}"
 bidslake index -i "${derivatives}/qsirecon_fsl_dtifit/dtifit/multishell" \
-	--dataset-id dtifit -o "${catalog}"
+	--adapter freesurfer --dataset-id dtifit -o "${catalog}"
 bidslake index -i "${derivatives}/freesurfer" --adapter freesurfer \
 	--dataset-id freesurfer -o "${catalog}"
 
