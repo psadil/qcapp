@@ -22,107 +22,209 @@ compute = "mask_volume"
 """
 
 
-class TestParse:
-    def test_valid(self):
-        p = plan.parse(VALID)
-        assert p.name == "demo"
-        assert p.strategy == models.ReviewStrategy.ANOMALY_FIRST
-        assert p.triage_depth == 2
-        sp = p.step_plan(models.Step.MASK)
-        assert sp is not None
-        assert sp.order_by == "volume_mm3"
-        assert sp.direction == models.MetricDirection.TWO_SIDED
-        assert sp.subgroup == ("space",)
-        order_measure = sp.order_measure
-        assert order_measure is not None
-        assert order_measure.compute == "mask_volume"
-        assert sp.computed_measures and not sp.catalog_measures
-        assert p.reviewable_steps == (models.Step.MASK,)
+class TestParseValid:
+    """VALID is parsed once per test; each test asserts one facet of the result."""
 
-    def test_empty_is_default_breadth_first(self):
-        p = plan.parse("")
-        assert p.strategy == models.ReviewStrategy.BREADTH_FIRST
-        assert p.triage_depth == 1
-        assert p.steps == ()
+    @pytest.fixture
+    def parsed(self) -> plan.Plan:
+        return plan.parse(VALID)
 
-    def test_catalog_measure(self):
-        p = plan.parse(
-            '[steps.dtifit]\norder_by="fd_mean"\ndirection="higher_worse"\n'
-            '[[steps.dtifit.measures]]\nname="fd_mean"\ncatalog="fd_mean"\n'
+    @pytest.fixture
+    def mask_plan(self, parsed: plan.Plan) -> plan.StepPlan:
+        step_plan = parsed.step_plan(models.Step.MASK)
+        if step_plan is None:  # a setup guard, not the assertion under test
+            pytest.fail("VALID declares a [steps.masks] table")
+        return step_plan
+
+    def test_name(self, parsed):
+        assert parsed.name == "demo"
+
+    def test_strategy(self, parsed):
+        assert parsed.strategy == models.ReviewStrategy.ANOMALY_FIRST
+
+    def test_triage_depth(self, parsed):
+        assert parsed.triage_depth == 2
+
+    def test_reviewable_steps(self, parsed):
+        assert parsed.reviewable_steps == (models.Step.MASK,)
+
+    def test_step_order_by(self, mask_plan):
+        assert mask_plan.order_by == "volume_mm3"
+
+    def test_step_direction(self, mask_plan):
+        assert mask_plan.direction == models.MetricDirection.TWO_SIDED
+
+    def test_step_subgroup(self, mask_plan):
+        assert mask_plan.subgroup == ("space",)
+
+    def test_order_by_resolves_to_its_measure(self, mask_plan):
+        assert mask_plan.order_measure == plan.Measure(
+            name="volume_mm3", compute="mask_volume"
         )
-        sp = p.step_plan(models.Step.DTIFIT)
-        assert sp is not None
-        assert sp.catalog_measures[0].catalog == "fd_mean"
-        assert not sp.computed_measures
 
-    @pytest.mark.parametrize(
-        "text",
-        [
-            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\ncatalog="b"',  # both
-            '[steps.masks]\n[[steps.masks.measures]]\nname="x"',  # neither
-            '[steps.masks]\norder_by="nope"',  # order_by not a measure
-            "[steps.bogus]\n",  # unknown step
-            '[ordering]\nstrategy="wat"',  # unknown strategy
-            "[ordering]\ntriage_depth=0",  # non-positive depth
-            (
-                '[steps.masks]\ndirection="sideways"\n'
-                '[[steps.masks.measures]]\nname="v"\ncompute="mask_volume"'
-            ),  # bad direction
-            (
-                '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncatalog="c"\n'
-                'catalog_suffix="bold"'
-            ),  # cross-dataset measure with no match keys
-            (
-                '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\n'
-                'match=["sub"]'
-            ),  # match on a computed measure
-        ],
+    def test_measure_is_computed(self, mask_plan):
+        assert mask_plan.computed_measures == mask_plan.measures
+
+    def test_measure_is_not_a_catalog_measure(self, mask_plan):
+        assert mask_plan.catalog_measures == ()
+
+
+class TestParseEmpty:
+    """An empty plan is the default: breadth-first over every step."""
+
+    @pytest.fixture
+    def parsed(self) -> plan.Plan:
+        return plan.parse("")
+
+    def test_strategy_defaults_to_breadth_first(self, parsed):
+        assert parsed.strategy == models.ReviewStrategy.BREADTH_FIRST
+
+    def test_triage_depth_defaults_to_one(self, parsed):
+        assert parsed.triage_depth == 1
+
+    def test_declares_no_steps(self, parsed):
+        assert parsed.steps == ()
+
+
+class TestParseCatalogMeasure:
+    CATALOG = (
+        '[steps.dtifit]\norder_by="fd_mean"\ndirection="higher_worse"\n'
+        '[[steps.dtifit.measures]]\nname="fd_mean"\ncatalog="fd_mean"\n'
     )
-    def test_invalid_raises_plan_error(self, text):
-        with pytest.raises(plan.PlanError):
-            plan.parse(text)
+
+    @pytest.fixture
+    def dtifit_plan(self) -> plan.StepPlan:
+        step_plan = plan.parse(self.CATALOG).step_plan(models.Step.DTIFIT)
+        if step_plan is None:  # a setup guard, not the assertion under test
+            pytest.fail("CATALOG declares a [steps.dtifit] table")
+        return step_plan
+
+    def test_measure_is_read_from_the_catalog(self, dtifit_plan):
+        assert dtifit_plan.catalog_measures == dtifit_plan.measures
+
+    def test_nothing_is_computed_at_ingest(self, dtifit_plan):
+        assert dtifit_plan.computed_measures == ()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        pytest.param(
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\ncatalog="b"',
+            id="compute-and-catalog",
+        ),
+        pytest.param(
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"',
+            id="neither-compute-nor-catalog",
+        ),
+        pytest.param('[steps.masks]\norder_by="nope"', id="order_by-is-not-a-measure"),
+        pytest.param("[steps.bogus]\n", id="unknown-step"),
+        pytest.param('[ordering]\nstrategy="wat"', id="unknown-strategy"),
+        pytest.param("[ordering]\ntriage_depth=0", id="non-positive-triage-depth"),
+        pytest.param(
+            '[steps.masks]\ndirection="sideways"\n'
+            '[[steps.masks.measures]]\nname="v"\ncompute="mask_volume"',
+            id="unknown-direction",
+        ),
+        pytest.param(
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncatalog="c"\n'
+            'catalog_suffix="bold"',
+            id="cross-dataset-measure-without-match-keys",
+        ),
+        pytest.param(
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\n'
+            'match=["sub"]',
+            id="match-on-a-computed-measure",
+        ),
+    ],
+)
+def test_invalid_raises_plan_error(text):
+    with pytest.raises(plan.PlanError):
+        plan.parse(text)
+
+
+@pytest.fixture
+def applied(db) -> models.ReviewPlan:
+    """VALID, applied — the arrange+act shared by the persistence tests."""
+    return services.plan_apply(name="demo", text=VALID)
 
 
 @pytest.mark.django_db
-class TestPersistence:
-    def test_apply_persists_and_activates(self):
-        record = services.plan_apply(name="demo", text=VALID)
-        assert record.is_active
-        active_record = plan.active_record()
-        assert active_record is not None
-        assert active_record.pk == record.pk
+class TestApply:
+    def test_record_is_active(self, applied):
+        assert applied.is_active
+
+    def test_record_is_the_active_record(self, applied):
+        assert plan.active_record() == applied
+
+    def test_active_plan_reflects_the_applied_text(self, applied):
         assert plan.active().strategy == models.ReviewStrategy.ANOMALY_FIRST
 
-    def test_apply_dedups_by_hash(self):
-        r1 = services.plan_apply(name="demo", text=VALID)
-        r2 = services.plan_apply(name="demo", text=VALID)
-        assert r1.pk == r2.pk
+
+@pytest.mark.django_db
+class TestReapplySameText:
+    """Plans are deduped by content hash, so re-applying is a no-op."""
+
+    @pytest.fixture
+    def reapplied(self, applied) -> models.ReviewPlan:
+        return services.plan_apply(name="demo", text=VALID)
+
+    def test_reuses_the_same_record(self, applied, reapplied):
+        assert reapplied.pk == applied.pk
+
+    def test_stores_no_duplicate(self, reapplied):
         assert models.ReviewPlan.objects.count() == 1
 
-    def test_reapply_switches_active(self):
-        r1 = services.plan_apply(name="a", text=VALID)
-        r2 = services.plan_apply(
-            name="b",
-            text=VALID.replace('strategy = "anomaly_first"', 'strategy = "triage"'),
-        )
-        r1.refresh_from_db()
-        assert not r1.is_active and r2.is_active
+
+@pytest.mark.django_db
+class TestApplyDifferentText:
+    TRIAGE = VALID.replace('strategy = "anomaly_first"', 'strategy = "triage"')
+
+    @pytest.fixture
+    def superseding(self, applied) -> models.ReviewPlan:
+        return services.plan_apply(name="b", text=self.TRIAGE)
+
+    def test_new_record_is_active(self, superseding):
+        assert superseding.is_active
+
+    def test_previous_record_is_deactivated(self, applied, superseding):
+        applied.refresh_from_db()
+
+        assert not applied.is_active
+
+    def test_active_plan_is_the_new_one(self, superseding):
         assert plan.active().strategy == models.ReviewStrategy.TRIAGE
 
-    def test_no_plan_is_default(self):
+
+@pytest.mark.django_db
+class TestNoPlanApplied:
+    def test_there_is_no_active_record(self):
         assert plan.active_record() is None
+
+    def test_active_plan_is_the_default(self):
         assert plan.active().strategy == models.ReviewStrategy.BREADTH_FIRST
 
 
 @pytest.mark.django_db
 class TestSessionPinsServingFacet:
-    def test_session_create_copies_strategy(self):
-        services.plan_apply(name="t", text=VALID)
-        session = services.session_create(step=models.Step.MASK)
-        assert session.strategy == models.ReviewStrategy.ANOMALY_FIRST
-        assert session.triage_depth == 2
+    """A Session copies the plan's serving facet at start-up (see plan module doc)."""
 
-    def test_session_defaults_without_plan(self):
-        session = services.session_create(step=models.Step.MASK)
-        assert session.strategy == models.ReviewStrategy.BREADTH_FIRST
-        assert session.triage_depth == 1
+    @pytest.fixture
+    def planned_session(self, applied) -> models.Session:
+        return services.session_create(step=models.Step.MASK)
+
+    @pytest.fixture
+    def unplanned_session(self, db) -> models.Session:
+        return services.session_create(step=models.Step.MASK)
+
+    def test_strategy_is_copied_from_the_plan(self, planned_session):
+        assert planned_session.strategy == models.ReviewStrategy.ANOMALY_FIRST
+
+    def test_triage_depth_is_copied_from_the_plan(self, planned_session):
+        assert planned_session.triage_depth == 2
+
+    def test_strategy_defaults_without_a_plan(self, unplanned_session):
+        assert unplanned_session.strategy == models.ReviewStrategy.BREADTH_FIRST
+
+    def test_triage_depth_defaults_without_a_plan(self, unplanned_session):
+        assert unplanned_session.triage_depth == 1

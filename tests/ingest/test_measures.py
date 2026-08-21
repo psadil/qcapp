@@ -1,12 +1,23 @@
 """Tests for computed metric extractors (require the neuro stack)."""
 
+from typing import NamedTuple
+
 import pytest
 
 np = pytest.importorskip("numpy")
 nb = pytest.importorskip("nibabel")
+measures = pytest.importorskip("django_dirt_ratings.management.ingest.measures")
 
 
-def _cube_mask(tmp_path):
+class _CubeMask(NamedTuple):
+    """A written-out mask plus the reference image transforms are defined against."""
+
+    path: str
+    reference: object
+
+
+@pytest.fixture
+def cube_mask(tmp_path) -> _CubeMask:
     """A 20 mm cube brain mask at 1 mm iso, centroid offset from the origin."""
     data = np.zeros((40, 40, 40), np.uint8)
     data[10:30, 10:30, 10:30] = 1
@@ -14,19 +25,23 @@ def _cube_mask(tmp_path):
     affine[:3, 3] = [-20, -20, -20]
     path = tmp_path / "mask.nii.gz"
     nb.Nifti1Image(data, affine).to_filename(path)
-    return data, affine, path
+    return _CubeMask(path=str(path), reference=nb.Nifti1Image(data, affine))
 
 
-def _itk_affine(tmp_path, matrix, reference):
+@pytest.fixture
+def write_itk_affine(tmp_path):
+    """Write a 4x4 matrix as an ITK transform file; hand back its path."""
     nt = pytest.importorskip("nitransforms")
-    path = tmp_path / "xfm.txt"
-    nt.linear.Affine(matrix, reference=reference).to_filename(path, fmt="itk")
-    return path
+
+    def _write(matrix, reference) -> str:
+        path = tmp_path / "xfm.txt"
+        nt.linear.Affine(matrix, reference=reference).to_filename(path, fmt="itk")
+        return str(path)
+
+    return _write
 
 
 def test_mask_volume_is_mm3(tmp_path):
-    from django_dirt_ratings.management.ingest.measures import MaskVolume
-
     # 2 mm isotropic voxels (8 mm^3 each); 8 nonzero voxels → 64 mm^3.
     affine = np.diag([2.0, 2.0, 2.0, 1.0])
     data = np.zeros((4, 4, 4), dtype=np.uint8)
@@ -34,44 +49,55 @@ def test_mask_volume_is_mm3(tmp_path):
     path = tmp_path / "mask.nii.gz"
     nb.Nifti1Image(data, affine).to_filename(path)
 
-    assert MaskVolume().extract({"mask": str(path)}) == pytest.approx(64.0)
+    volume = measures.MaskVolume().extract({"mask": str(path)})
+
+    assert volume == pytest.approx(64.0)
 
 
-def test_affine_displacement_is_rms_mm(tmp_path):
-    from django_dirt_ratings.management.ingest.measures import AffineDisplacement
+def test_identity_transform_displaces_nothing(cube_mask, write_itk_affine):
+    xfm = write_itk_affine(np.eye(4), cube_mask.reference)
 
-    data, affine, mask = _cube_mask(tmp_path)
-    ref = nb.Nifti1Image(data, affine)
-    ext = AffineDisplacement()
-
-    # Identity transform moves nothing.
-    ident = _itk_affine(tmp_path, np.eye(4), ref)
-    assert ext.extract({"mask": str(mask), "transform": str(ident)}) == pytest.approx(
-        0.0
+    displacement = measures.AffineDisplacement().extract(
+        {"mask": cube_mask.path, "transform": xfm}
     )
 
-    # A pure 5 mm translation displaces the brain by exactly 5 mm (A = 0, so the
-    # radius/centroid drop out).
-    trans = np.eye(4)
-    trans[0, 3] = 5.0
-    xfm = _itk_affine(tmp_path, trans, ref)
-    assert ext.extract({"mask": str(mask), "transform": str(xfm)}) == pytest.approx(5.0)
+    assert displacement == pytest.approx(0.0)
 
-    # A small rotation is a small positive displacement.
+
+def test_pure_translation_displaces_by_its_own_length(cube_mask, write_itk_affine):
+    """A = 0 for a pure translation, so the radius/centroid terms drop out."""
+    matrix = np.eye(4)
+    matrix[0, 3] = 5.0
+    xfm = write_itk_affine(matrix, cube_mask.reference)
+
+    displacement = measures.AffineDisplacement().extract(
+        {"mask": cube_mask.path, "transform": xfm}
+    )
+
+    assert displacement == pytest.approx(5.0)
+
+
+def test_small_rotation_is_a_small_positive_displacement(cube_mask, write_itk_affine):
     theta = np.deg2rad(2)
-    rot = np.eye(4)
-    rot[:2, :2] = [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
-    xfm = _itk_affine(tmp_path, rot, ref)
-    displacement = ext.extract({"mask": str(mask), "transform": str(xfm)})
+    matrix = np.eye(4)
+    matrix[:2, :2] = [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+    xfm = write_itk_affine(matrix, cube_mask.reference)
+
+    displacement = measures.AffineDisplacement().extract(
+        {"mask": cube_mask.path, "transform": xfm}
+    )
+
     assert displacement is not None and displacement > 0
 
 
-def test_registered_under_key():
-    from django_dirt_ratings.management.ingest.measures import (
-        AffineDisplacement,
-        MaskVolume,
-        MetricExtractor,
-    )
+@pytest.mark.parametrize(
+    "key, expected_class",
+    [
+        ("mask_volume", measures.MaskVolume),
+        ("affine_displacement", measures.AffineDisplacement),
+    ],
+)
+def test_registered_under_key(key, expected_class):
+    extractor = measures.MetricExtractor.get(key)
 
-    assert isinstance(MetricExtractor.get("mask_volume"), MaskVolume)
-    assert isinstance(MetricExtractor.get("affine_displacement"), AffineDisplacement)
+    assert isinstance(extractor, expected_class)

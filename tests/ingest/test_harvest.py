@@ -37,14 +37,18 @@ MATCH = {"dataset_id": "mriqc", "suffix": "bold", "extension": ".json", **ENT}
 
 def test_harvests_from_sibling():
     lake = _FakeLake({"fmriprep": ["mriqc"]}, [(MATCH, _Rec({"fd_mean": 0.42}))])
-    assert harvest.harvest_catalog(lake, "fmriprep", ENT, [CATALOG]) == {
-        "fd_mean": 0.42
-    }
+
+    harvested = harvest.harvest_catalog(lake, "fmriprep", ENT, [CATALOG])
+
+    assert harvested == {"fd_mean": 0.42}
 
 
 def test_no_sibling_yields_none():
     lake = _FakeLake({}, [(MATCH, _Rec({"fd_mean": 0.42}))])
-    assert harvest.harvest_catalog(lake, "orphan", ENT, [CATALOG]) == {"fd_mean": None}
+
+    harvested = harvest.harvest_catalog(lake, "orphan", ENT, [CATALOG])
+
+    assert harvested == {"fd_mean": None}
 
 
 def test_ambiguous_match_yields_none():
@@ -53,9 +57,10 @@ def test_ambiguous_match_yields_none():
         {"fmriprep": ["mriqc"]},
         [(MATCH, _Rec({"fd_mean": 0.42})), (MATCH, _Rec({"fd_mean": 0.99}))],
     )
-    assert harvest.harvest_catalog(lake, "fmriprep", ENT, [CATALOG]) == {
-        "fd_mean": None
-    }
+
+    harvested = harvest.harvest_catalog(lake, "fmriprep", ENT, [CATALOG])
+
+    assert harvested == {"fd_mean": None}
 
 
 def test_plain_sidecar_row_is_not_a_candidate():
@@ -67,17 +72,24 @@ def test_plain_sidecar_row_is_not_a_candidate():
         {"fmriprep": ["mriqc"]},
         [(MATCH, _Rec({"fd_mean": 0.42})), (MATCH, _Rec({}))],
     )
-    assert harvest.harvest_catalog(lake, "fmriprep", ENT, [CATALOG]) == {
-        "fd_mean": 0.42
-    }
+
+    harvested = harvest.harvest_catalog(lake, "fmriprep", ENT, [CATALOG])
+
+    assert harvested == {"fd_mean": 0.42}
 
 
 def test_same_dataset_catalog_measure_is_not_harvested_here():
     same = plan.Measure(name="x", catalog="x")  # no catalog_suffix -> not cross-dataset
     lake = _FakeLake({"fmriprep": ["mriqc"]}, [])
-    assert harvest.harvest_catalog(lake, "fmriprep", ENT, [same]) == {}
+
+    harvested = harvest.harvest_catalog(lake, "fmriprep", ENT, [same])
+
+    assert harvested == {}
 
 
 def test_missing_source_dataset_is_empty():
     lake = _FakeLake({"fmriprep": ["mriqc"]}, [(MATCH, _Rec({"fd_mean": 0.42}))])
-    assert harvest.harvest_catalog(lake, None, ENT, [CATALOG]) == {}
+
+    harvested = harvest.harvest_catalog(lake, None, ENT, [CATALOG])
+
+    assert harvested == {}
