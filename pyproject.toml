@@ -19,6 +19,7 @@ manage = "dirt.manage:main"
 dev = [
     "codespell>=2.4.1",
     "prek",
+    "ruff==0.16.4",
     "playwright",
     "pytest-playwright",
     "pywatchman>=3.0.0,<4",
@@ -65,6 +66,14 @@ pythonpath = ["src"]
 [tool.ruff]
 # Django writes migrations in its own style; leave the generated files alone.
 extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+ignore = [
+    # Django assigns mutable class attributes by design (Meta.fields,
+    # ModelAdmin.list_display, ninja Schema config). RUF012's remedy is to wrap
+    # them in ClassVar[], which fights django-stubs and the framework metaclasses.
+    "RUF012",
+]
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
