@@ -63,16 +63,18 @@ def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
         space=None,
         extension=".nii.gz",
     )
-    # `desc=None` pins the boldref->fieldmap alignment: a full fMRIPrep run also
-    # writes `desc-coreg` (boldref->T1w) and `desc-hmc` transforms with the same
-    # entities, which would otherwise make every key ambiguous.
+    # `to-auto#####` pins the boldref->fieldmap alignment: a full fMRIPrep run
+    # also writes a boldref->T1w transform with the same entities, which would
+    # otherwise make every key ambiguous. Keyed off `from`/`to` rather than
+    # `desc`, which is absent on older fMRIPrep but `desc-fmap` on v4+.
     xfms = bids.index_by(
         lake,
         _TARGET_ENTITIES,
+        where=lambda f: str(f.entities.get("to") or "").startswith("auto"),
         datatype="func",
         suffix="xfm",
-        desc=None,
         extension=".txt",
+        **{"from": "boldref"},  # `from` is a keyword, so it cannot be a kwarg
     )
     jobs: list[RenderJob] = []
     for fmap in fmaps:
