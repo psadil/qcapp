@@ -42,12 +42,21 @@ SPATIAL_NORMALIZATION_CUTS = {
 _Blobs = dict[tuple[models.DisplayMode, int | None], bytes]
 
 # The stored-image encoder settings. Pillow's AVIF plugin has no ``lossless``
-# key (an unknown kwarg is silently dropped), so quality is the plugin default
-# (75). Speed 10 is libaom's fastest preset; one encoder thread because the
-# render pool already saturates every core.
+# key (an unknown kwarg is silently dropped), so quality must be set explicitly:
+# q90 with 4:4:4 chroma is visually lossless on QC figures (no chroma bleed on
+# the one-pixel contour lines) at a fraction of true-lossless (q100) size.
+# Speed 10 is libaom's fastest preset; one encoder thread because the render
+# pool already saturates every core.
+_AVIF_QUALITY = 90
+_AVIF_SUBSAMPLING = "4:4:4"
 _AVIF_SPEED = 10
 _AVIF_MAX_THREADS = 1
-_AVIF_KWARGS = {"speed": _AVIF_SPEED, "max_threads": _AVIF_MAX_THREADS}
+_AVIF_KWARGS = {
+    "quality": _AVIF_QUALITY,
+    "subsampling": _AVIF_SUBSAMPLING,
+    "speed": _AVIF_SPEED,
+    "max_threads": _AVIF_MAX_THREADS,
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -278,6 +287,8 @@ def _draw_fmap_frames(
             frames,
             extension=".avif",
             duration=300,
+            quality=_AVIF_QUALITY,
+            subsampling=_AVIF_SUBSAMPLING,
             speed=_AVIF_SPEED,
             max_threads=_AVIF_MAX_THREADS,
         )
@@ -430,6 +441,8 @@ def render_dtifit(*, inputs: dict[str, str], cuts, displays_) -> _Blobs:
             frames,
             extension=".avif",
             duration=200,
+            quality=_AVIF_QUALITY,
+            subsampling=_AVIF_SUBSAMPLING,
             speed=_AVIF_SPEED,
             max_threads=_AVIF_MAX_THREADS,
         )
