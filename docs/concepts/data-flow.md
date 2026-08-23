@@ -13,7 +13,7 @@ preprocessed dataset (BIDS derivatives)
         │                    nilearn, dipy, matplotlib): discovers derivatives by BIDS
         │                    concept and renders a compact set of QC figures for each
         ▼
-   SQLite database          each figure is stored as lossless AVIF bytes on an `Image` row
+   SQLite database          each figure is stored as AVIF bytes on an `Image` row
         │
         │  serve            the `default` environment (Django + HTMX), no neuro stack
         ▼

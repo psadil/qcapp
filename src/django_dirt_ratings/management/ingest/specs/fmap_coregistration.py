@@ -20,6 +20,7 @@ from .. import bids, render
 from ..registry import RenderJob, StepSpec, register
 
 _TARGET_ENTITIES = ("sub", "ses", "task", "run", "acq")
+_EPI_KEY = ("sub", "ses", "run", "acq")
 
 
 def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
@@ -30,45 +31,62 @@ def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
         "extension": ".nii.gz",
         **filters,
     }
+    fmaps = list(lake.get(**query))
+    if not fmaps:
+        return []
+    # One indexing query per role instead of 1 + 3-per-IntendedFor-target
+    # lookups per fieldmap. The `IntendedFor` link itself must come from the
+    # merged sidecar (the catalog's fieldmap associations carry no resolved
+    # target ids), so targets stay parsed from metadata below.
+    epis = bids.index_by(
+        lake,
+        _EPI_KEY,
+        datatype="fmap",
+        suffix="fieldmap",
+        desc="epi",
+        extension=".nii.gz",
+    )
+    boldrefs = bids.index_by(
+        lake,
+        _TARGET_ENTITIES,
+        datatype="func",
+        suffix="boldref",
+        desc="coreg",
+        extension=".nii.gz",
+    )
+    masks = bids.index_by(
+        lake,
+        _TARGET_ENTITIES,
+        datatype="func",
+        suffix="mask",
+        desc="brain",
+        space=None,
+        extension=".nii.gz",
+    )
+    # `desc=None` pins the boldref->fieldmap alignment: a full fMRIPrep run also
+    # writes `desc-coreg` (boldref->T1w) and `desc-hmc` transforms with the same
+    # entities, which would otherwise make every key ambiguous.
+    xfms = bids.index_by(
+        lake,
+        _TARGET_ENTITIES,
+        datatype="func",
+        suffix="xfm",
+        desc=None,
+        extension=".txt",
+    )
     jobs: list[RenderJob] = []
-    for fmap in lake.get(**query):
+    for fmap in fmaps:
         e = fmap.entities
-        epi = bids.first(
-            lake,
-            datatype="fmap",
-            suffix="fieldmap",
-            desc="epi",
-            sub=e.get("sub"),
-            ses=e.get("ses"),
-            run=e.get("run"),
-            acq=e.get("acq"),
-            extension=".nii.gz",
-        )
+        epi = epis.get(tuple(e.get(k) for k in _EPI_KEY))
         if epi is None:
             continue
         for target in bids.intended_for(fmap.metadata):
             bold = bids.parse_entities(target)
             shared = {k: bold.get(k) for k in _TARGET_ENTITIES}
-            boldref = bids.first(
-                lake,
-                datatype="func",
-                suffix="boldref",
-                desc="coreg",
-                extension=".nii.gz",
-                **shared,
-            )
-            mask = bids.first(
-                lake,
-                datatype="func",
-                suffix="mask",
-                desc="brain",
-                space=None,
-                extension=".nii.gz",
-                **shared,
-            )
-            xfm = bids.first(
-                lake, datatype="func", suffix="xfm", extension=".txt", **shared
-            )
+            key = tuple(shared.values())
+            boldref = boldrefs.get(key)
+            mask = masks.get(key)
+            xfm = xfms.get(key)
             if not (boldref and mask and xfm):
                 continue
             jobs.append(

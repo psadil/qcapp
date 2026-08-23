@@ -35,12 +35,18 @@ def image_exists(
     ).exists()
 
 
-def image_file_exists(*, file1: str, step: int) -> bool:
-    """Whether any Image for this source file + step exists.
+def image_files_rendered(*, step: int) -> set[str]:
+    """The ``file1`` values that already have Images for this step.
 
-    Used by ingest to skip re-rendering a whole file's series when not updating.
+    Used by ingest to skip re-rendering whole files when not updating: one
+    set-returning query, where a per-file existence probe would walk the step's
+    rows (no index leads with ``file1``) once per discovered job.
     """
-    return models.Image.objects.filter(file1=file1, step=step).exists()
+    return set(
+        models.Image.objects.filter(step=step)
+        .values_list("file1", flat=True)
+        .distinct()
+    )
 
 
 def image_list(

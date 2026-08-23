@@ -16,9 +16,7 @@ from __future__ import annotations
 
 import functools
 import io
-import tempfile
 from collections.abc import Sequence
-from pathlib import Path
 
 import imageio.v3 as iio
 import nibabel as nb
@@ -29,7 +27,6 @@ from matplotlib import pyplot as plt
 from nibabel import spatialimages
 from nilearn import image, plotting
 from nilearn.plotting import displays
-from scipy import ndimage
 
 from django_dirt_ratings import datasets, models
 
@@ -43,6 +40,14 @@ SPATIAL_NORMALIZATION_CUTS = {
 }
 
 _Blobs = dict[tuple[models.DisplayMode, int | None], bytes]
+
+# The stored-image encoder settings. Pillow's AVIF plugin has no ``lossless``
+# key (an unknown kwarg is silently dropped), so quality is the plugin default
+# (75). Speed 10 is libaom's fastest preset; one encoder thread because the
+# render pool already saturates every core.
+_AVIF_SPEED = 10
+_AVIF_MAX_THREADS = 1
+_AVIF_KWARGS = {"speed": _AVIF_SPEED, "max_threads": _AVIF_MAX_THREADS}
 
 
 # --------------------------------------------------------------------------- #
@@ -101,12 +106,12 @@ def cuts_from_bbox(
 
 
 def _savefig(p: displays.OrthoSlicer, dst: io.BytesIO) -> None:
-    """Write the slicer to ``dst`` as a lossless AVIF — the stored QC image."""
+    """Write the slicer to ``dst`` as AVIF — the stored QC image."""
     p.savefig(
         dst,
         backend="Agg",
         format="avif",
-        pil_kwargs={"lossless": True},
+        pil_kwargs=_AVIF_KWARGS,
     )
 
 
@@ -132,11 +137,11 @@ def rotate_affine(img, rot=None):
 
 @functools.lru_cache(maxsize=4)
 def _template_img(path: str) -> nb.nifti1.Nifti1Image:
-    """The bundled ROI template, loaded once per process."""
+    """The bundled ROI template, loaded and reordered once per process."""
     img = nb.load(path)
     if not isinstance(img, nb.nifti1.Nifti1Image):  # nb.load promises FileBasedImage
         raise TypeError(f"expected a NIfTI template at {path}, got {type(img)}")
-    return img
+    return image.reorder_img(img, resample="continuous")
 
 
 # --------------------------------------------------------------------------- #
@@ -156,9 +161,8 @@ def _draw_mask(
             colorbar=False,
         )
         if mask_nii:
-            p.add_contours(
-                mask_nii, levels=[0.5], colors="g", filled=True, transparency=0.5
-            )
+            # Outline, not filled: the filled contour costs ~4x per cut to draw.
+            p.add_contours(mask_nii, levels=[0.5], colors="g")
         _savefig(p, img)
         plt.close(f)
         return img.getvalue()
@@ -219,6 +223,8 @@ def _draw_fmap_frames(
     file2_nii,
     coord: float,
     display_mode: models.DisplayMode,
+    file_scale: tuple[float, float],
+    file2_scale: tuple[float, float],
 ) -> bytes:
     dm = display_mode.name.lower()
     f0 = plt.figure(figsize=(6.4, 4.8), layout="none")
@@ -232,19 +238,16 @@ def _draw_fmap_frames(
             colorbar=False,
             title="func/boldref",
         )
-        p0.add_overlay(
-            file_nii,
-            cmap="gray",
-            vmax=np.quantile(file_nii.get_fdata(), 0.998),
-            vmin=np.quantile(file_nii.get_fdata(), 0.15),
-        )
+        p0.add_overlay(file_nii, cmap="gray", vmin=file_scale[0], vmax=file_scale[1])
         try:
             p0.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
         except ValueError:
             pass
         # Frames are throwaway intermediates decoded straight to arrays below, so
         # keep them as fast lossless PNG; only the stitched animation is AVIF.
-        p0.savefig(frame0, backend="Agg", format="png")
+        p0.savefig(
+            frame0, backend="Agg", format="png", pil_kwargs={"compress_level": 1}
+        )
         plt.close(f0)
 
         p1: displays.OrthoSlicer = plotting.plot_anat(
@@ -255,17 +258,14 @@ def _draw_fmap_frames(
             colorbar=False,
             title="fmap/epi",
         )
-        p1.add_overlay(
-            file2_nii,
-            cmap="gray",
-            vmax=np.quantile(file2_nii.get_fdata(), 0.998),
-            vmin=np.quantile(file2_nii.get_fdata(), 0.15),
-        )
+        p1.add_overlay(file2_nii, cmap="gray", vmin=file2_scale[0], vmax=file2_scale[1])
         try:
             p1.add_contours(mask_nii, levels=[0.5], colors="g", transparency=0.5)
         except ValueError:
             pass
-        p1.savefig(frame1, backend="Agg", format="png")
+        p1.savefig(
+            frame1, backend="Agg", format="png", pil_kwargs={"compress_level": 1}
+        )
         plt.close(f1)
 
         frames = np.stack(
@@ -273,7 +273,14 @@ def _draw_fmap_frames(
             axis=0,
         )
     with io.BytesIO() as buf:
-        iio.imwrite(buf, frames, extension=".avif", loop=0, duration=300)
+        iio.imwrite(
+            buf,
+            frames,
+            extension=".avif",
+            duration=300,
+            speed=_AVIF_SPEED,
+            max_threads=_AVIF_MAX_THREADS,
+        )
         return buf.getvalue()
 
 
@@ -285,6 +292,10 @@ def render_mask(*, inputs: dict[str, str], cuts: Sequence[int], displays_) -> _B
     file_nii = loading.load_nifti(inputs["anat"])
     coords = cuts_from_bbox(mask_nii, cuts=N_CUTS)  # per-file
     vmax = float(np.quantile(file_nii.get_fdata(), 0.95))  # per-file
+    # Reorder once per file: nilearn repeats this exact call inside every
+    # plot/overlay — a full-volume resample when the affine is oblique.
+    file_nii = image.reorder_img(file_nii, resample="continuous")
+    mask_nii = image.reorder_img(mask_nii, resample="continuous")
     return {
         (display, cut): _draw_mask(
             file_nii, mask_nii, coords[display][cut], display, vmax
@@ -303,6 +314,11 @@ def render_surface_localization(
     contour_data = ribbon_nii.get_fdata() % 39  # per-file
     white = image.new_img_like(ribbon_nii, contour_data == 2)
     pial = image.new_img_like(ribbon_nii, contour_data >= 2)
+    # Derive the surfaces from the *raw* ribbon (resampling would interpolate
+    # its labels), then reorder each volume once instead of per plot call.
+    brain_nii = image.reorder_img(brain_nii, resample="continuous")
+    white = image.reorder_img(white, resample="continuous")
+    pial = image.reorder_img(pial, resample="continuous")
     return {
         (display, cut): _draw_surface(
             brain_nii, white, pial, coords[display][cut], display
@@ -315,7 +331,9 @@ def render_surface_localization(
 def render_spatial_normalization(
     *, inputs: dict[str, str], cuts: Sequence[int], displays_
 ) -> _Blobs:
-    file_nii = loading.load_nifti(inputs["anat"])
+    file_nii = image.reorder_img(
+        loading.load_nifti(inputs["anat"]), resample="continuous"
+    )
     template_img = _template_img(str(datasets.get_layout()))  # cached per process
     return {
         (display, cut): _draw_spatial_normalization(
@@ -345,16 +363,30 @@ def render_fmap_coregistration(
     # Per-file prep: rotate to the EPI's canonical frame and share an empty
     # background so both animation frames have an identical, uncropped FOV.
     canonical_r = rotation2canonical(file2_nii)
-    file2_nii = rotate_affine(file2_nii)
+    file2_nii = rotate_affine(file2_nii, rot=canonical_r)
     file_nii = rotate_affine(file_nii, rot=canonical_r)
     mask_nii = rotate_affine(mask_nii, rot=canonical_r)
     coords = cuts_from_bbox(mask_nii, cuts=N_CUTS)
+    file_scale = tuple(np.quantile(file_nii.get_fdata(), [0.15, 0.998]))
+    file2_scale = tuple(np.quantile(file2_nii.get_fdata(), [0.15, 0.998]))
     bg_nii = nb.Nifti1Image(
         np.zeros(file2_nii.shape), file2_nii.affine, header=file2_nii.header
     )
+    # Reorder once per file (see render_mask).
+    bg_nii = image.reorder_img(bg_nii, resample="continuous")
+    mask_nii = image.reorder_img(mask_nii, resample="continuous")
+    file_nii = image.reorder_img(file_nii, resample="continuous")
+    file2_nii = image.reorder_img(file2_nii, resample="continuous")
     return {
         (display, cut): _draw_fmap_frames(
-            bg_nii, mask_nii, file_nii, file2_nii, coords[display][cut], display
+            bg_nii,
+            mask_nii,
+            file_nii,
+            file2_nii,
+            coords[display][cut],
+            display,
+            file_scale,
+            file2_scale,
         )
         for display in displays_
         for cut in cuts
@@ -374,26 +406,33 @@ def render_dtifit(*, inputs: dict[str, str], cuts, displays_) -> _Blobs:
     mask_nii = image.binarize_img(nii, 0.0001, two_sided=False, copy_header=True)
     cut_ix = cuts_from_bbox_ijk(mask_nii, cuts=n_cuts).round().astype(np.uint16)
 
-    with tempfile.TemporaryDirectory() as _tmpd:
-        tmpd = Path(_tmpd)
-        images: list[Path] = []
-        for cut in range(n_cuts):
-            plt.figure(figsize=(6.4, 4.8), layout="none")
-            plt.imshow(np.clip(ndimage.rotate(rgb[:, :, cut_ix[2, cut]], 90), 0, 1))
-            img = tmpd / f"{cut}.png"
-            plt.axis("off")
+    images: list[npt.NDArray] = []
+    for cut in range(n_cuts):
+        f = plt.figure(figsize=(6.4, 4.8), layout="none")
+        plt.imshow(np.clip(np.rot90(rgb[:, :, cut_ix[2, cut]]), 0, 1))
+        plt.axis("off")
+        # Throwaway intermediates (see _draw_fmap_frames): fast PNG, in memory.
+        with io.BytesIO() as img:
             plt.savefig(
                 img,
                 backend="Agg",
-                pil_kwargs={"compress_level": 6},
+                format="png",
+                pil_kwargs={"compress_level": 1},
                 bbox_inches="tight",
             )
-            plt.close()
-            images.append(img)
-        frames = np.stack([iio.imread(img) for img in images + images[-2:1:-1]], axis=0)
+            plt.close(f)
+            images.append(iio.imread(img.getvalue()))
+    frames = np.stack(images + images[-2:1:-1], axis=0)
 
     with io.BytesIO() as buf:
-        iio.imwrite(buf, frames, extension=".avif", loop=0, duration=200)
+        iio.imwrite(
+            buf,
+            frames,
+            extension=".avif",
+            duration=200,
+            speed=_AVIF_SPEED,
+            max_threads=_AVIF_MAX_THREADS,
+        )
         return {(models.DisplayMode.Z, None): buf.getvalue()}
 
 

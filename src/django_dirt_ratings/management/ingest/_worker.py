@@ -11,6 +11,15 @@ from __future__ import annotations
 
 
 def init_django() -> None:
+    import os
+
+    # One render worker per core already: keep BLAS/OpenMP pools (and any
+    # display backend probing) from oversubscribing, before the heavy imports.
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("MPLBACKEND", "Agg")
+
     import django
 
     django.setup()

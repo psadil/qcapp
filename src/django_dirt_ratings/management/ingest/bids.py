@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+from collections.abc import Sequence
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _ENTITY = re.compile(r"(?:^|[_/])(sub|ses|task|acq|run|space|res|desc)-([A-Za-z0-9]+)")
 
@@ -14,14 +18,31 @@ def parse_entities(name: str) -> dict[str, str]:
     return dict(_ENTITY.findall(name))
 
 
-def first(lake: Any, **filters: Any) -> Any | None:
-    """The first file matching ``filters``, or None (the expected-single lookup).
+def index_by(lake: Any, keys: Sequence[str], **filters: Any) -> dict[tuple, Any]:
+    """One query's matching files, keyed by their ``keys`` entity values.
 
-    ``lake.get`` iterates bidslake's full file registry — every walked file,
-    sidecars included — so callers pin ``extension`` to mean one format (all
-    current callers do).
+    The batched replacement for a per-candidate single-file lookup: one
+    ``lake.get`` round-trip (~50 ms regardless of result size) builds the index,
+    and each candidate is then a dict lookup. ``lake.get`` iterates bidslake's
+    full file registry — every walked file, sidecars included — so callers pin
+    ``extension`` to mean one format (all current callers do).
+
+    A key matched by more than one file is ambiguous: it is stored as ``None``
+    (and warned about once) so lookups skip it, never silently taking either
+    candidate.
     """
-    return next(iter(lake.get(**filters)), None)
+    index: dict[tuple, Any] = {}
+    for f in lake.get(**filters):
+        key = tuple(f.entities.get(k) for k in keys)
+        if key in index:
+            if index[key] is not None:
+                logger.warning(
+                    "ambiguous %s=%s under %s; skipping the key", keys, key, filters
+                )
+            index[key] = None
+        else:
+            index[key] = f
+    return index
 
 
 def intended_for(metadata: dict[str, Any]) -> list[str]:

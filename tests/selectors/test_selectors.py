@@ -13,7 +13,7 @@ from django_dirt_ratings.models import (
 )
 from django_dirt_ratings.selectors import (
     image_exists,
-    image_file_exists,
+    image_files_rendered,
     image_get,
     image_list,
     image_with_fewest_ratings,
@@ -73,16 +73,23 @@ class TestImageExists:
 
 
 @pytest.mark.django_db
-class TestImageFileExists:
-    def test_true_for_a_known_file(self, mask_image):
-        exists = image_file_exists(file1=mask_image.file1, step=mask_image.step)
+class TestImageFilesRendered:
+    def test_contains_a_known_file(self, mask_image):
+        rendered = image_files_rendered(step=mask_image.step)
 
-        assert exists
+        assert mask_image.file1 in rendered
 
-    def test_false_for_an_unknown_file(self):
-        exists = image_file_exists(file1="nope.nii.gz", step=Step.MASK)
+    def test_empty_for_an_unrendered_step(self):
+        rendered = image_files_rendered(step=Step.MASK)
 
-        assert not exists
+        assert rendered == set()
+
+    def test_scoped_to_its_step(self, make_image):
+        other = make_image(step=Step.DTIFIT)
+
+        rendered = image_files_rendered(step=Step.MASK)
+
+        assert other.file1 not in rendered
 
 
 @pytest.mark.django_db

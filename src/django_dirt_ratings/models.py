@@ -24,7 +24,7 @@ class Step(models.IntegerChoices):
     def image_type(self) -> str:
         """MIME subtype of the figures stored for this step.
 
-        Every step stores lossless AVIF: a single frame for the static views
+        Every step stores AVIF: a single frame for the static views
         (mask, spatial normalization, surface localization) and an animation for
         the multi-frame views (fmap coregistration, dtifit).
         """

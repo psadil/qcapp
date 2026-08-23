@@ -13,31 +13,35 @@ from typing import Any
 
 from django_dirt_ratings import models
 
-from ..registry import RenderJob, StepSpec, register
+from .. import lake as lake_mod
+from ..registry import Lake, RenderJob, StepSpec, register
 
 SPACE = "MNI152NLin2009cAsym"
 N_CUTS = 3
 
 
-def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
-    query = {
-        "datatype": "anat",
-        "suffix": "T1w",
-        "desc": "preproc",
-        "space": SPACE,
-        "extension": ".nii.gz",
-        **filters,
-    }
+def discover(lake: Lake, filters: Mapping[str, Any]) -> list[RenderJob]:
+    rows = lake_mod.unit_rows(
+        lake,
+        anchor={
+            "datatype": "anat",
+            "suffix": "T1w",
+            "desc": "preproc",
+            "space": SPACE,
+            "extension": ".nii.gz",
+            **filters,
+        },
+    )
     return [
         RenderJob(
-            file1=Path(anat.file_path).name,
+            file1=Path(row.file_path).name,
             file2=None,
             render_key="spatial_normalization",
-            inputs={"anat": str(anat.local_path)},
+            inputs={"anat": row.local},
             cuts=list(range(N_CUTS)),
             displays=list(models.DisplayMode),
         )
-        for anat in lake.get(**query)
+        for row in rows
     ]
 
 

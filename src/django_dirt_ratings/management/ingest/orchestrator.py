@@ -117,10 +117,9 @@ def ingest_dataset(
     for spec in chosen:
         jobs = spec.discover(lake, filters)
         logger.info("step %s: discovered %d job(s)", spec.name, len(jobs))
+        rendered = set() if update else selectors.image_files_rendered(step=spec.step)
         for job in jobs:
-            if not update and selectors.image_file_exists(
-                file1=job.file1, step=spec.step
-            ):
+            if job.file1 in rendered:
                 continue
             pending.append((spec.step, job))
 

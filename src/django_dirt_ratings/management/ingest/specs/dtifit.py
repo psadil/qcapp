@@ -9,39 +9,42 @@ tree if ``discover`` finds nothing (the sample dataset has no DWI to exercise it
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from django_dirt_ratings import models
 
-from .. import bids
-from ..registry import RenderJob, StepSpec, register
+from .. import lake as lake_mod
+from ..registry import Lake, RenderJob, StepSpec, register
+
+logger = logging.getLogger(__name__)
 
 
-def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
-    query = {"suffix": "FA", "extension": ".nii.gz", **filters}
+def discover(lake: Lake, filters: Mapping[str, Any]) -> list[RenderJob]:
+    rows = lake_mod.unit_rows(
+        lake,
+        anchor={"suffix": "FA", "extension": ".nii.gz", **filters},
+        roles={
+            v.lower(): lake_mod.Role(
+                join=("sub", "ses", "run"),
+                where={"suffix": v, "extension": ".nii.gz"},
+            )
+            for v in ("V1", "V2", "V3")
+        },
+    )
     jobs: list[RenderJob] = []
-    for fa in lake.get(**query):
-        e = fa.entities
-        shared = {"sub": e.get("sub"), "ses": e.get("ses"), "run": e.get("run")}
-        v1, v2, v3 = (
-            bids.first(lake, suffix=p, extension=".nii.gz", **shared)
-            for p in ("V1", "V2", "V3")
-        )
-        if v1 is None or v2 is None or v3 is None:
+    for row in rows:
+        if row.warn_unresolved(logger):
             continue
+        vecs = {name: role.local for name, role in row.roles.items() if role}
         jobs.append(
             RenderJob(
-                file1=Path(fa.file_path).name,
+                file1=Path(row.file_path).name,
                 file2=None,
                 render_key="dtifit",
-                inputs={
-                    "fa": str(fa.local_path),
-                    "v1": str(v1.local_path),
-                    "v2": str(v2.local_path),
-                    "v3": str(v3.local_path),
-                },
+                inputs={"fa": row.local, **vecs},
                 cuts=[None],
                 displays=[models.DisplayMode.Z],
             )
