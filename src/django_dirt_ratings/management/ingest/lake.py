@@ -111,7 +111,7 @@ def unit_rows(
     # bidslake/sqlalchemy exist only in the manage env; see open_lake.
     import bidslake  # ty: ignore[unresolved-import]
     from bidslake.schema.models import AllFiles  # ty: ignore[unresolved-import]
-    from sqlalchemy import select, true  # ty: ignore[unresolved-import]
+    from sqlalchemy import select, true
 
     roles = dict(roles or {})
     a = AllFiles.__table__.alias("a")
@@ -162,7 +162,7 @@ def _basename_sibling(anchor: Any, name: str, role: Role) -> tuple[Any, list[Any
     one-row aggregation) with a ``file_path`` suffix condition that its
     equality-only ``where`` cannot express.
     """
-    from sqlalchemy import and_, func, select  # ty: ignore[unresolved-import]
+    from sqlalchemy import and_, func, select
 
     f = getattr(anchor, "element", anchor).alias(f"f_{name}")
     conds = [f.c.file_path.endswith(f"/{role.basename}", autoescape=True)]

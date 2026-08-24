@@ -10,5 +10,10 @@ def get_data(file: str) -> Path:
     return out
 
 
-def get_layout() -> Path:
-    return get_data("tpl-MNI152NLin2009cAsym_res-01_desc-rois_dseg.nii.gz")
+def get_landmarks() -> Path:
+    """The canonical hand-drawn landmark dseg (see the sibling PROVENANCE.md).
+
+    Built by ``tools/make_landmarks.py``; its label table lives in the sidecar
+    JSON next to it. Consumed by ``management.ingest.rois``.
+    """
+    return get_data("tpl-MNI152NLin2009cAsym_desc-landmarks_dseg.nii.gz")

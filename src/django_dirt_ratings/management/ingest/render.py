@@ -23,36 +23,36 @@ import nibabel as nb
 import numpy as np
 import numpy.typing as npt
 from dipy.reconst import dti
+from matplotlib import colors
 from matplotlib import pyplot as plt
 from nibabel import spatialimages
 from nilearn import image, plotting
 from nilearn.plotting import displays
 
-from django_dirt_ratings import datasets, models
+from django_dirt_ratings import models
 
-from . import loading
+from . import loading, rois
 
 N_CUTS = 5
-SPATIAL_NORMALIZATION_CUTS = {
-    "x": {0: -50, 1: 5, 2: 30},
-    "y": {0: -65, 1: 20, 2: 54},
-    "z": {0: -6, 1: 13, 2: 58},
-}
 
 _Blobs = dict[tuple[models.DisplayMode, int | None], bytes]
 
 # The stored-image encoder settings. Pillow's AVIF plugin has no ``lossless``
-# key (an unknown kwarg is silently dropped), so quality must be set explicitly:
-# q90 with 4:4:4 chroma is visually lossless on QC figures (no chroma bleed on
-# the one-pixel contour lines) at a fraction of true-lossless (q100) size.
-# Speed 10 is libaom's fastest preset; one encoder thread because the render
-# pool already saturates every core.
-_AVIF_QUALITY = 90
+# key (an unknown kwarg is silently dropped), so quality must be set explicitly.
+# Stills encode at q100: measured on real QC figures, q90 rings ~25k spuriously
+# colored pixels around a saturated ROI fill (a visible halo bleeding up to
+# ~20px) and ~500 around thin contour lines, while q100 leaves zero and costs
+# only ~30-45%% more bytes on these small images. Animations stay at q90: frame
+# count multiplies the cost (q100 is ~60%% larger per frame) and their
+# continuous imagery doesn't produce structured fringes. Speed 10 is libaom's
+# fastest preset; one encoder thread because the render pool already saturates
+# every core.
 _AVIF_SUBSAMPLING = "4:4:4"
 _AVIF_SPEED = 10
 _AVIF_MAX_THREADS = 1
+_AVIF_ANIMATION_QUALITY = 90
 _AVIF_KWARGS = {
-    "quality": _AVIF_QUALITY,
+    "quality": 100,
     "subsampling": _AVIF_SUBSAMPLING,
     "speed": _AVIF_SPEED,
     "max_threads": _AVIF_MAX_THREADS,
@@ -145,12 +145,29 @@ def rotate_affine(img, rot=None):
 
 
 @functools.lru_cache(maxsize=4)
-def _template_img(path: str) -> nb.nifti1.Nifti1Image:
-    """The bundled ROI template, loaded and reordered once per process."""
+def _roi_img(path: str) -> nb.nifti1.Nifti1Image:
+    """A landmark dseg (see ``rois``), remapped to display groups, per process.
+
+    Labels are collapsed left/right into one display group per structure type
+    (one hue each), and reordered with *nearest* resampling — labels must never
+    be continuously interpolated.
+    """
     img = nb.load(path)
     if not isinstance(img, nb.nifti1.Nifti1Image):  # nb.load promises FileBasedImage
-        raise TypeError(f"expected a NIfTI template at {path}, got {type(img)}")
-    return image.reorder_img(img, resample="continuous")
+        raise TypeError(f"expected a NIfTI dseg at {path}, got {type(img)}")
+    lut = np.zeros(max(rois.DISPLAY_GROUPS) + 1, dtype=np.uint8)
+    for label, group in rois.DISPLAY_GROUPS.items():
+        lut[label] = group
+    grouped = nb.nifti1.Nifti1Image(
+        lut[np.asanyarray(img.dataobj).astype(np.uint8)], img.affine, dtype=np.uint8
+    )
+    return image.reorder_img(grouped, resample="nearest")
+
+
+@functools.lru_cache(maxsize=4)
+def _roi_cuts(meta_path: str) -> dict[str, list[float]]:
+    """The per-display cut coordinates from a ROI artifact sidecar."""
+    return rois.load_cuts(meta_path)
 
 
 # --------------------------------------------------------------------------- #
@@ -208,17 +225,25 @@ def _draw_surface(
 
 
 def _draw_spatial_normalization(
-    file_nii, template_img, coord: float, display_mode: models.DisplayMode
+    file_nii, roi_nii, coord: float, display_mode: models.DisplayMode
 ) -> bytes:
     f = plt.figure(figsize=(6.4, 4.8), layout="none")
     with io.BytesIO() as img:
         p: displays.OrthoSlicer = plotting.plot_roi(
-            roi_img=template_img,
+            roi_img=roi_nii,
             bg_img=file_nii,
             cut_coords=[coord],
             display_mode=display_mode.name.lower(),
             figure=f,
             colorbar=False,
+            # Translucent "confidence band" fill (Benhajali-style): anatomy
+            # should fall inside the tinted regions. One hue per structure
+            # type; nearest resampling keeps the label edges crisp.
+            alpha=0.7,
+            cmap=colors.ListedColormap(rois.DISPLAY_COLORS),
+            vmin=1,
+            vmax=len(rois.DISPLAY_COLORS),
+            resampling_interpolation="nearest",
         )
         _savefig(p, img)
         plt.close(f)
@@ -287,7 +312,7 @@ def _draw_fmap_frames(
             frames,
             extension=".avif",
             duration=300,
-            quality=_AVIF_QUALITY,
+            quality=_AVIF_ANIMATION_QUALITY,
             subsampling=_AVIF_SUBSAMPLING,
             speed=_AVIF_SPEED,
             max_threads=_AVIF_MAX_THREADS,
@@ -339,19 +364,31 @@ def render_surface_localization(
     }
 
 
+def _skull_strip(anat_nii, mask_nii):
+    """Zero the T1w outside its brain mask, clipped to a within-mask quantile.
+
+    fMRIPrep's ``desc-preproc`` T1w keeps skull/scalp, which otherwise renders
+    as a dim halo around the brain; clipping then keys the display contrast to
+    brain tissue alone.
+    """
+    data = anat_nii.get_fdata() * (np.asanyarray(mask_nii.dataobj) > 0)
+    vmax = float(np.quantile(data[data > 0], 0.99))
+    return image.new_img_like(anat_nii, np.clip(data, 0.0, vmax))
+
+
 def render_spatial_normalization(
     *, inputs: dict[str, str], cuts: Sequence[int], displays_
 ) -> _Blobs:
+    anat_nii = loading.load_nifti(inputs["anat"])
+    mask_nii = loading.load_nifti(inputs["mask"])
     file_nii = image.reorder_img(
-        loading.load_nifti(inputs["anat"]), resample="continuous"
+        _skull_strip(anat_nii, mask_nii), resample="continuous"
     )
-    template_img = _template_img(str(datasets.get_layout()))  # cached per process
+    roi_nii = _roi_img(inputs["rois"])  # cached per process
+    coords = _roi_cuts(inputs["roi_meta"])
     return {
         (display, cut): _draw_spatial_normalization(
-            file_nii,
-            template_img,
-            SPATIAL_NORMALIZATION_CUTS[display.name.lower()][cut],
-            display,
+            file_nii, roi_nii, coords[display.name.lower()][cut], display
         )
         for display in displays_
         for cut in cuts
@@ -441,7 +478,7 @@ def render_dtifit(*, inputs: dict[str, str], cuts, displays_) -> _Blobs:
             frames,
             extension=".avif",
             duration=200,
-            quality=_AVIF_QUALITY,
+            quality=_AVIF_ANIMATION_QUALITY,
             subsampling=_AVIF_SUBSAMPLING,
             speed=_AVIF_SPEED,
             max_threads=_AVIF_MAX_THREADS,
