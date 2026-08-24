@@ -2,6 +2,7 @@ import abc
 import json
 
 from django import http, shortcuts, urls, views
+from django.conf import settings
 from django.views.generic import edit
 
 from django_dirt_ratings import (
@@ -21,6 +22,16 @@ FMAP_COREGISTRATION_VIEW = "fmap_coregistration"
 DTIFIT_VIEW = "dtifit"
 RATE_PARTIAL = "rate_partial"
 CLICK_PARTIAL = "click_partial"
+
+# Steps with a rater walkthrough on the docs site (see DIRT_DOCS_URL).
+TUTORIAL_PATHS: dict[models.Step, str] = {
+    models.Step.SPATIAL_NORMALIZATION: "tutorials/rate-spatial-normalization.html",
+}
+
+
+def _tutorial_url(step: models.Step) -> str | None:
+    path = TUTORIAL_PATHS.get(step)
+    return f"{settings.DIRT_DOCS_URL}/{path}" if path else None
 
 
 class RatePartial(views.View):
@@ -59,6 +70,7 @@ class RatePartial(views.View):
                 "img_type": models.Step(image.step).image_type,
                 "image": formatters.image_to_base64(image.img),
                 "grid_cols": models.Step(image.step).grid_cols,
+                "tutorial_url": _tutorial_url(models.Step(image.step)),
             },
         )
 

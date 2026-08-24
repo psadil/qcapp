@@ -43,6 +43,10 @@ manage = [
 neuro = [
     "dipy>=1.11.0",
     "imageio>=2.37.0",
+    # ROI generation (ingest/rois.py): template assets per output space, plus
+    # scipy.ndimage morphology (previously only a transitive dependency).
+    "templateflow>=24.2",
+    "scipy>=1.11",
     # matplotlib 3.11 is the first release whose Agg backend can savefig AVIF
     # (via Pillow); QC figures are stored as AVIF (see ingest/render.py).
     "matplotlib>=3.11.0",

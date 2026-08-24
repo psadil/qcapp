@@ -1,0 +1,112 @@
+{
+  "brain_match_commit": "58476047cf43b30425eb35cb414890ce99c318c0",
+  "built": "2026-08-24",
+  "labels": {
+    "left_calcarine_sulcus": 10,
+    "left_central_sulcus": 6,
+    "left_cingulate_sulcus": 8,
+    "left_parieto_occipital_fissure": 12,
+    "left_tentorium_cerebelli": 14,
+    "right_calcarine_sulcus": 11,
+    "right_central_sulcus": 7,
+    "right_cingulate_sulcus": 9,
+    "right_parieto_occipital_fissure": 13,
+    "right_tentorium_cerebelli": 15
+  },
+  "license": "MIT (SIMEXP/brain_match)",
+  "reference": "Benhajali et al. 2020, doi:10.3389/fninf.2020.00007",
+  "registration": {
+    "engine": "dipy 1.12.1 affine(MI)+SyN(CC) on GM probability maps",
+    "moving": {
+      "mni_icbm152_gm_tal_nlin_sym_09a.nii.gz": "46109b120a5fe23d45ff6e64941ddda00e8f411690987236cb3e0c0c3c5fbfeb"
+    },
+    "r_identity": 0.845,
+    "r_warp": 0.9651,
+    "static": {
+      "tpl-MNI152NLin2009cAsym_res-01_desc-brain_mask.nii.gz": "e40bb1816736504d4c25abc243c1c8503df1d308f64c048318aa4b829e09a7ae",
+      "tpl-MNI152NLin2009cAsym_res-01_label-GM_probseg.nii.gz": "662b18e83dddc554b19c621d9750af3454b54d4e103df03633eacced3884805a"
+    }
+  },
+  "structures": {
+    "left_calcarine_sulcus": {
+      "cleanup": {
+        "voxels_after": 5743,
+        "voxels_before": 5577
+      },
+      "input_sha256": "72d10f2122a58eba97a6a973eee8b892d7528d05cce64864852b6555bdaf01ca",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_calcarine_sulcus.nii.gz"
+    },
+    "left_central_sulcus": {
+      "cleanup": {
+        "voxels_after": 28917,
+        "voxels_before": 28415
+      },
+      "input_sha256": "cc5aa5f43f73a016cdaef278a19d1ab47067ac27d97bfe91044a252bd50a050f",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_central_sulcus.nii.gz"
+    },
+    "left_cingulate_sulcus": {
+      "cleanup": {
+        "voxels_after": 25545,
+        "voxels_before": 25438
+      },
+      "input_sha256": "af2cdee01bb3833a9e6a1b2405518d9a54d806c952fc0e0074de3b60a17f08a4",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_cingulate_sulcus.nii.gz"
+    },
+    "left_parieto_occipital_fissure": {
+      "cleanup": {
+        "voxels_after": 9181,
+        "voxels_before": 9143
+      },
+      "input_sha256": "429f4287624a25b5ff7d384d1830305dac3913725428c0cfa861369b31a218ce",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_parieto-occipital_fissure.nii.gz"
+    },
+    "left_tentorium_cerebelli": {
+      "cleanup": {
+        "voxels_after": 26530,
+        "voxels_before": 26432
+      },
+      "input_sha256": "c05202ae33474006f11786ec5d311eff33852a0abfe2badbb9ad0f7563b37b3c",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_tentorium_cerebelli.nii.gz"
+    },
+    "right_calcarine_sulcus": {
+      "cleanup": {
+        "voxels_after": 6130,
+        "voxels_before": 5947
+      },
+      "input_sha256": "72d10f2122a58eba97a6a973eee8b892d7528d05cce64864852b6555bdaf01ca",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_calcarine_sulcus.nii.gz (mirrored across x=0)"
+    },
+    "right_central_sulcus": {
+      "cleanup": {
+        "voxels_after": 27120,
+        "voxels_before": 26667
+      },
+      "input_sha256": "cc5aa5f43f73a016cdaef278a19d1ab47067ac27d97bfe91044a252bd50a050f",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_central_sulcus.nii.gz (mirrored across x=0)"
+    },
+    "right_cingulate_sulcus": {
+      "cleanup": {
+        "voxels_after": 25701,
+        "voxels_before": 25620
+      },
+      "input_sha256": "af2cdee01bb3833a9e6a1b2405518d9a54d806c952fc0e0074de3b60a17f08a4",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_cingulate_sulcus.nii.gz (mirrored across x=0)"
+    },
+    "right_parieto_occipital_fissure": {
+      "cleanup": {
+        "voxels_after": 9748,
+        "voxels_before": 9710
+      },
+      "input_sha256": "429f4287624a25b5ff7d384d1830305dac3913725428c0cfa861369b31a218ce",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_parieto-occipital_fissure.nii.gz (mirrored across x=0)"
+    },
+    "right_tentorium_cerebelli": {
+      "cleanup": {
+        "voxels_after": 26963,
+        "voxels_before": 26851
+      },
+      "input_sha256": "c05202ae33474006f11786ec5d311eff33852a0abfe2badbb9ad0f7563b37b3c",
+      "source": "SIMEXP/brain_match@58476047cf43b30425eb35cb414890ce99c318c0 left_tentorium_cerebelli.nii.gz (mirrored across x=0)"
+    }
+  }
+}

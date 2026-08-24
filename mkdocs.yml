@@ -61,10 +61,12 @@ nav:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
   - Tutorials:
+      - Rate spatial normalization: tutorials/rate-spatial-normalization.md
       - Review a local dataset: tutorials/review-local-dataset.md
       - Order coregistrations by RMS: tutorials/order-coregistration-by-rms.md
   - Concepts:
       - How data flows: concepts/data-flow.md
+      - Spatial-normalization ROIs: concepts/spatial-normalization-rois.md
       - Review ordering: concepts/review-ordering.md
       - Two kinds of review: concepts/interaction-types.md
       - Data model: concepts/data-model.md
