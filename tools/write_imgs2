@@ -1,0 +1,48 @@
+#!/bin/bash
+#SBATCH -J dirt-render
+#SBATCH -o render.log
+#SBATCH -t 2-00:00:00
+#SBATCH -p corralextra
+#SBATCH -N 1 -n 1
+#SBATCH -A A2CPS
+
+set -xeu
+a2cps=/corral-secure/projects/A2CPS
+derivatives=${a2cps}/products/mris
+# login-node build (compute has no network): apptainer build "${SIF}" docker://psadil/dirt:manage
+# SIF=${SCRATCH}/dirt/dirt-manage.sif
+SIF="docker://psadil/dirt:manage"
+CATALOG=/tmp/a2cps.duckdb # node-local; /tmp is bound by apptainer already
+DBDIR=/tmp/dirtdb         # ditto — no explicit bind needed
+OUT=${SCRATCH}/dirt/db
+
+mkdir -p "${DBDIR}" "${OUT}"
+rm -f "${CATALOG}" "${CATALOG}.wal"
+set -a
+. ./.env
+set +a # .env uses `export`; --env-file can't read it
+
+run() { apptainer exec --bind "${a2cps}" \
+	--env DB="${DBDIR}/dirt.db" --env DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+	"${SIF}" "$@"; }
+
+for s in "${derivatives}"/*/fmriprep-v4/*; do
+	echo $s
+	run bidslake index -i "${s}/fmriprep" --adapter freesurfer --adapter fmriprep \
+		--dataset-id fmriprep -o "${CATALOG}" --no-bidsignore
+	run bidslake index -i "${s}/fmriprep/sourcedata/freesurfer" --no-bidsignore \
+		--adapter freesurfer --adapter fmriprep --dataset-id freesurfer -o "${CATALOG}"
+done
+
+# rsync -ha --info=progress2 "${derivatives}"/*/synthstrip/*/synthstrip/ sourcedata/synthstrip/
+run bidslake index -i sourcedata/synthstrip --no-bidsignore \
+	--adapter freesurfer --adapter fmriprep --dataset-id synthstrip -o "${CATALOG}"
+
+# rsync -ah --info=progress2 "${derivatives}"/*/qsirecon_fsl_dtifit/*/dtifit/multishell/ sourcedata/multishell/
+run bidslake index -i "sourcedata/multishell" --no-bidsignore \
+	--adapter freesurfer --adapter fmriprep --dataset-id dtifit -o "${CATALOG}"
+
+run manage migrate --no-input
+run manage render "${CATALOG}" # drop --update on a fresh seed
+cp -av "${DBDIR}"/. "${OUT}/"
+cp -av "${CATALOG}" "${PWD}"

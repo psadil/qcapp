@@ -35,7 +35,7 @@ manage = [
     # install time). This is the *reader* only; the indexer CLI is a separate crate
     # in the same repo, and the Dockerfile's manage stage reads the rev back out of
     # this line to build it — so this pin is the single source of truth for both.
-    "bidslake @ git+https://github.com/psadil/bidslake.git@ff643e173257f7dd84f6bfa71e7d3cc297e790ad#subdirectory=crates/bidslake-py",
+    "bidslake @ git+https://github.com/psadil/bidslake.git@ab8be383536e4bd7d9bdc28892b43c28448e01f0#subdirectory=crates/bidslake-py",
     { include-group = "neuro" },
 ]
 # Split from `manage` so the dev env (Python 3.13, where the ty prek hook runs)
@@ -145,6 +145,11 @@ awscli = "*"
 # at install time, so Dockerfile.manage needs no apt Rust.
 rust = "*"
 maturin = ">=1.7,<2"
+
+# linux only: conda's C/C++ toolchain, so duckdb's bundled C++ and conda's rust linker share one sysroot.
+[tool.pixi.feature.manage.target.linux-64.dependencies]
+gcc_linux-64 = "*"
+gxx_linux-64 = "*"
 
 [tool.pixi.feature.docs.tasks]
 # Regenerate the auto-built reference pages (ast-based; no Django needed) and the

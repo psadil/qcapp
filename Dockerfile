@@ -13,7 +13,7 @@
 # The pixi-docker image tag is <version>-<distro>; -noble pins glibc parity with
 # the ubuntu:24.04 runtime. (Docker images lag the pixi CLI release slightly, so
 # this is the latest published tag, not necessarily the newest pixi.)
-ARG PIXI_VERSION=0.72.2
+ARG PIXI_VERSION=0.77.0
 ARG BASE_IMAGE=ubuntu:24.04
 ARG ENVIRONMENT=default
 
@@ -22,9 +22,10 @@ ARG ENVIRONMENT=default
 # Keep it on the same Ubuntu release (noble/24.04) as BASE_IMAGE so the
 # cargo-built bidslake binary's system glibc matches the runtime.
 #   git:             pixi builds git-sourced pypi deps (bidslake).
-#   build-essential: C linker for the maturin/rust build of bidslake — needed
-#                    both for the manage env's `pixi install` and the cargo CLI
-#                    build below (the manage env ships rust + maturin).
+# Deliberately no build-essential: the manage env ships conda's gcc/gxx, and a
+# system compiler on PATH lets cc-rs build duckdb's bundled C++ against Ubuntu's
+# glibc while conda's linker resolves against its older sysroot — undefined
+# __isoc23_* symbols, legal in the bidslake-py cdylib, fatal linking the CLI.
 # Air-gapped / ghcr-blocked fallback: replace the FROM with `FROM ubuntu:24.04`
 # and prepend:
 #   RUN curl -Ls "https://github.com/prefix-dev/pixi/releases/download/v${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" -o /usr/local/bin/pixi && chmod +x /usr/local/bin/pixi
@@ -32,7 +33,7 @@ ARG ENVIRONMENT=default
 FROM ghcr.io/prefix-dev/pixi:${PIXI_VERSION}-noble AS builder-base
 ARG ENVIRONMENT
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git build-essential \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 # The single "dirt" distribution ships BOTH top-level packages (dirt AND
@@ -63,8 +64,8 @@ RUN set -eu; \
     [ -n "$REV" ] || { echo 'ERROR: no bidslake rev found in pyproject.toml' >&2; exit 1; }; \
     echo "Building bidslake indexer CLI at rev $REV"; \
     pixi run -e ${ENVIRONMENT} cargo install \
-        --git https://github.com/psadil/bidslake.git --rev "$REV" \
-        --locked --bin bidslake --root /app/.pixi/envs/${ENVIRONMENT} bidslake
+    --git https://github.com/psadil/bidslake.git --rev "$REV" \
+    --locked --bin bidslake --root /app/.pixi/envs/${ENVIRONMENT} bidslake
 
 # ---- select the builder by ENVIRONMENT (ARG-in-FROM; needs BuildKit) ----
 FROM builder-${ENVIRONMENT} AS builder
@@ -95,8 +96,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
-# Complete activation: both envs ship zero conda activate.d scripts, so PATH +
-# CONDA_PREFIX is all that is needed (no shell-hook). Must match the builder path.
+# Complete activation: the activate.d scripts present (rust, and manage's compilers)
+# export build-time vars only, so PATH + CONDA_PREFIX suffice. Must match the builder path.
 ENV PATH=/app/.pixi/envs/${ENVIRONMENT}/bin:$PATH
 ENV CONDA_PREFIX=/app/.pixi/envs/${ENVIRONMENT}
 
