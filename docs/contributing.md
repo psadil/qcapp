@@ -40,6 +40,11 @@ directives) — edit the docstrings, not the pages. The REST-API page and OpenAP
 generated from the live django-ninja API by `manage export_openapi`, which `docs-serve` /
 `docs-build` run first (via `docs-gen`); those two files are not checked in.
 
+The rater-tutorial figures (`docs/assets/tutorial/`) are generated from the bundled
+sample data by the real renderer — re-run `pixi run -e dev python
+tools/make_tutorial_images.py` and commit the output whenever the
+spatial-normalization rendering style changes.
+
 ## Branches and pull requests
 
 Work on a feature branch and open a pull request against `main`.

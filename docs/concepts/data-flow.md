@@ -24,7 +24,9 @@ preprocessed dataset (BIDS derivatives)
 
 - **Image generation** runs in the `manage` pixi environment / the `psadil/dirt:manage`
   Docker image. This is the only place the neuroimaging libraries are installed. It reads
-  files from disk, renders figures, and writes `Image` rows.
+  files from disk, renders figures, and writes `Image` rows. For the spatial-normalization
+  step it also resolves a per-space landmark-ROI artifact (built from TemplateFlow assets
+  and cached on disk — see [Spatial-normalization ROIs](spatial-normalization-rois.md)).
 - **Review** runs in the `default` pixi environment / the `psadil/dirt` Docker image. It
   imports no neuroimaging code at all: it only reads pre-rendered image bytes out of the
   database and records ratings.

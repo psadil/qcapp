@@ -33,6 +33,11 @@ ALLOWED_HOSTS = env.list(
 # convenience default so `manage plan` (and a Docker entrypoint) can apply it.
 DIRT_PLAN = env.str("DIRT_PLAN", default=None)
 
+# Base URL of the documentation site; templates link raters to its tutorials
+# (e.g. the spatial-normalization rating walkthrough). Self-hosted deployments
+# that mirror the docs can point this elsewhere.
+DIRT_DOCS_URL = env.str("DIRT_DOCS_URL", default="https://psadil.github.io/dirt")
+
 
 # Application definition
 
@@ -71,6 +76,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django_dirt_ratings.context_processors.docs",
             ],
         },
     },
