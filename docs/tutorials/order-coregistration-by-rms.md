@@ -17,6 +17,7 @@ A natural answer to "how much does this affine move the brain?" is the RMS displ
 Save this as `dirt.toml` next to your catalog:
 
 ```toml
+#:schema https://psadil.github.io/dirt/api/plan.schema.json
 name = "study coregistration QC"
 
 [ordering]
@@ -65,4 +66,3 @@ Open <http://localhost:8000>. On the first pass (that is, when every image unrev
 ## Where to go next
 
 - Add a cross-dataset measure; order the same coregistrations by an MRIQC IQM (e.g. `fd_mean`) that lives in a sibling MRIQC dataset built from the same source. See the `catalog` / `catalog_suffix` / `match` example in [Review ordering](../concepts/review-ordering.md#the-review-plan-dirttoml).
-- Switch `strategy` to `triage` for a failure hunt that *terminates* — it serves the worst under-reviewed image and stops when the pool empties.

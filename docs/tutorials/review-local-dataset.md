@@ -91,6 +91,7 @@ scans sooner, write a [review plan](../concepts/review-ordering.md) and apply it
 rendering. For example, to see the most atypically-sized brain masks first:
 
 ```toml
+#:schema https://psadil.github.io/dirt/api/plan.schema.json
 # dirt.toml
 [ordering]
 strategy = "anomaly_first"
@@ -113,7 +114,7 @@ pixi run -e manage manage prioritize         # z-score the measures into the ord
 
 The metric only *reorders* — it never hides an image, and it is invisible to reviewers. Rerun
 `manage prioritize` after adding data. See [Review ordering](../concepts/review-ordering.md)
-for the strategies (`breadth_first`, `anomaly_first`, `triage`) and the full schema.
+for the strategies (`breadth_first`, `anomaly_first`) and the full schema.
 
 ## 5. Serve and review
 

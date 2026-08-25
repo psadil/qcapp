@@ -4,25 +4,23 @@ There are often far more targets to review than budgets allow, and so it would b
 
 ## Strategies
 
-A plan picks one strategy (`ordering.py`). All three are a single covering index seek.
+A plan picks one strategy (`ordering.py`). Both are a single covering index seek.
 
 | Strategy | Next image | Use |
 |---|---|---|
 | `breadth_first` (default) | fewest reviews first | one look at everything, then deepen |
 | `anomaly_first` | fewest reviews first, then **most atypical** within a review-depth band | surface likely failures early, full coverage |
-| `triage` | `anomaly_first` restricted to under-reviewed images | a quick failure hunt that *finishes* |
-
 
 ## The review plan (`dirt.toml`)
 
 A plan is a small TOML file. It says which steps are reviewed, how to order them, and what to measure:
 
 ```toml
+#:schema https://psadil.github.io/dirt/api/plan.schema.json
 name = "ds007070 QC"
 
 [ordering]
-strategy = "anomaly_first"      # breadth_first | anomaly_first | triage
-triage_depth = 1                # triage only
+strategy = "anomaly_first"      # breadth_first | anomaly_first
 
 [steps.masks]                   # one block per step in the review
 order_by = "volume_mm3"         # a measure below → the ordering key (omit ⇒ breadth-first here)
@@ -57,6 +55,10 @@ Each measure has exactly one source: `compute` (a metric DIRT computes over the 
 
 A `catalog` measure with `catalog_suffix` + `match` is cross-dataset: the metric is read from a record in a sibling dataset (see the bidslake [cross-dataset links](https://github.com/psadil/bidslake)), paired to this file by the `match` BIDS entities. That is how MRIQC IQMs (which live in a separate dataset) order an fMRIPrep review without the unsound cross-dataset entity join: DIRT only trusts the pairing because the shared source guarantees `sub-01` is the same subject in both. A missing or ambiguous match scores nothing (never a guess), so those images just fall back to the review's other ordering.
 
+### Editor support
+
+The plan format has a JSON Schema, generated from the same models `manage plan` validates with (by `manage export_plan_schema`, rerun at every docs build) — the schema and the validator cannot drift. The `#:schema` line above hooks it up in editors that speak JSON Schema for TOML (VS Code's Even Better TOML, tombi): completion for step names and keys, hover docs, and squiggles on mistakes. Validation is strict — an unknown key is an error, never silently ignored. The published schema lives at <https://psadil.github.io/dirt/api/plan.schema.json>; for offline work, point the directive at a locally generated copy (`pixi run -e docs docs-gen` → `docs/api/plan.schema.json`).
+
 ### Workflow
 
 ```shell
@@ -71,7 +73,7 @@ manage prioritize                                # measures → Image.priority (
 
 ### Provenance
 
-A plan has two facets stored in their natural homes. The pipeline facet (measures, ordering key) shapes the images: `render` stamps each `Image.review_plan` and `manage prioritize` writes `Image.priority`. The serving facet (strategy, triage_depth) shapes a session: it is pinned onto each `Session` at start-up, so editing the plan mid-review never disturbs an in-flight session. Together they answer "what QC was done for this dataset?" from the database alone.
+A plan has two facets stored in their natural homes. The pipeline facet (measures, ordering key) shapes the images: `render` stamps each `Image.review_plan` and `manage prioritize` writes `Image.priority`. The serving facet (the strategy) shapes a session: it is pinned onto each `Session` at start-up, so editing the plan mid-review never disturbs an in-flight session. Together they answer "what QC was done for this dataset?" from the database alone.
 
 ## Quality is a signal, not a verdict
 

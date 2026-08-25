@@ -1,27 +1,36 @@
 """The review plan — a dataset's QC plan, parsed from ``dirt.toml``.
 
 A plan says which steps are reviewed, how to order them, and what to measure. It
-is parsed here into typed, frozen dataclasses and persisted (raw) as a
-:class:`models.ReviewPlan` so it travels with the ratings as QC provenance.
+is parsed here into typed, frozen pydantic models and persisted (raw) as a
+:class:`models.ReviewPlan` so it travels with the ratings as QC provenance. The
+models are the single source of truth for the plan format: ``manage
+export_plan_schema`` emits their JSON Schema, so editors validate and complete a
+``dirt.toml`` against exactly what :func:`parse` accepts (see
+docs/concepts/review-ordering.md). Validation is strict — unknown keys are
+rejected, never ignored.
 
 Two facets live in two natural homes (see :mod:`~django_dirt_ratings.services`):
 
 - the **pipeline facet** (``measures`` / ``order_by`` / ``direction`` / ``subgroup``)
   shapes the images — ``render`` measures them and stamps ``Image.review_plan``,
   ``prioritize`` turns the measures into ``Image.priority``;
-- the **serving facet** (``strategy`` / ``triage_depth``) shapes a review session —
-  it is copied onto ``Session`` at start-up.
+- the **serving facet** (``strategy``) shapes a review session — it is copied onto
+  ``Session`` at start-up.
 
-This module is web-safe (stdlib ``tomllib`` only, no neuro/ingest imports), so the
-web app can read the active plan on the hot-ish paths (session start, landing).
+This module is web-safe: beyond the stdlib it needs only pydantic, which the web
+app already loads via django-ninja, so the hot-ish paths (session start, landing)
+pay no new import.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 import tomllib
 from pathlib import Path
+from typing import Annotated
+
+import pydantic
+from pydantic.json_schema import SkipJsonSchema
 
 from django_dirt_ratings import models
 
@@ -30,8 +39,16 @@ class PlanError(ValueError):
     """A review plan is malformed or references something unknown."""
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class Measure:
+_STRICT = pydantic.ConfigDict(strict=True, frozen=True, extra="forbid")
+
+# TOML yields plain strings/arrays; relax exactly those fields (strict elsewhere,
+# so e.g. a boolean or numeric string never coerces into a number).
+_LaxStrings = Annotated[tuple[str, ...], pydantic.Field(strict=False)]
+_LaxStrategy = Annotated[models.ReviewStrategy, pydantic.Field(strict=False)]
+_LaxDirection = Annotated[models.MetricDirection, pydantic.Field(strict=False)]
+
+
+class Measure(pydantic.BaseModel):
     """One measured quantity to store in ``Image.raw_metrics`` under ``name``.
 
     Exactly one source: ``compute`` (a :class:`~management.ingest.measures.MetricExtractor`
@@ -46,27 +63,43 @@ class Measure:
     match=["sub","ses","task","run"]``.
     """
 
-    name: str
-    compute: str | None = None
-    catalog: str | None = None
-    catalog_suffix: str | None = None
-    match: tuple[str, ...] = ()
+    model_config = _STRICT
 
-    def __post_init__(self) -> None:
+    name: str = pydantic.Field(
+        description="The key this value is stored under in `Image.raw_metrics`."
+    )
+    compute: str | None = pydantic.Field(
+        default=None, description="A metric DIRT computes itself at ingest."
+    )
+    catalog: str | None = pydantic.Field(
+        default=None, description="A metadata key read from the bidslake catalog."
+    )
+    catalog_suffix: str | None = pydantic.Field(
+        default=None,
+        description="Cross-dataset: the sibling record's suffix to read `catalog` from.",
+    )
+    match: _LaxStrings = pydantic.Field(
+        default=(),
+        description="Cross-dataset: BIDS entities pairing this file to the sibling record.",
+    )
+
+    @pydantic.model_validator(mode="after")
+    def _one_source(self) -> Measure:
         if bool(self.compute) == bool(self.catalog):
-            raise PlanError(
+            raise ValueError(
                 f"measure {self.name!r}: set exactly one of `compute` or `catalog`"
             )
         cross = self.catalog_suffix is not None or bool(self.match)
         if cross and not self.catalog:
-            raise PlanError(
+            raise ValueError(
                 f"measure {self.name!r}: `catalog_suffix`/`match` apply only to a `catalog` measure"
             )
         if cross and (not self.catalog_suffix or not self.match):
-            raise PlanError(
+            raise ValueError(
                 f"measure {self.name!r}: a cross-dataset catalog measure needs both "
                 "`catalog_suffix` and a non-empty `match`"
             )
+        return self
 
     @property
     def is_cross_dataset(self) -> bool:
@@ -79,8 +112,14 @@ class Measure:
 DEFAULT_MIN_CV = 0.01
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class StepPlan:
+def _resolve_step(value: object) -> object:
+    """Resolve a ``[steps.<token>]`` table name to its :class:`models.Step`."""
+    if isinstance(value, str):
+        return models.Step.from_cli_name(value)
+    return value
+
+
+class StepPlan(pydantic.BaseModel):
     """How one step is measured and ordered.
 
     ``min_cv``/``min_spread`` are the **degeneracy floor**: they answer "does this
@@ -92,15 +131,46 @@ class StepPlan:
     falls back to breadth-first for them.
     """
 
-    step: models.Step
-    measures: tuple[Measure, ...] = ()
-    order_by: str | None = None
-    direction: models.MetricDirection = models.MetricDirection.TWO_SIDED
-    subgroup: tuple[str, ...] = ()
-    # Relative floor: subgroup sd / |mean| (unit-free; the default guard).
-    min_cv: float = DEFAULT_MIN_CV
-    # Absolute floor in the measure's own units; overrides min_cv when set.
-    min_spread: float | None = None
+    model_config = _STRICT
+
+    # Injected from the [steps.<token>] table name; hidden from the JSON Schema.
+    step: SkipJsonSchema[
+        Annotated[models.Step, pydantic.BeforeValidator(_resolve_step)]
+    ]
+    measures: Annotated[tuple[Measure, ...], pydantic.Field(strict=False)] = ()
+    order_by: str | None = pydantic.Field(
+        default=None,
+        description="The measure (by name) that orders this step; omit for breadth-first.",
+    )
+    direction: _LaxDirection = pydantic.Field(
+        default=models.MetricDirection.TWO_SIDED,
+        description="Which values of the `order_by` measure count as atypical.",
+    )
+    subgroup: _LaxStrings = pydantic.Field(
+        default=(),
+        description="Entities of the rational subgroup scored within (e.g. ['space']).",
+    )
+    min_cv: float = pydantic.Field(
+        default=DEFAULT_MIN_CV,
+        ge=0,
+        description="Relative variation floor: subgroup sd / |mean| (unit-free; default 1%).",
+    )
+    min_spread: float | None = pydantic.Field(
+        default=None,
+        ge=0,
+        description="Absolute variation floor in the measure's own units; overrides min_cv.",
+    )
+
+    @pydantic.model_validator(mode="after")
+    def _order_by_declared(self) -> StepPlan:
+        if self.order_by is not None and self.order_by not in {
+            m.name for m in self.measures
+        }:
+            raise ValueError(
+                f"order_by={self.order_by!r} is not a declared measure "
+                f"(have {[m.name for m in self.measures]})"
+            )
+        return self
 
     @property
     def order_measure(self) -> Measure | None:
@@ -118,14 +188,75 @@ class StepPlan:
         return tuple(m for m in self.measures if m.catalog)
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class Plan:
-    """A whole parsed review plan."""
+class Ordering(pydantic.BaseModel):
+    """The plan's serving facet — how a review session orders images."""
 
-    name: str = ""
-    strategy: models.ReviewStrategy = models.ReviewStrategy.BREADTH_FIRST
-    triage_depth: int = 1
-    steps: tuple[StepPlan, ...] = ()
+    model_config = _STRICT
+
+    strategy: _LaxStrategy = pydantic.Field(
+        default=models.ReviewStrategy.BREADTH_FIRST,
+        description="How the next image to review is chosen.",
+    )
+
+
+class StepsTable(pydantic.BaseModel):
+    """The reviewed steps — one optional ``[steps.<name>]`` block each.
+
+    One explicit field per :class:`models.Step` (kept in lockstep by the guard
+    below) rather than a dynamic mapping, so the generated JSON Schema lists the
+    step names and editors can complete them.
+    """
+
+    model_config = _STRICT
+
+    masks: StepPlan | None = None
+    spatial_normalization: StepPlan | None = None
+    surface_localization: StepPlan | None = None
+    fmap_coregistration: StepPlan | None = None
+    dtifit: StepPlan | None = None
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _inject_step(cls, data: object) -> object:
+        """Stamp each block with its table name, which becomes the block's ``step``."""
+        if not isinstance(data, dict):
+            return data
+        out: dict[object, object] = {}
+        for token, block in data.items():
+            if isinstance(block, dict):
+                if "step" in block:
+                    raise ValueError(
+                        f"[steps.{token}]: `step` comes from the table name; do not set it"
+                    )
+                block = {**block, "step": token}
+            out[token] = block
+        return out
+
+
+# Import-time drift guard: a new models.Step must also gain a StepsTable field.
+if set(StepsTable.model_fields) != {s.cli_name for s in models.Step}:
+    raise RuntimeError("StepsTable fields drifted from models.Step cli names")
+
+
+class Plan(pydantic.BaseModel):
+    """A whole parsed review plan (mirrors the ``dirt.toml`` shape)."""
+
+    model_config = _STRICT
+
+    name: str = pydantic.Field(
+        default="", description="Human-readable plan name, stored as QC provenance."
+    )
+    ordering: Ordering = Ordering()
+    steps_table: StepsTable = pydantic.Field(default_factory=StepsTable, alias="steps")
+
+    @property
+    def strategy(self) -> models.ReviewStrategy:
+        return self.ordering.strategy
+
+    @property
+    def steps(self) -> tuple[StepPlan, ...]:
+        blocks = (getattr(self.steps_table, f) for f in StepsTable.model_fields)
+        return tuple(b for b in blocks if b is not None)
 
     def step_plan(self, step: models.Step) -> StepPlan | None:
         return next((s for s in self.steps if s.step == step), None)
@@ -148,94 +279,22 @@ def content_hash(text: str) -> str:
 def parse(text: str) -> Plan:
     """Parse and strictly validate a plan from TOML text.
 
-    Raises :class:`PlanError` with a precise message on any malformed field, so
-    ``manage plan`` fails loudly rather than a typo reaching the serve loop.
+    Raises :class:`PlanError` with a precise ``<location>: <problem>`` message on
+    any malformed or unknown field, so ``manage plan`` fails loudly rather than a
+    typo reaching the serve loop.
     """
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as e:
         raise PlanError(f"invalid TOML: {e}") from e
-
-    ordering = data.get("ordering", {})
     try:
-        strategy = models.ReviewStrategy(ordering.get("strategy", "breadth_first"))
-    except ValueError as e:
-        raise PlanError(
-            f"unknown strategy {ordering.get('strategy')!r}; "
-            f"choose from {[s.value for s in models.ReviewStrategy]}"
-        ) from e
-
-    triage_depth = ordering.get("triage_depth", 1)
-    if not isinstance(triage_depth, int) or triage_depth < 1:
-        raise PlanError(
-            f"triage_depth must be a positive integer, got {triage_depth!r}"
-        )
-
-    steps: list[StepPlan] = []
-    for token, block in data.get("steps", {}).items():
-        try:
-            step = models.Step.from_cli_name(token)
-        except ValueError as e:
-            raise PlanError(str(e)) from e
-
-        measures = tuple(
-            Measure(
-                name=m["name"],
-                compute=m.get("compute"),
-                catalog=m.get("catalog"),
-                catalog_suffix=m.get("catalog_suffix"),
-                match=tuple(m.get("match", [])),
-            )
-            for m in block.get("measures", [])
-        )
-
-        order_by = block.get("order_by")
-        if order_by is not None and order_by not in {m.name for m in measures}:
-            raise PlanError(
-                f"step {token!r}: order_by={order_by!r} is not a declared measure "
-                f"(have {[m.name for m in measures]})"
-            )
-
-        try:
-            direction = models.MetricDirection(block.get("direction", "two_sided"))
-        except ValueError as e:
-            raise PlanError(
-                f"step {token!r}: unknown direction {block.get('direction')!r}"
-            ) from e
-
-        min_cv = block.get("min_cv", DEFAULT_MIN_CV)
-        if (
-            not isinstance(min_cv, (int, float))
-            or isinstance(min_cv, bool)
-            or min_cv < 0
-        ):
-            raise PlanError(f"step {token!r}: min_cv must be a non-negative number")
-        min_spread = block.get("min_spread")
-        if min_spread is not None and (
-            not isinstance(min_spread, (int, float))
-            or isinstance(min_spread, bool)
-            or min_spread < 0
-        ):
-            raise PlanError(f"step {token!r}: min_spread must be a non-negative number")
-
-        steps.append(
-            StepPlan(
-                step=step,
-                measures=measures,
-                order_by=order_by,
-                direction=direction,
-                subgroup=tuple(block.get("subgroup", [])),
-                min_cv=float(min_cv),
-                min_spread=None if min_spread is None else float(min_spread),
-            )
-        )
-
-    return Plan(
-        name=data.get("name", ""),
-        strategy=strategy,
-        triage_depth=triage_depth,
-        steps=tuple(steps),
-    )
+        return Plan.model_validate(data)
+    except pydantic.ValidationError as e:
+        errors = e.errors(include_url=False)
+        loc = ".".join(str(p) for p in errors[0]["loc"])
+        msg = f"{loc}: {errors[0]['msg']}" if loc else errors[0]["msg"]
+        more = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
+        raise PlanError(msg + more) from e
 
 
 def load(path: Path) -> Plan:

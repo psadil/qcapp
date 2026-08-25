@@ -226,7 +226,6 @@ class TestRatePartial:
             step=Step.FMAP_COREGISTRATION,
             session_id=fmap_session.pk,
             strategy="anomaly_first",
-            triage_depth=1,
         )
 
         client.get(reverse("rate_partial"))

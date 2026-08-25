@@ -28,7 +28,9 @@ manage prioritize         # recompute Image.priority from measured metrics per t
 
 `render` reads the active plan to know which metrics to compute and stamps each image with it;
 `manage prioritize` z-scores those metrics into the ordering key. With no active plan, ordering
-is the default breadth-first and no metrics are computed.
+is the default breadth-first and no metrics are computed. The `dirt.toml` format has a
+[JSON Schema](https://psadil.github.io/dirt/api/plan.schema.json) for editor completion and
+validation, regenerated at every docs build by `manage export_plan_schema`.
 
 ## Adding a step
 

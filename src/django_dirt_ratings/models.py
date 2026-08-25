@@ -91,7 +91,7 @@ class DisplayMode(models.IntegerChoices):
 
 
 class ReviewStrategy(models.TextChoices):
-    """How the next image to review is chosen (see ``ordering.py``).
+    """How the next image to review is chosen.
 
     ``TextChoices`` (str-valued, with ``.choices``/``.values``) so the same enum
     serves both the review-plan TOML validation and the ``Session.strategy`` field.
@@ -101,8 +101,6 @@ class ReviewStrategy(models.TextChoices):
     BREADTH_FIRST = "breadth_first"
     # breadth backbone, most-atypical re-ranked within a review-depth band
     ANOMALY_FIRST = "anomaly_first"
-    # anomaly_first restricted to under-reviewed images (a failure hunt)
-    TRIAGE = "triage"
 
 
 class MetricDirection(models.TextChoices):
@@ -128,7 +126,7 @@ class ReviewPlan(BaseModel):
     Stored verbatim (``toml``) with a ``content_hash`` so re-applying an identical
     plan is idempotent. ``render`` stamps each :class:`Image` it produces with the
     active plan (the "pipeline facet": what was measured); a rating :class:`Session`
-    copies the plan's serving facet (strategy/triage_depth) onto itself. Exactly one
+    copies the plan's serving facet (strategy) onto itself. Exactly one
     plan is ``is_active`` at a time.
     """
 
@@ -146,7 +144,6 @@ class Session(BaseModel):
     strategy = models.TextField(
         choices=ReviewStrategy.choices, default=ReviewStrategy.BREADTH_FIRST
     )
-    triage_depth = models.PositiveIntegerField(default=1)
 
 
 class Image(BaseModel):
@@ -169,7 +166,7 @@ class Image(BaseModel):
         null=True,
         blank=True,
         help_text=(
-            "Advisory ordering key for the anomaly_first/triage strategies, computed "
+            "Advisory ordering key for the anomaly_first strategy, computed "
             "by `manage prioritize` as a robust within-subgroup modified z-score "
             "(MAD-based; |z| for two-sided measures). Larger = more atypical, "
             "surfaced earlier; 0.0 = typical (including a subgroup with no "
@@ -206,7 +203,7 @@ class Image(BaseModel):
             # Serves the breadth_first strategy: filter by step, order by
             # (n_reviews, id) — an index range seek returning one leaf entry.
             models.Index(fields=["step", "n_reviews", "id"], name="image_next"),
-            # Serves anomaly_first/triage: order by (n_reviews, priority desc nulls
+            # Serves anomaly_first: order by (n_reviews, priority desc nulls
             # last, id). -priority matches F("priority").desc(nulls_last=True) so the
             # whole order is a covering forward scan — a single leaf seek, no sort.
             models.Index(
