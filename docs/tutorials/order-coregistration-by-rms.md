@@ -10,13 +10,7 @@ It assumes you can already index and render a dataset (see
 
 The `fmap_coregistration` step renders, for each BOLD run, the reference EPI against the coregistered boldref, masked and animated so a reviewer can flip between them and judge the alignment by eye. fMRIPrep writes that alignment as a boldref→field-map affine (`*_xfm.txt`). We want the runs whose affine is most out of place to rise to the top of the queue.
 
-A natural answer to "how much does this affine move the brain?" is the RMS displacement ([Jenkinson et al. 2002](https://doi.org/10.1016/S1053-8119(02)91132-8)): for a voxel mapped by `x → Mx + t`, with `A = M − I`, averaged over a sphere of radius `R` at the brain centroid `c`,
-
-$$
-E_{rms} = \sqrt{( (1/5) R² · tr(AᵀA) + |t + A c|² )}
-$$
-
-which folds rotation, translation, and scale/shear into a single number. A run that is coregistered well barely moves (`E ≈ 0`); a large `E` flags a suspect alignment (assuming the participant did not move much between scans). The brain's centroid and radius come from the run's own brain mask, so the measure needs no template.
+A natural answer to "how much does this affine move the brain?" is the RMS displacement ([Jenkinson et al. 2002](https://doi.org/10.1016/S1053-8119(02)91132-8)), which folds rotation, translation, and scale/shear into a single number. A large displacement flags a suspect alignment (assuming the participant did not move much between scans). The brain's centroid and radius come from the run's own brain mask, so the measure needs no template.
 
 ## Write the plan
 
