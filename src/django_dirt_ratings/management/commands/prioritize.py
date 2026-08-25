@@ -3,7 +3,7 @@
 For each planned step with an ``order_by`` measure this scores that measure *within
 a rational subgroup* (SPC: compare like with like — e.g. mask volume within a
 template space) and folds in the measure's direction, writing the result to
-``Image.priority`` (the anomaly_first/triage ordering key). Web-safe (stdlib only),
+``Image.priority`` (the anomaly_first ordering key). Web-safe (stdlib only),
 idempotent, and a safety valve like ``recount``: rerun it after ``render`` brings in
 new measures.
 

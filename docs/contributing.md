@@ -37,8 +37,10 @@ pixi run -e docs docs-build     # one-off build (also the CI gate)
 The module reference pages (`docs/reference/`) render from source docstrings via
 [mkdocstrings](https://zensical.org/docs/setup/extensions/mkdocstrings) (`::: module`
 directives) — edit the docstrings, not the pages. The REST-API page and OpenAPI schema are
-generated from the live django-ninja API by `manage export_openapi`, which `docs-serve` /
-`docs-build` run first (via `docs-gen`); those two files are not checked in.
+generated from the live django-ninja API by `manage export_openapi`, and the review-plan
+JSON Schema from the pydantic models in `plan.py` by `manage export_plan_schema`;
+`docs-serve` / `docs-build` run both first (via `docs-gen`), and none of those generated
+files are checked in.
 
 The rater-tutorial figures (`docs/assets/tutorial/`) are generated from the bundled
 sample data by the real renderer — re-run `pixi run -e dev python

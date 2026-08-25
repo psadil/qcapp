@@ -47,8 +47,7 @@ class RatePartial(views.View):
         # seek, so there is no slow query to hide behind a prefetch; excluding the
         # image just shown gives the next one in order.
         strategy = ordering.OrderingStrategy.build(
-            request.session.get("strategy", models.ReviewStrategy.BREADTH_FIRST),
-            triage_depth=request.session.get("triage_depth", 1),
+            request.session.get("strategy", models.ReviewStrategy.BREADTH_FIRST)
         )
         try:
             image = selectors.next_image(
@@ -57,7 +56,7 @@ class RatePartial(views.View):
                 exclude=request.session.get("image_id"),
             )
         except exceptions.ApplicationError:
-            # No image left to serve — an exhausted triage pool, or an empty step.
+            # No image left to serve — an empty step, or its only image was just shown.
             return http.HttpResponse(
                 "Review complete for this step. Please return to the homepage."
             )
@@ -210,5 +209,4 @@ class LayoutView(edit.FormView):
         # Pin the serving strategy in the cookie so the partial loop needs no DB
         # read for it (mirrors how `step` is cached).
         self.request.session["strategy"] = session.strategy
-        self.request.session["triage_depth"] = session.triage_depth
         return http.HttpResponseRedirect(self.get_success_url())

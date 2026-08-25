@@ -1,6 +1,6 @@
 """Review-ordering strategies — how the next image to review is chosen.
 
-Each strategy encapsulates its own filter + ``order_by`` on a per-step ``Image``
+Each strategy encapsulates its own ``order_by`` on a per-step ``Image``
 queryset and self-registers by its :class:`~models.ReviewStrategy` key (the same
 registry idiom the ingest ``StepSpec`` uses, but class-based via
 ``__init_subclass__``; cf. Effective Python, "Register Class Existence with
@@ -35,11 +35,8 @@ class OrderingStrategy(abc.ABC):
         cls.key = key
         OrderingStrategy._registry[key] = cls
 
-    def __init__(self, *, triage_depth: int = 1) -> None:
-        self.triage_depth = triage_depth
-
     @classmethod
-    def build(cls, key: str, *, triage_depth: int = 1) -> OrderingStrategy:
+    def build(cls, key: str) -> OrderingStrategy:
         """Construct the strategy for a ``ReviewStrategy`` key (as stored on a Session)."""
         try:
             subclass = cls._registry[str(key)]
@@ -47,11 +44,11 @@ class OrderingStrategy(abc.ABC):
             raise ValueError(
                 f"unknown ordering strategy {key!r}; have {sorted(cls._registry)}"
             ) from e
-        return subclass(triage_depth=triage_depth)
+        return subclass()
 
     @abc.abstractmethod
     def order(self, qs: dm.QuerySet[models.Image]) -> dm.QuerySet[models.Image]:
-        """Filter/order ``qs`` so ``.first()`` is the next image to serve."""
+        """Order ``qs`` so ``.first()`` is the next image to serve."""
         raise NotImplementedError
 
 
@@ -71,16 +68,3 @@ class AnomalyFirst(OrderingStrategy, key=models.ReviewStrategy.ANOMALY_FIRST.val
 
     def order(self, qs):
         return qs.order_by("n_reviews", dm.F("priority").desc(nulls_last=True), "id")
-
-
-class Triage(AnomalyFirst, key=models.ReviewStrategy.TRIAGE.value):
-    """``anomaly_first`` restricted to under-reviewed images — a failure hunt.
-
-    The ``n_reviews < triage_depth`` filter is the anti-loop guard: reviewing an
-    image drops it from the pool, so the run advances and *terminates* when the pool
-    empties. It is a serving focus, not data hiding — every image stays in the DB and
-    is reviewable under the default strategy.
-    """
-
-    def order(self, qs):
-        return super().order(qs.filter(n_reviews__lt=self.triage_depth))

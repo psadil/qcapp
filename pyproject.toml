@@ -158,6 +158,6 @@ gxx_linux-64 = "*"
 [tool.pixi.feature.docs.tasks]
 # Regenerate the auto-built reference pages (ast-based; no Django needed) and the
 # django-ninja OpenAPI schema, then build/serve with Zensical (reads mkdocs.yml).
-docs-gen = { cmd = "manage export_openapi", env = { DJANGO_SECRET_KEY = "docs-build-not-a-secret" } }
+docs-gen = { cmd = "manage export_openapi && manage export_plan_schema", env = { DJANGO_SECRET_KEY = "docs-build-not-a-secret" } }
 docs-build = { cmd = "zensical build --strict", depends-on = ["docs-gen"] }
 docs-serve = { cmd = "zensical serve", depends-on = ["docs-gen"] }

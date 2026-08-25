@@ -135,7 +135,6 @@ def session_create(*, step: int, user: str | None = None) -> models.Session:
         step=step,
         user=user,
         strategy=active.strategy,
-        triage_depth=active.triage_depth,
     )
     session.full_clean()
     session.save()

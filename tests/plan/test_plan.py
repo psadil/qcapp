@@ -9,7 +9,6 @@ name = "demo"
 
 [ordering]
 strategy = "anomaly_first"
-triage_depth = 2
 
 [steps.masks]
 order_by = "volume_mm3"
@@ -41,9 +40,6 @@ class TestParseValid:
 
     def test_strategy(self, parsed):
         assert parsed.strategy == models.ReviewStrategy.ANOMALY_FIRST
-
-    def test_triage_depth(self, parsed):
-        assert parsed.triage_depth == 2
 
     def test_reviewable_steps(self, parsed):
         assert parsed.reviewable_steps == (models.Step.MASK,)
@@ -78,9 +74,6 @@ class TestParseEmpty:
 
     def test_strategy_defaults_to_breadth_first(self, parsed):
         assert parsed.strategy == models.ReviewStrategy.BREADTH_FIRST
-
-    def test_triage_depth_defaults_to_one(self, parsed):
-        assert parsed.triage_depth == 1
 
     def test_declares_no_steps(self, parsed):
         assert parsed.steps == ()
@@ -120,7 +113,18 @@ class TestParseCatalogMeasure:
         pytest.param('[steps.masks]\norder_by="nope"', id="order_by-is-not-a-measure"),
         pytest.param("[steps.bogus]\n", id="unknown-step"),
         pytest.param('[ordering]\nstrategy="wat"', id="unknown-strategy"),
-        pytest.param("[ordering]\ntriage_depth=0", id="non-positive-triage-depth"),
+        pytest.param('nam = "demo"', id="unknown-top-level-key"),
+        pytest.param("[ordering]\ntriage_depth=1", id="stale-triage-depth"),
+        pytest.param("[steps.masks]\nbogus=1", id="unknown-step-block-key"),
+        pytest.param(
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\nbogus=1',
+            id="unknown-measure-key",
+        ),
+        pytest.param('[steps.masks]\nstep="masks"', id="step-set-in-block"),
+        pytest.param("[steps.masks]\nmin_cv=-0.5", id="negative-min_cv"),
+        pytest.param("[steps.masks]\nmin_cv=true", id="boolean-min_cv"),
+        pytest.param('[steps.masks]\nmin_cv="0.1"', id="string-min_cv"),
+        pytest.param("[steps.masks]\nmin_spread=true", id="boolean-min_spread"),
         pytest.param(
             '[steps.masks]\ndirection="sideways"\n'
             '[[steps.masks.measures]]\nname="v"\ncompute="mask_volume"',
@@ -178,11 +182,11 @@ class TestReapplySameText:
 
 @pytest.mark.django_db
 class TestApplyDifferentText:
-    TRIAGE = VALID.replace('strategy = "anomaly_first"', 'strategy = "triage"')
+    BREADTH = VALID.replace('strategy = "anomaly_first"', 'strategy = "breadth_first"')
 
     @pytest.fixture
     def superseding(self, applied) -> models.ReviewPlan:
-        return services.plan_apply(name="b", text=self.TRIAGE)
+        return services.plan_apply(name="b", text=self.BREADTH)
 
     def test_new_record_is_active(self, superseding):
         assert superseding.is_active
@@ -193,7 +197,7 @@ class TestApplyDifferentText:
         assert not applied.is_active
 
     def test_active_plan_is_the_new_one(self, superseding):
-        assert plan.active().strategy == models.ReviewStrategy.TRIAGE
+        assert plan.active().strategy == models.ReviewStrategy.BREADTH_FIRST
 
 
 @pytest.mark.django_db
@@ -220,11 +224,29 @@ class TestSessionPinsServingFacet:
     def test_strategy_is_copied_from_the_plan(self, planned_session):
         assert planned_session.strategy == models.ReviewStrategy.ANOMALY_FIRST
 
-    def test_triage_depth_is_copied_from_the_plan(self, planned_session):
-        assert planned_session.triage_depth == 2
-
     def test_strategy_defaults_without_a_plan(self, unplanned_session):
         assert unplanned_session.strategy == models.ReviewStrategy.BREADTH_FIRST
 
-    def test_triage_depth_defaults_without_a_plan(self, unplanned_session):
-        assert unplanned_session.triage_depth == 1
+
+class TestJsonSchema:
+    """The generated schema mirrors exactly what ``parse`` accepts."""
+
+    @pytest.fixture(scope="class")
+    def schema(self) -> dict:
+        return plan.Plan.model_json_schema()
+
+    def test_strategy_enum_matches_the_review_strategies(self, schema):
+        assert schema["$defs"]["ReviewStrategy"]["enum"] == [
+            s.value for s in models.ReviewStrategy
+        ]
+
+    def test_unknown_top_level_keys_are_forbidden(self, schema):
+        assert schema["additionalProperties"] is False
+
+    def test_step_names_match_the_steps(self, schema):
+        assert set(schema["$defs"]["StepsTable"]["properties"]) == {
+            s.cli_name for s in models.Step
+        }
+
+    def test_injected_step_field_is_hidden(self, schema):
+        assert "step" not in schema["$defs"]["StepPlan"]["properties"]

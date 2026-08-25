@@ -70,10 +70,11 @@ def next_image(
 ) -> models.Image:
     """The next image to serve for a step under a review-ordering ``strategy``.
 
-    The strategy owns the filter/order (see :mod:`~django_dirt_ratings.ordering`);
+    The strategy owns the ordering (see :mod:`~django_dirt_ratings.ordering`);
     every strategy is a single index seek. ``exclude`` drops the image just shown so
     a tie doesn't re-serve it. Raises :class:`exceptions.ApplicationError` when the
-    step has no image to serve (e.g. a triage pool that has been exhausted).
+    step has no image to serve (e.g. a step with no images, or whose only image was
+    just shown).
     """
     qs = models.Image.objects.filter(step=step.value)
     if exclude is not None:
