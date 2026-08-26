@@ -14,17 +14,27 @@ derivatives=${a2cps}/products/mris
 SIF="docker://psadil/dirt:manage"
 CATALOG=/tmp/a2cps.duckdb # node-local; /tmp is bound by apptainer already
 DBDIR=/tmp/dirtdb         # ditto — no explicit bind needed
+PLAN=a2cps.toml           # review plan, staged into the submit dir like .env (from the repo's tools/)
 OUT=${SCRATCH}/dirt/db
+TEMPLATEFLOW=${SCRATCH}/dirt/templateflow # persistent caches, shared login↔compute (see prewarm below)
+ROIS=${SCRATCH}/dirt/rois                 # ditto
 
-mkdir -p "${DBDIR}" "${OUT}"
+mkdir -p "${DBDIR}" "${OUT}" "${TEMPLATEFLOW}" "${ROIS}"
 rm -f "${CATALOG}" "${CATALOG}.wal"
 set -a
 . ./.env
 set +a # .env uses `export`; --env-file can't read it
 
-run() { apptainer exec --bind "${a2cps}" \
+run() { apptainer exec --bind "${a2cps}" --bind "${TEMPLATEFLOW}" --bind "${ROIS}" \
 	--env DB="${DBDIR}/dirt.db" --env DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+	--env TEMPLATEFLOW_HOME="${TEMPLATEFLOW}" --env DIRT_ROI_CACHE="${ROIS}" \
 	"${SIF}" "$@"; }
+
+# A cold ROI cache needs network (TemplateFlow) plus minutes of registration, which
+# the offline compute node can't do: pre-warm on a login node with `./write_imgs2 prewarm`
+# before sbatch. In the job the same command is an instant fail-fast cache check.
+run manage build_rois MNI152NLin2009cAsym MNI152NLin6Asym
+if [[ "${1:-}" == prewarm ]]; then exit 0; fi
 
 for s in "${derivatives}"/*/fmriprep-v4/*; do
 	echo $s
@@ -43,6 +53,8 @@ run bidslake index -i "sourcedata/multishell" --no-bidsignore \
 	--adapter freesurfer --adapter fmriprep --dataset-id dtifit -o "${CATALOG}"
 
 run manage migrate --no-input
+run manage plan "${PLAN}"      # activate before render: render stamps the plan + computes its measures
 run manage render "${CATALOG}" # drop --update on a fresh seed
+run manage prioritize          # measures → Image.priority, the anomaly_first ordering key
 cp -av "${DBDIR}"/. "${OUT}/"
 cp -av "${CATALOG}" "${PWD}"
