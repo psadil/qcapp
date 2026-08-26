@@ -260,9 +260,14 @@ def build_rois(space: str, cohort: str | None, out_dir: Path) -> RoiArtifact:
     cuts = _cuts_from_mask(mask_img)
     dseg_path, meta_path = _artifact_paths(space, cohort, out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    _atomic_write_nifti(
-        nb.nifti1.Nifti1Image(data, mask_img.affine, dtype=np.uint8), dseg_path
-    )
+    out_img = nb.nifti1.Nifti1Image(data, mask_img.affine, dtype=np.uint8)
+    # A default header carries qform_code=0/sform_code=ALIGNED and no units;
+    # inherit the template mask's space code so external tools that read NIfTI
+    # codes rather than affines see the space.
+    out_img.header.set_qform(mask_img.affine, code=int(mask_img.header["sform_code"]))
+    out_img.header.set_sform(mask_img.affine, code=int(mask_img.header["sform_code"]))
+    out_img.header.set_xyzt_units(xyz="mm")
+    _atomic_write_nifti(out_img, dseg_path)
     meta = {
         "algorithm_version": ROI_ALGORITHM_VERSION,
         "space": space,

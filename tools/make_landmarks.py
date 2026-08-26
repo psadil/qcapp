@@ -231,10 +231,22 @@ def main() -> None:
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     dseg_path = DATA_DIR / DSEG_NAME
-    rois._atomic_write_nifti(
-        nb.nifti1.Nifti1Image(data, fix_img.affine, dtype=np.uint8), dseg_path
-    )
+    out_img = nb.nifti1.Nifti1Image(data, fix_img.affine, dtype=np.uint8)
+    # A default header carries qform_code=0/sform_code=ALIGNED and no units;
+    # inherit the reference's space code (MNI152 on TemplateFlow templates) so
+    # external tools that read NIfTI codes rather than affines see the space.
+    out_img.header.set_qform(fix_img.affine, code=int(fix_img.header["sform_code"]))
+    out_img.header.set_sform(fix_img.affine, code=int(fix_img.header["sform_code"]))
+    out_img.header.set_xyzt_units(xyz="mm")
+    rois._atomic_write_nifti(out_img, dseg_path)
     sidecar = {
+        # BIDS derivative sidecar fields (SpatialReference, Sources) alongside
+        # the bespoke provenance keys.
+        "SpatialReference": "https://templateflow.s3.amazonaws.com/"
+        f"tpl-{rois.CANONICAL_SPACE}/tpl-{rois.CANONICAL_SPACE}_res-01_T1w.nii.gz",
+        "Sources": [
+            f"{BRAIN_MATCH_LFS}/{name}" for name in [*SOURCES, GM_09A, MASK_09A]
+        ],
         "built": datetime.datetime.now(tz=datetime.UTC).date().isoformat(),
         "brain_match_commit": BRAIN_MATCH_COMMIT,
         "license": "MIT (SIMEXP/brain_match)",
