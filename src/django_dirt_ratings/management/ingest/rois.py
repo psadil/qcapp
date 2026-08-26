@@ -14,13 +14,15 @@ Per-structure sourcing, procedural-first:
 - **sulcal/fissure/tentorium bands** — no atlas defines these; they are the
   hand-drawn Benhajali landmarks shipped with this package on the canonical
   ``MNI152NLin2009cAsym`` grid (see ``tools/make_landmarks.py`` and the
-  ``PROVENANCE.md`` next to the file). For other spaces they are warped by a
-  dipy affine+SyN registration between the two spaces' masked template T1ws,
-  computed at build time. TemplateFlow's curated ``*_xfm.h5`` composites were
-  evaluated and rejected: nitransforms misapplies their displacement-field
-  component (warping *lowered* masked-T1w correlation below identity), whereas
-  the computed registration is validated by construction — the build fails
-  loudly unless warping *improves* on the identity alignment.
+  ``PROVENANCE.md`` next to the file). For other spaces they are warped through
+  a dirt-built between-template transform: a dipy affine+SyN registration of
+  the two spaces' masked template T1ws, estimated once per :data:`XFM_VERSION`,
+  serialized as an ITK displacement-field ``*_xfm.h5`` artifact in the cache,
+  and applied with SimpleITK. TemplateFlow's curated composites were evaluated
+  instead, but the needed from-``MNI152NLin2009cAsym`` direction is mislabeled
+  upstream (its file encodes the opposite mapping), so dirt builds its own —
+  validated by construction: the build fails loudly unless warping *improves*
+  on the identity alignment.
 
 A space without a recipe, or whose assets cannot be fetched, raises
 :class:`RoiUnavailableError`; callers must skip loudly, never guess. Artifacts
@@ -54,7 +56,7 @@ from django_dirt_ratings import datasets
 
 logger = logging.getLogger(__name__)
 
-ROI_ALGORITHM_VERSION = 1
+ROI_ALGORITHM_VERSION = 2
 CANONICAL_SPACE = "MNI152NLin2009cAsym"
 BAND_MM = 4.0
 N_CUTS = 3
@@ -130,8 +132,14 @@ _HOSPA_STRUCTURES: dict[str, int] = {
     "right_hippocampus": 19,
 }
 
-# Registration parameters (recorded in the sidecar; changing them warrants a
-# ROI_ALGORITHM_VERSION bump). Deterministic: full-sampling MI + CC metrics.
+# The between-template transform artifact version. The registration parameters
+# below are recorded in the transform sidecar; changing them (or the
+# serialization) warrants an XFM_VERSION bump — and a ROI_ALGORITHM_VERSION
+# bump with it, since composed dsegs embed the warp.
+XFM_VERSION = 1
+
+# Registration parameters (recorded in the transform sidecar; changing them
+# warrants an XFM_VERSION bump). Deterministic: full-sampling MI + CC metrics.
 _AFFINE_LEVEL_ITERS = [10000, 1000, 100]
 _AFFINE_SIGMAS = [3.0, 1.0, 0.0]
 _AFFINE_FACTORS = [4, 2, 1]
@@ -248,7 +256,9 @@ def build_rois(space: str, cohort: str | None, out_dir: Path) -> RoiArtifact:
             "inputs": {atlas_path.name: _sha256(atlas_path)},
         }
 
-    landmark_structs, landmark_prov = _landmark_structures(space, t1w_img, mask_img)
+    landmark_structs, landmark_prov = _landmark_structures(
+        space, cohort, t1w_img, mask_img, out_dir
+    )
     structures.update(landmark_structs)
     provenance.update(landmark_prov)
 
@@ -260,9 +270,14 @@ def build_rois(space: str, cohort: str | None, out_dir: Path) -> RoiArtifact:
     cuts = _cuts_from_mask(mask_img)
     dseg_path, meta_path = _artifact_paths(space, cohort, out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    _atomic_write_nifti(
-        nb.nifti1.Nifti1Image(data, mask_img.affine, dtype=np.uint8), dseg_path
-    )
+    out_img = nb.nifti1.Nifti1Image(data, mask_img.affine, dtype=np.uint8)
+    # A default header carries qform_code=0/sform_code=ALIGNED and no units;
+    # inherit the template mask's space code so external tools that read NIfTI
+    # codes rather than affines see the space.
+    out_img.header.set_qform(mask_img.affine, code=int(mask_img.header["sform_code"]))
+    out_img.header.set_sform(mask_img.affine, code=int(mask_img.header["sform_code"]))
+    out_img.header.set_xyzt_units(xyz="mm")
+    _atomic_write_nifti(out_img, dseg_path)
     meta = {
         "algorithm_version": ROI_ALGORITHM_VERSION,
         "space": space,
@@ -389,13 +404,17 @@ def _atlas_structures(
 
 
 def _landmark_structures(
-    space: str, t1w_img: nb.nifti1.Nifti1Image, mask_img: nb.nifti1.Nifti1Image
+    space: str,
+    cohort: str | None,
+    t1w_img: nb.nifti1.Nifti1Image,
+    mask_img: nb.nifti1.Nifti1Image,
+    cache_dir: Path,
 ) -> tuple[dict[str, npt.NDArray[np.bool_]], dict[str, dict[str, typing.Any]]]:
     """The hand-drawn sulcal bands, on this space's grid.
 
     On the canonical space the packaged dseg is used directly (its grid must
-    match TemplateFlow's); any other space warps it through a dipy affine+SyN
-    registration of the two spaces' masked template T1ws.
+    match TemplateFlow's); any other space warps it through the cached
+    dirt-built between-template transform (see :func:`_ensure_xfm`).
     """
     canonical_path = datasets.get_landmarks()
     canonical_img = _load(canonical_path)
@@ -422,7 +441,9 @@ def _landmark_structures(
         }
         return canonical_structs, {name: dict(base_prov) for name in canonical_structs}
 
-    warped, registration = _warp_labels(canonical_img, t1w_img, mask_img)
+    warped, registration = _warp_labels(
+        space, cohort, canonical_img, t1w_img, mask_img, cache_dir
+    )
     structs: dict[str, npt.NDArray[np.bool_]] = {}
     prov: dict[str, dict[str, typing.Any]] = {}
     for name in names:
@@ -435,17 +456,77 @@ def _landmark_structures(
     return structs, prov
 
 
-def _warp_labels(
-    canonical_img: nb.nifti1.Nifti1Image,
-    t1w_img: nb.nifti1.Nifti1Image,
-    mask_img: nb.nifti1.Nifti1Image,
-) -> tuple[npt.NDArray[np.integer], dict[str, typing.Any]]:
-    """Register canonical-space template T1w to this space's, warp the labels.
+def _apply_xfm(
+    xfm_path: Path,
+    moving_img: nb.nifti1.Nifti1Image,
+    reference_img: nb.nifti1.Nifti1Image,
+    order: int,
+) -> npt.NDArray[np.floating]:
+    """Resample ``moving_img`` onto ``reference_img``'s grid through an ITK h5.
 
-    The result is gated: warping must *improve* the masked-T1w correlation
-    over plain world-coordinate resampling, otherwise the registration (or an
-    upstream convention) is broken and the build fails.
+    The h5 holds the pull-back map — reference coordinates to moving
+    coordinates, the ITK resampling convention.
     """
+    import SimpleITK as sitk
+
+    with tempfile.TemporaryDirectory() as td:
+        mov, ref = Path(td) / "mov.nii.gz", Path(td) / "ref.nii.gz"
+        # file round-trip: sitk owns the RAS->LPS handling, no hand-built affines
+        nb.save(moving_img, mov)
+        nb.save(reference_img, ref)
+        out = sitk.Resample(
+            sitk.ReadImage(str(mov)),
+            sitk.ReadImage(str(ref)),
+            sitk.ReadTransform(str(xfm_path)),
+            sitk.sitkNearestNeighbor if order == 0 else sitk.sitkLinear,
+            0.0,
+            sitk.sitkFloat64,
+        )
+    # sitk arrays are z,y,x
+    return np.transpose(sitk.GetArrayFromImage(out), (2, 1, 0))
+
+
+def _write_itk_field(
+    d_ras: npt.NDArray[np.floating], reference_img: nb.nifti1.Nifti1Image, dst: Path
+) -> None:
+    """Write a RAS displacement field on the reference grid as an ITK h5."""
+    import SimpleITK as sitk
+
+    d_lps = d_ras.copy()
+    d_lps[..., :2] *= -1.0  # ITK displacement vectors are LPS
+    with tempfile.TemporaryDirectory() as td:
+        ref = Path(td) / "ref.nii.gz"
+        nb.save(reference_img, ref)
+        field = sitk.GetImageFromArray(
+            np.ascontiguousarray(np.transpose(d_lps, (2, 1, 0, 3))), isVector=True
+        )
+        field.CopyInformation(sitk.ReadImage(str(ref)))
+        with tempfile.NamedTemporaryFile(
+            dir=dst.parent, suffix=".h5", delete=False
+        ) as tmp:
+            pass
+        sitk.WriteTransform(
+            sitk.DisplacementFieldTransform(sitk.Cast(field, sitk.sitkVectorFloat64)),
+            tmp.name,
+        )
+    os.replace(tmp.name, dst)
+
+
+def _ensure_xfm(space: str, cohort: str | None, cache_dir: Path) -> Path:
+    """The dirt-built canonical->``space`` transform, registered once and cached.
+
+    Estimating a between-template warp is the hard, careful part, so it runs
+    once per :data:`XFM_VERSION`: a dipy affine(MI)+SyN(CC) registration of the
+    canonical masked template T1w onto the target's, serialized as an ITK
+    displacement-field ``*_xfm.h5`` (the pull-back map sampled on the target
+    grid) that SimpleITK and ANTs apply directly. The serialization is
+    validated before caching: applying the h5 must reproduce the direct dipy
+    warp and improve on the identity alignment.
+    """
+    h5_path, meta_path = _xfm_paths(space, cohort, cache_dir)
+    if h5_path.exists() and meta_path.exists():
+        return h5_path
+
     from dipy.align.imaffine import (
         AffineRegistration,
         MutualInformationMetric,
@@ -459,18 +540,36 @@ def _warp_labels(
     )
     from nilearn import image
 
-    recipe = _RECIPES[CANONICAL_SPACE]
+    recipe = _RECIPES[space]
+    canonical = _RECIPES[CANONICAL_SPACE]
+    fix_t1w_path = _tf_get(
+        space, cohort, suffix="T1w", desc=None, resolution=recipe.resolution
+    )
+    fix_mask_path = _tf_get(
+        space, cohort, suffix="mask", desc="brain", resolution=recipe.resolution
+    )
     mov_t1w_path = _tf_get(
-        CANONICAL_SPACE, None, suffix="T1w", desc=None, resolution=recipe.resolution
+        CANONICAL_SPACE, None, suffix="T1w", desc=None, resolution=canonical.resolution
     )
     mov_mask_path = _tf_get(
-        CANONICAL_SPACE, None, suffix="mask", desc="brain", resolution=recipe.resolution
+        CANONICAL_SPACE,
+        None,
+        suffix="mask",
+        desc="brain",
+        resolution=canonical.resolution,
     )
+    fix_img = _load(fix_t1w_path)
     mov_img = _load(mov_t1w_path)
+    fix_mask = np.asarray(_load(fix_mask_path).dataobj) > 0
+    fix = fix_img.get_fdata() * fix_mask
     mov = mov_img.get_fdata() * (np.asarray(_load(mov_mask_path).dataobj) > 0)
-    fix = t1w_img.get_fdata() * (np.asarray(mask_img.dataobj) > 0)
-    sg, mg = t1w_img.affine, mov_img.affine
+    sg, mg = fix_img.affine, mov_img.affine
 
+    logger.info(
+        "registering %s -> %s (dipy; runs once per transform version)",
+        CANONICAL_SPACE,
+        space,
+    )
     com = transform_centers_of_mass(fix, sg, mov, mg)
     affreg = AffineRegistration(
         metric=MutualInformationMetric(nbins=32),
@@ -502,18 +601,22 @@ def _warp_labels(
         fix, mov, static_grid2world=sg, moving_grid2world=mg, prealign=affine.affine
     )
 
-    fix_mask = np.asarray(mask_img.dataobj) > 0
-    warped_t1w = mapping.transform(
-        mov,
-        interpolation="linear",
-        image_world2grid=np.linalg.inv(mg),
-        out_shape=t1w_img.shape,
-        out_grid2world=sg,
-    )
+    def warp(
+        data: npt.NDArray[np.floating], world2grid: npt.NDArray[np.floating]
+    ) -> npt.NDArray[np.floating]:
+        return mapping.transform(
+            data,
+            interpolation="linear",
+            image_world2grid=world2grid,
+            out_shape=fix_img.shape,
+            out_grid2world=sg,
+        )
+
+    warped_t1w = warp(mov, np.linalg.inv(mg))
     identity_t1w = np.asarray(
         image.resample_to_img(
             nb.nifti1.Nifti1Image(mov, mg),
-            t1w_img,
+            fix_img,
             interpolation="linear",
             force_resample=True,
             copy_header=True,
@@ -528,19 +631,135 @@ def _warp_labels(
             f"(r_warp={r_warp:.4f} <= r_identity={r_identity:.4f})"
         )
 
+    # Serialize the pull-back map (target world -> canonical world) as a dense
+    # displacement field on the target grid: warp world-coordinate ramps and a
+    # validity indicator through the mapping; voxels the canonical FOV cannot
+    # reach are filled from their nearest valid neighbour.
+    mov_world = affines.apply_affine(
+        mg, np.indices(mov_img.shape).reshape(3, -1).T
+    ).reshape(*mov_img.shape, 3)
+    pullback = np.stack(
+        [warp(mov_world[..., i], np.linalg.inv(mg)) for i in range(3)], axis=-1
+    )
+    indicator = warp(np.ones(mov_img.shape), np.linalg.inv(mg))
+    p_identity = affines.apply_affine(
+        sg, np.indices(fix_img.shape).reshape(3, -1).T
+    ).reshape(*fix_img.shape, 3)
+    d_ras = pullback - p_identity
+    invalid = indicator < 0.999
+    if invalid.any():
+        nearest = ndimage.distance_transform_edt(
+            invalid, return_distances=False, return_indices=True
+        )
+        d_ras = d_ras[tuple(nearest)]
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    staging = h5_path.parent / f".{h5_path.stem}.building.h5"
+    _write_itk_field(d_ras, fix_img, staging)
+    r_h5 = float(
+        np.corrcoef(
+            _apply_xfm(staging, nb.nifti1.Nifti1Image(mov, mg), fix_img, order=1)[
+                fix_mask
+            ],
+            reference,
+        )[0, 1]
+    )
+    if not (r_h5 > r_identity and abs(r_h5 - r_warp) < 0.01):
+        staging.unlink(missing_ok=True)
+        raise RoiUnavailableError(
+            f"serialized transform failed validation (r_h5={r_h5:.4f}, "
+            f"r_direct={r_warp:.4f}, r_identity={r_identity:.4f})"
+        )
+
     import dipy
 
-    warped_labels = mapping.transform(
-        np.asarray(canonical_img.dataobj).astype(np.int16),
-        interpolation="nearest",
-        image_world2grid=np.linalg.inv(canonical_img.affine),
-        out_shape=t1w_img.shape,
-        out_grid2world=sg,
-    ).astype(np.int16)
-    registration = {
-        "engine": f"dipy {dipy.__version__} affine(MI)+SyN(CC) on masked T1w",
+    meta = {
+        "xfm_version": XFM_VERSION,
+        "space": space,
+        "cohort": cohort,
+        "engine": (
+            f"dipy {dipy.__version__} affine(MI)+SyN(CC) on masked T1w, "
+            "serialized as an ITK displacement-field h5"
+        ),
         "affine_level_iters": _AFFINE_LEVEL_ITERS,
         "syn_level_iters": _SYN_LEVEL_ITERS,
+        "moving": {
+            mov_t1w_path.name: _sha256(mov_t1w_path),
+            mov_mask_path.name: _sha256(mov_mask_path),
+        },
+        "static": {
+            fix_t1w_path.name: _sha256(fix_t1w_path),
+            fix_mask_path.name: _sha256(fix_mask_path),
+        },
+        "r_identity": round(r_identity, 4),
+        "r_warp": round(r_warp, 4),
+        "r_h5": round(r_h5, 4),
+    }
+    os.replace(staging, h5_path)
+    _atomic_write_text(json.dumps(meta, indent=2, sort_keys=True), meta_path)
+    logger.info("built transform %s -> %s: %s", CANONICAL_SPACE, space, h5_path)
+    return h5_path
+
+
+def _warp_labels(
+    space: str,
+    cohort: str | None,
+    canonical_img: nb.nifti1.Nifti1Image,
+    t1w_img: nb.nifti1.Nifti1Image,
+    mask_img: nb.nifti1.Nifti1Image,
+    cache_dir: Path,
+) -> tuple[npt.NDArray[np.integer], dict[str, typing.Any]]:
+    """Warp the canonical landmarks through the cached dirt-built transform.
+
+    Application is gated on every build: pushing the canonical masked T1w
+    through the h5 must *improve* the masked-T1w correlation over plain
+    world-coordinate resampling, otherwise the artifact (or its application)
+    is broken and the build fails.
+    """
+    from nilearn import image
+
+    xfm_path = _ensure_xfm(space, cohort, cache_dir)
+
+    recipe = _RECIPES[CANONICAL_SPACE]
+    mov_t1w_path = _tf_get(
+        CANONICAL_SPACE, None, suffix="T1w", desc=None, resolution=recipe.resolution
+    )
+    mov_mask_path = _tf_get(
+        CANONICAL_SPACE, None, suffix="mask", desc="brain", resolution=recipe.resolution
+    )
+    mov_img = _load(mov_t1w_path)
+    mov = mov_img.get_fdata() * (np.asarray(_load(mov_mask_path).dataobj) > 0)
+    masked_mov_img = nb.nifti1.Nifti1Image(mov, mov_img.affine)
+    fix = t1w_img.get_fdata() * (np.asarray(mask_img.dataobj) > 0)
+    fix_mask = np.asarray(mask_img.dataobj) > 0
+
+    warped_t1w = _apply_xfm(xfm_path, masked_mov_img, t1w_img, order=1)
+    identity_t1w = np.asarray(
+        image.resample_to_img(
+            masked_mov_img,
+            t1w_img,
+            interpolation="linear",
+            force_resample=True,
+            copy_header=True,
+        ).dataobj
+    )
+    reference = fix[fix_mask]
+    r_warp = float(np.corrcoef(warped_t1w[fix_mask], reference)[0, 1])
+    r_identity = float(np.corrcoef(identity_t1w[fix_mask], reference)[0, 1])
+    if r_warp <= r_identity:
+        raise RoiUnavailableError(
+            f"transform {xfm_path.name} did not improve on identity alignment "
+            f"(r_warp={r_warp:.4f} <= r_identity={r_identity:.4f})"
+        )
+
+    warped_labels = _apply_xfm(xfm_path, canonical_img, t1w_img, order=0).astype(
+        np.int16
+    )
+    xfm_meta = json.loads(_xfm_paths(space, cohort, cache_dir)[1].read_text())
+    registration = {
+        "engine": xfm_meta["engine"],
+        "xfm_version": xfm_meta["xfm_version"],
+        "xfm": {xfm_path.name: _sha256(xfm_path)},
         "moving": {
             mov_t1w_path.name: _sha256(mov_t1w_path),
             mov_mask_path.name: _sha256(mov_mask_path),
@@ -596,6 +815,15 @@ def _artifact_paths(
     cohort_part = f"_cohort-{cohort}" if cohort else ""
     stem = f"tpl-{space}{cohort_part}_desc-dirtv{ROI_ALGORITHM_VERSION}_dseg"
     return cache_dir / f"{stem}.nii.gz", cache_dir / f"{stem}.json"
+
+
+def _xfm_paths(space: str, cohort: str | None, cache_dir: Path) -> tuple[Path, Path]:
+    cohort_part = f"_cohort-{cohort}" if cohort else ""
+    stem = (
+        f"tpl-{space}{cohort_part}_from-{CANONICAL_SPACE}"
+        f"_mode-image_desc-dirtv{XFM_VERSION}_xfm"
+    )
+    return cache_dir / f"{stem}.h5", cache_dir / f"{stem}.json"
 
 
 def _sha256(path: Path) -> str:

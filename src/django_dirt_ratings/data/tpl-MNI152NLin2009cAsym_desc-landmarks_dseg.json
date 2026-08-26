@@ -1,4 +1,14 @@
 {
+  "Sources": [
+    "https://media.githubusercontent.com/media/SIMEXP/brain_match/58476047cf43b30425eb35cb414890ce99c318c0/data/Misc/landmarks/left_central_sulcus.nii.gz",
+    "https://media.githubusercontent.com/media/SIMEXP/brain_match/58476047cf43b30425eb35cb414890ce99c318c0/data/Misc/landmarks/left_cingulate_sulcus.nii.gz",
+    "https://media.githubusercontent.com/media/SIMEXP/brain_match/58476047cf43b30425eb35cb414890ce99c318c0/data/Misc/landmarks/left_calcarine_sulcus.nii.gz",
+    "https://media.githubusercontent.com/media/SIMEXP/brain_match/58476047cf43b30425eb35cb414890ce99c318c0/data/Misc/landmarks/left_parieto-occipital_fissure.nii.gz",
+    "https://media.githubusercontent.com/media/SIMEXP/brain_match/58476047cf43b30425eb35cb414890ce99c318c0/data/Misc/landmarks/left_tentorium_cerebelli.nii.gz",
+    "https://media.githubusercontent.com/media/SIMEXP/brain_match/58476047cf43b30425eb35cb414890ce99c318c0/data/Misc/landmarks/mni_icbm152_gm_tal_nlin_sym_09a.nii.gz",
+    "https://media.githubusercontent.com/media/SIMEXP/brain_match/58476047cf43b30425eb35cb414890ce99c318c0/data/Misc/landmarks/mni_icbm152_t1_tal_nlin_sym_09a_mask.nii.gz"
+  ],
+  "SpatialReference": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz",
   "brain_match_commit": "58476047cf43b30425eb35cb414890ce99c318c0",
   "built": "2026-08-24",
   "labels": {

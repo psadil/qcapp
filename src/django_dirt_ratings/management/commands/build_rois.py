@@ -1,10 +1,11 @@
 """Pre-build the spatial-normalization ROI cache for one or more spaces.
 
-Building fetches TemplateFlow assets (network) and, for non-canonical spaces,
-runs a few minutes of registration — run this on a networked login node before
-offline cluster renders. Rendering then finds the artifacts in the cache
-(``DIRT_ROI_CACHE``, default ``~/.cache/dirt/rois``) and never touches the
-network.
+Building fetches TemplateFlow assets (network) and, for non-canonical spaces
+with a cold cache, runs a few minutes of registration once per transform
+version, caching the result as an ITK ``*_xfm.h5`` artifact next to the dseg —
+run this on a networked login node before offline cluster renders. Rendering
+then finds the artifacts in the cache (``DIRT_ROI_CACHE``, default
+``~/.cache/dirt/rois``) and never touches the network.
 """
 
 import typing as t

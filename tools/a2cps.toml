@@ -1,0 +1,30 @@
+#:schema https://psadil.github.io/dirt/api/plan.schema.json
+name = "A2CPS MRI QC"
+
+[ordering]
+strategy = "anomaly_first" # fewest-reviews first, most atypical first within a depth band
+
+[steps.masks]
+order_by = "volume_mm3"
+direction = "two_sided" # an atypically large or small mask is equally worth a look
+subgroup = ["space"]    # a native-space volume is not comparable to an MNI-space one
+
+[[steps.masks.measures]]
+name = "volume_mm3"
+compute = "mask_volume" # brain-mask volume in mm³
+
+[steps.fmap_coregistration]
+order_by = "coreg_mm"
+direction = "higher_worse" # a bigger induced displacement is more suspect
+
+[[steps.fmap_coregistration.measures]]
+name = "coreg_mm"
+compute = "affine_displacement" # RMS mm the coregistration affine moves the brain (Jenkinson)
+
+# An active plan gates the landing page to the steps it names, so the other
+# rendered steps are declared too; empty blocks keep them breadth-first.
+[steps.spatial_normalization]
+
+[steps.surface_localization]
+
+[steps.dtifit]

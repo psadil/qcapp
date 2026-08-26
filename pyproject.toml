@@ -53,6 +53,8 @@ neuro = [
     "nibabel>=5.3.2",
     "nilearn>=0.12.0",
     "nitransforms>=25.0.0",
+    # applies the ITK displacement-field h5 artifacts built by ingest/rois.py
+    "SimpleITK>=2",
     "numpy>=2.3.1",
     "polars>=1.31.0",
 ]
