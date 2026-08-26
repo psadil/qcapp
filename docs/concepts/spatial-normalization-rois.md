@@ -27,7 +27,9 @@ commit) and committed with full provenance
 original drawings live on the ICBM 2009a *symmetric* template; the build moves
 them to `MNI152NLin2009cAsym` with a dipy affine+SyN registration on
 gray-matter probability maps, gated on improving the within-brain GM
-correlation over identity placement (0.845 → 0.965).
+correlation over identity placement (0.845 → 0.965). The result of that warp is
+shown on the [Landmark warp QC](landmark-warp-qc.md) page for visual
+verification.
 
 ## Transforms are computed, validated, and recorded
 

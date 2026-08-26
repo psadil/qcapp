@@ -14,13 +14,15 @@ ventricles and hippocampi come procedurally from each space's Harvard-Oxford
 atlas at build time (see ``management/ingest/rois.py``), and the brain-outline
 band is always procedural.
 
-Outputs (commit the first three):
+Outputs (commit all of them):
 - src/django_dirt_ratings/data/tpl-MNI152NLin2009cAsym_desc-landmarks_dseg.nii.gz
 - src/django_dirt_ratings/data/tpl-MNI152NLin2009cAsym_desc-landmarks_dseg.json
 - src/django_dirt_ratings/data/PROVENANCE.md
-- QC figures under --work-dir (inspect, do not commit)
+- QC figures under docs/assets/concepts/landmarks/ (shown on the
+  "Landmark warp QC" docs page so users can verify the warp)
 
 Run:  pixi run -e dev python tools/make_landmarks.py
+      pixi run -e dev python tools/make_landmarks.py --figures-only
 """
 
 from __future__ import annotations
@@ -58,6 +60,7 @@ MASK_09A = "mni_icbm152_t1_tal_nlin_sym_09a_mask.nii.gz"
 
 DATA_DIR = REPO / "src" / "django_dirt_ratings" / "data"
 DSEG_NAME = "tpl-MNI152NLin2009cAsym_desc-landmarks_dseg.nii.gz"
+QC_DIR = REPO / "docs" / "assets" / "concepts" / "landmarks"
 
 
 def fetch(work: Path, name: str) -> Path:
@@ -190,7 +193,17 @@ def main() -> None:
         default=Path.home() / ".cache" / "dirt" / "make-landmarks",
         help="download + QC scratch directory (kept for re-runs)",
     )
+    parser.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="re-render the QC figures from the committed dseg "
+        "(no download or registration)",
+    )
     args = parser.parse_args()
+    if args.figures_only:
+        qc_figures(DATA_DIR / DSEG_NAME)
+        print(f"QC figures in {QC_DIR}")
+        return
     work = args.work_dir
     work.mkdir(parents=True, exist_ok=True)
 
@@ -259,8 +272,8 @@ def main() -> None:
     rois._atomic_write_text(json.dumps(sidecar, indent=2, sort_keys=True), meta_path)
 
     write_provenance(sidecar)
-    qc_figures(dseg_path, work)
-    print(f"\nwrote {dseg_path}\nwrote {meta_path}\nQC figures in {work}")
+    qc_figures(dseg_path)
+    print(f"\nwrote {dseg_path}\nwrote {meta_path}\nQC figures in {QC_DIR}")
 
 
 def write_provenance(sidecar: dict) -> None:
@@ -313,14 +326,23 @@ def write_provenance(sidecar: dict) -> None:
     (DATA_DIR / "PROVENANCE.md").write_text("\n".join(lines) + "\n")
 
 
-def qc_figures(dseg_path: Path, work: Path) -> None:
-    """Overlay the composed landmarks on the target T1w at the display cuts."""
+def qc_figures(dseg_path: Path) -> None:
+    """Overlay the composed landmarks on the target T1w at the display cuts.
+
+    Written as committed docs assets (AVIF, same idiom as
+    ``tools/make_tutorial_images.py``) and shown on the "Landmark warp QC"
+    docs page so users can verify the warp.
+    """
+    import io
+
     import templateflow.api as tf
     from matplotlib import pyplot as plt
     from nilearn import plotting
+    from PIL import Image
 
     t1w = str(tf.get(rois.CANONICAL_SPACE, desc=None, suffix="T1w", resolution=1))
     display_cuts = {"x": [-50, 5, 30], "y": [-65, 20, 54], "z": [-6, 13, 58]}
+    QC_DIR.mkdir(parents=True, exist_ok=True)
     for axis, cuts in display_cuts.items():
         f = plt.figure(figsize=(12, 4.8))
         p = plotting.plot_roi(
@@ -331,8 +353,16 @@ def qc_figures(dseg_path: Path, work: Path) -> None:
             figure=f,
             colorbar=False,
         )
-        p.savefig(str(work / f"qc_landmarks_{axis}.png"))
+        buffer = io.BytesIO()
+        p.savefig(buffer, dpi=150)
         plt.close(f)
+        buffer.seek(0)
+        Image.open(buffer).convert("RGB").save(
+            QC_DIR / f"qc_landmarks_{axis}.avif",
+            quality=100,
+            subsampling="4:4:4",
+            speed=6,
+        )
 
 
 if __name__ == "__main__":
