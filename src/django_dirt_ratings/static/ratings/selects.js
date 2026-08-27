@@ -29,7 +29,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.addEventListener('keydown', function (e) {
-        const tag = document.activeElement.tagName;
+        const active = document.activeElement;
+        const tag = active.tagName;
         const key = e.key.toLowerCase();
 
         if (key === 'enter') {
@@ -45,8 +46,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Rating hotkeys should not fire while typing in a field.
-        if (['INPUT', 'TEXTAREA'].includes(tag)) return;
+        // Rating hotkeys should not fire while typing in a field. Radios and
+        // checkboxes are not typing targets — and native validation focuses
+        // the first radio when it blocks a submit, so hotkeys must keep
+        // working from there.
+        if (tag === 'TEXTAREA') return;
+        if (tag === 'INPUT' && !['radio', 'checkbox'].includes(active.type)) return;
         if (hotkeyMap[key]) {
             selectRadio(hotkeyMap[key]);
             e.preventDefault();

@@ -236,5 +236,5 @@ data/*
 
 **/.DS_Store
 
-# created during dev setups
-static/
+# created during dev setups (collectstatic output at the repo root only)
+/static/

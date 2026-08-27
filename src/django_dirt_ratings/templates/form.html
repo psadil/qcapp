@@ -1,7 +1,7 @@
 <div class="card shadow-sm">
-    <div class="card-body p-4">
-        <form id="form" hx-post="{{request.path}}" hx-target="#main"
-            hx-on::after-request="if(event.detail.successful) this.reset()">
+    <form id="form" hx-post="{{request.path}}" hx-target="#main"
+        hx-on::after-request="if(event.detail.successful) this.reset()">
+        <div class="card-body p-4">
             {% csrf_token %}
 
 
@@ -29,20 +29,19 @@
             </div>
 
             {% else %}
-            {{ field }}
             <label class="form-label fw-bold" for="{{ field.id_for_label }}">
                 {{ field.label }}
             </label>
             {{ field }}
             {% endif %}
             {% endfor %}
-    </div>
+        </div>
 
-    <div class="d-grid gap-2">
-        <button type="submit" id="submit" class="btn btn-primary btn-lg">
-            <i class="fas fa-check me-2"></i>
-            Submit Rating
-        </button>
-    </div>
+        <div class="d-grid gap-2">
+            <button type="submit" id="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-check me-2"></i>
+                Submit Rating
+            </button>
+        </div>
     </form>
 </div>

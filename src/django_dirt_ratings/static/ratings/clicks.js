@@ -216,7 +216,13 @@
         }
 
         document.addEventListener("keydown", (e) => {
-            if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+            // Hotkeys must not fire while typing in a field — but radios and
+            // checkboxes are not typing targets, and checking the flag box
+            // leaves it focused.
+            const active = document.activeElement;
+            const toggle = ["radio", "checkbox"].includes(active.type);
+            if (active.tagName === "TEXTAREA") return;
+            if (active.tagName === "INPUT" && !toggle) return;
             if (!controller) return; // only active on click pages
             const key = e.key.toLowerCase();
             if (key === "u") {
