@@ -237,6 +237,74 @@ class TestRatingHotkeys:
 
         assert models.Rating.objects.get().image_id in rating_page.seeded
 
+    def test_hotkey_fires_while_a_radio_is_focused(self, rating_page: _RatingPage):
+        """Native validation focuses the first radio when it blocks a submit."""
+        rating_page.page.focus(f"input[value='{models.Ratings.FAIL.value}']")
+
+        rating_page.page.keyboard.press("p")
+
+        expect(
+            rating_page.page.locator(f"input[value='{models.Ratings.PASS.value}']")
+        ).to_be_checked()
+
+    def test_hotkey_fires_while_the_flag_checkbox_is_focused(
+        self, rating_page: _RatingPage
+    ):
+        """Checking the source-data-issue box leaves focus on it."""
+        rating_page.page.focus("#id_source_data_issue")
+
+        rating_page.page.keyboard.press("u")
+
+        expect(
+            rating_page.page.locator(f"input[value='{models.Ratings.UNSURE.value}']")
+        ).to_be_checked()
+
+
+@pytest.mark.django_db(transaction=True)
+class TestFlagOnlySubmitIsBlockedNatively:
+    """Submitting only the source-data-issue flag never reaches the server.
+
+    Regression: the blank '---------' choice rendered as a pre-checked radio,
+    so a flag-only submit passed native required validation and POSTed an
+    empty rating; the invalid-form response was the full page, which htmx
+    nested inside #main.
+    """
+
+    @pytest.fixture
+    def flagged_only(self, rating_page: _RatingPage) -> _RatingPage:
+        """Check only the source-data-issue box and try to submit."""
+        rating_page.page.check("#id_source_data_issue")
+        rating_page.page.click("#submit")
+        return rating_page
+
+    def test_the_blank_choice_is_not_rendered(self, rating_page: _RatingPage):
+        expect(rating_page.page.locator("input[name='rating']")).to_have_count(3)
+
+    def test_no_rating_is_preselected(self, rating_page: _RatingPage):
+        expect(rating_page.page.locator("input[name='rating']:checked")).to_have_count(
+            0
+        )
+
+    def test_native_validation_holds_the_form_invalid(self, flagged_only: _RatingPage):
+        expect(flagged_only.page.locator("#form:invalid")).to_have_count(1)
+
+    def test_the_image_pane_is_not_nested(self, flagged_only: _RatingPage):
+        expect(flagged_only.page.locator("#main")).to_have_count(1)
+
+    @pytest.fixture
+    def corrected(self, flagged_only: _RatingPage) -> _RatingPage:
+        """Pick a verdict after the blocked attempt and submit for real."""
+        _rate_and_submit(flagged_only, "p")
+        return flagged_only
+
+    def test_only_the_corrected_submission_is_stored(self, corrected: _RatingPage):
+        # One row proves the flag-only click never POSTed: the awaited
+        # corrected submit would otherwise have been the second rating.
+        assert models.Rating.objects.count() == 1
+
+    def test_the_flag_rides_along_with_the_verdict(self, corrected: _RatingPage):
+        assert models.Rating.objects.get().source_data_issue is True
+
 
 class _CanvasPage(NamedTuple):
     page: Page

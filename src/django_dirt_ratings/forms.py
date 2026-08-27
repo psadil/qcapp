@@ -18,6 +18,19 @@ class RatingForm(forms.ModelForm):
             "source_data_issue": CheckboxInput,
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Drop the auto-added blank choice: it renders as a pre-checked
+        # '---------' radio, which satisfies the native required-group check
+        # and lets a ratingless submission through to the server.
+        rating_field = self.fields["rating"]
+        if not isinstance(rating_field, forms.ChoiceField):  # IntegerField w/ choices
+            raise TypeError(
+                f"expected a ChoiceField for rating, got {type(rating_field)}"
+            )
+        choices = cast("list[tuple[object, str]]", rating_field.choices)
+        rating_field.choices = [c for c in choices if c[0] not in ("", None)]
+
 
 class IndexForm(forms.ModelForm):
     class Meta:

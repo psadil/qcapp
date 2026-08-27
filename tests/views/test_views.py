@@ -104,6 +104,13 @@ class TestRateViewGet:
 
         assert response.status_code == 200
 
+    def test_rating_renders_without_a_blank_choice(self, client):
+        # A blank '---------' radio would render pre-checked, defeating the
+        # native required-group validation that blocks ratingless submits.
+        response = client.get(reverse(FMAP_COREGISTRATION_VIEW))
+
+        assert "---------" not in response.text
+
 
 @pytest.mark.django_db
 class TestRateViewPost:
