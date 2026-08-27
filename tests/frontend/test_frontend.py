@@ -375,3 +375,23 @@ class TestCanvasGridPaint:
         levels = set(submitted.cells.values_list("rating", flat=True))
 
         assert levels == {models.Ratings.UNSURE, models.Ratings.FAIL}
+
+    def test_level_hotkey_fires_while_the_flag_checkbox_is_focused(
+        self, canvas_page: _CanvasPage
+    ):
+        canvas_page.page.focus("#id_source_data_issue")
+
+        canvas_page.page.keyboard.press("f")
+
+        expect(canvas_page.page.locator("button[data-level='2']")).to_have_attribute(
+            "aria-pressed", "true"
+        )
+
+    def test_enter_submits_the_flag_while_its_checkbox_is_focused(
+        self, canvas_page: _CanvasPage
+    ):
+        canvas_page.page.check("#id_source_data_issue")
+        with _posted_to(canvas_page.page, "mask"):
+            canvas_page.page.keyboard.press("Enter")
+
+        assert models.Annotation.objects.get().source_data_issue is True
