@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J qcapp-render
+#SBATCH -J dirt-render
 #SBATCH -o render.log
 #SBATCH -t 2-00:00:00
 #SBATCH -p corralextra
@@ -7,39 +7,54 @@
 #SBATCH -A A2CPS
 
 set -xeu
-
 a2cps=/corral-secure/projects/A2CPS
-release=${a2cps}/products/consortium-data/pre-surgery-release-3-0-0/mris
-derivatives=${release}/derivatives
+derivatives=${a2cps}/products/mris
+# login-node build (compute has no network): apptainer build "${SIF}" docker://psadil/dirt:manage
+# SIF=${SCRATCH}/dirt/dirt-manage.sif
+SIF="docker://psadil/dirt:manage"
+CATALOG=/tmp/a2cps.duckdb # node-local; /tmp is bound by apptainer already
+DBDIR=/tmp/dirtdb         # ditto — no explicit bind needed
+PLAN=a2cps.toml           # review plan, staged into the submit dir like .env (from the repo's tools/)
+OUT=${SCRATCH}/dirt/db
+TEMPLATEFLOW=${SCRATCH}/dirt/templateflow # persistent caches, shared login↔compute (see prewarm below)
+ROIS=${SCRATCH}/dirt/rois                 # ditto
 
-# Index every derivative tree into one bidslake catalog. Related files (a mask's
-# T1w, a field map's IntendedFor bold + boldref + transform) are then resolved by
-# BIDS concept at render time, across trees, from this single catalog. FreeSurfer
-# recon-all is non-BIDS, so it uses the bidslake FreeSurfer adapter and indexes as
-# its own dataset (its sourcedata/ nesting defeats the term-map anchor otherwise).
-# A shared catalog's physical shape is frozen by the run that creates it, and an
-# adapter widens it — so every index run into the catalog passes the union of
-# adapters any of its datasets needs (here: freesurfer), or bidslake refuses the
-# mismatched run.
-catalog=/scratch/08266/psadil/qcapp/a2cps.duckdb
-# Fresh catalog each run: a catalog written by an older bidslake format is
-# unreadable by the current reader, and the script re-scans all four trees
-# anyway, so a clean rebuild costs about the same as upserting into a stale one.
-rm -f "${catalog}" "${catalog}.wal"
-bidslake index -i "${derivatives}/fmriprep" --adapter freesurfer -o "${catalog}"
-bidslake index -i "${derivatives}/synthstrip" --adapter freesurfer -o "${catalog}"
-bidslake index -i "${derivatives}/qsirecon_fsl_dtifit/dtifit/multishell" \
-	--adapter freesurfer --dataset-id dtifit -o "${catalog}"
-bidslake index -i "${derivatives}/freesurfer" --adapter freesurfer \
-	--dataset-id freesurfer -o "${catalog}"
+mkdir -p "${DBDIR}" "${OUT}" "${TEMPLATEFLOW}" "${ROIS}"
+rm -f "${CATALOG}" "${CATALOG}.wal"
+set -a
+. ./.env
+set +a # .env uses `export`; --env-file can't read it
 
-# Render every step present in the catalog, updating in place. One process is the
-# sole SQLite writer; rendering fans out across worker processes internally.
-# The psadil/dirt:manage image ships the `bidslake` CLI and depends on bidslake by
-# git rev, so `bidslake index` above can also run inside the container if desired.
-apptainer run \
-	--bind /scratch/08266/psadil/qcapp/a2cps.duckdb:/tmp/a2cps.duckdb \
-	--bind "${a2cps}" \
-	--env-file=.env \
-	docker://psadil/dirt:manage \
-	render --update /tmp/a2cps.duckdb
+run() { apptainer exec --bind "${a2cps}" --bind "${TEMPLATEFLOW}" --bind "${ROIS}" \
+	--env DB="${DBDIR}/dirt.db" --env DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+	--env TEMPLATEFLOW_HOME="${TEMPLATEFLOW}" --env DIRT_ROI_CACHE="${ROIS}" \
+	"${SIF}" "$@"; }
+
+# A cold ROI cache needs network (TemplateFlow) plus minutes of registration, which
+# the offline compute node can't do: pre-warm on a login node with `./write_imgs2 prewarm`
+# before sbatch. In the job the same command is an instant fail-fast cache check.
+run manage build_rois MNI152NLin2009cAsym MNI152NLin6Asym
+if [[ "${1:-}" == prewarm ]]; then exit 0; fi
+
+for s in "${derivatives}"/*/fmriprep-v4/*; do
+	echo $s
+	run bidslake index -i "${s}/fmriprep" --adapter freesurfer --adapter fmriprep \
+		--dataset-id fmriprep -o "${CATALOG}" --no-bidsignore
+	run bidslake index -i "${s}/fmriprep/sourcedata/freesurfer" --no-bidsignore \
+		--adapter freesurfer --adapter fmriprep --dataset-id freesurfer -o "${CATALOG}"
+done
+
+# rsync -ha --info=progress2 "${derivatives}"/*/synthstrip/*/synthstrip/ sourcedata/synthstrip/
+run bidslake index -i sourcedata/synthstrip --no-bidsignore \
+	--adapter freesurfer --adapter fmriprep --dataset-id synthstrip -o "${CATALOG}"
+
+# rsync -ah --info=progress2 "${derivatives}"/*/qsirecon_fsl_dtifit/*/dtifit/multishell/ sourcedata/multishell/
+# run bidslake index -i "sourcedata/multishell" --no-bidsignore \
+# 	--adapter freesurfer --adapter fmriprep --dataset-id dtifit -o "${CATALOG}"
+
+run manage migrate --no-input
+run manage plan "${PLAN}"      # activate before render: render stamps the plan + computes its measures
+run manage render "${CATALOG}" # drop --update on a fresh seed
+run manage prioritize          # measures → Image.priority, the anomaly_first ordering key
+cp -av "${DBDIR}"/. "${OUT}/"
+cp -av "${CATALOG}" "${PWD}"
