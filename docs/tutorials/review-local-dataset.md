@@ -97,19 +97,18 @@ rendering. For example, to see the most atypically-sized brain masks first:
 strategy = "anomaly_first"
 
 [steps.masks]
-order_by = "volume_mm3"
+order_by = "mask_volume"
 direction = "two_sided"     # atypically large OR small is worth a look
 subgroup = ["space"]
-
-  [[steps.masks.measures]]
-  name = "volume_mm3"
-  compute = "mask_volume"
 ```
+
+`mask_volume` needs no declaring: DIRT [measures every metric it can](../concepts/metrics.md)
+for every file, and a plan only picks which one orders the queue.
 
 ```shell
 pixi run -e manage manage plan dirt.toml     # validate + activate (before render)
 pixi run -e manage manage render study.duckdb
-pixi run -e manage manage prioritize         # z-score the measures into the ordering key
+pixi run -e manage manage prioritize         # z-score the measure into the ordering key
 ```
 
 The metric only *reorders* — it never hides an image, and it is invisible to reviewers. Rerun

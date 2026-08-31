@@ -27,11 +27,17 @@ DIRT has three parts:
   brain mask, for example, five informative slices in each of three
   orientations. Where a failure is best seen across a whole volume, the image is
   animated.
+- **Quantitative measures.** Every derivative DIRT renders is also measured —
+  brain-mask volume, how much of the brain the field of view cuts off, which
+  tissue it cuts through, how far a coregistration moves the brain. Every metric
+  DIRT can compute from a file is computed and stored, whether or not anything
+  orders by it, and no metric is ever shown to a rater.
 - **A review-ordering algorithm.** During a session, images are served one at a
-  time using a *breadth-first* strategy: the next image comes from whichever
-  scan has been reviewed the fewest times, and scans already judged to have
-  failed are skipped. Effort is spread across the whole dataset first, then
-  deepens per scan as time allows.
+  time. The default *breadth-first* strategy takes the next image from whichever
+  scan has been reviewed the fewest times, so effort spreads across the whole
+  dataset first and deepens per scan as time allows. *anomaly-first* keeps that
+  backbone but re-ranks within each review-depth band by how atypical a measure
+  is, surfacing likely failures early without ever hiding anything.
 - **A review platform.** A mobile-friendly Django web app presents the images,
   collects ratings, and stores everything in a SQL database, so several
   reviewers can work on the same dataset at once. A little session metadata (who

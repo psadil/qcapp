@@ -4,22 +4,15 @@ name = "A2CPS MRI QC"
 [ordering]
 strategy = "anomaly_first" # fewest-reviews first, most atypical first within a depth band
 
+# Every metric DIRT can compute is stored; a step only names the one it orders by.
 [steps.masks]
-order_by = "volume_mm3"
+order_by = "mask_volume"
 direction = "two_sided" # an atypically large or small mask is equally worth a look
-subgroup = ["space"]    # a native-space volume is not comparable to an MNI-space one
-
-[[steps.masks.measures]]
-name = "volume_mm3"
-compute = "mask_volume" # brain-mask volume in mm³
+subgroup = ["space", "res"] # a native-space volume is not comparable to an MNI-space one
 
 [steps.fmap_coregistration]
-order_by = "coreg_mm"
+order_by = "affine_displacement"
 direction = "higher_worse" # a bigger induced displacement is more suspect
-
-[[steps.fmap_coregistration.measures]]
-name = "coreg_mm"
-compute = "affine_displacement" # RMS mm the coregistration affine moves the brain (Jenkinson)
 
 # An active plan gates the landing page to the steps it names, so the other
 # rendered steps are declared too; empty blocks keep them breadth-first.

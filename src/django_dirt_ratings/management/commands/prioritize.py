@@ -1,4 +1,4 @@
-"""Recompute ``Image.priority`` from ``raw_metrics`` per the active review plan.
+"""Recompute ``Image.priority`` from the stored metrics per the active review plan.
 
 For each planned step with an ``order_by`` measure this scores that measure *within
 a rational subgroup* (SPC: compare like with like — e.g. mask volume within a
@@ -20,8 +20,9 @@ docs/concepts/review-ordering.md):
   — only 1.5 for n=4 — so it saturates exactly when a scan is badly wrong.
 
 ``priority`` is advisory and only ever reorders — never filters or hides an image.
-The statistical unit is one whole NIfTI (one ``file1``), not the 15 rendered views
-of it, so measures are de-duplicated per file before any statistic is taken.
+The statistical unit is one whole NIfTI, which is what a ``MeasuredFile`` row is —
+so the numbers arrive already one-per-file, and the 15 rendered views of a file all
+receive the score computed once for it.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ _MEANAD_TO_SIGMA = 0.7979
 
 
 def _num(value: object) -> float | None:
-    """Coerce a raw_metrics value to a finite float, or None."""
+    """Coerce a stored metric value to a finite float, or None."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return float(value) if math.isfinite(value) else None
@@ -114,54 +115,54 @@ def _priorities(
 
 
 class Command(BaseCommand):
-    help = "Recompute Image.priority from raw_metrics per the active review plan."
+    help = "Recompute Image.priority from the stored metrics per the active plan."
 
     def handle(self, *args, **options) -> None:
         active = plan.active()
         updated = 0
         for step_plan in active.steps:
-            measure = step_plan.order_measure
-            if measure is None:
+            order_by = step_plan.order_by
+            if order_by is None:
                 continue
 
-            rows = list(
-                models.Image.objects.filter(step=step_plan.step.value).values(
-                    "id", "priority", "raw_metrics", "file1"
-                )
+            step = step_plan.step.value
+            measured = models.MeasuredFile.objects.filter(step=step).values(
+                "file1", "entities"
             )
-            # De-duplicate to one value per whole NIfTI: a file's 15 rendered views
-            # (display x cut) are one observation, not 15. Counting them 15x would
-            # dilute the sample-sd correction and skew the floor.
-            per_file: dict[tuple, dict[str, float | None]] = collections.defaultdict(
-                dict
+            # One query for the ordering metric across the whole step; a file with
+            # no row for it simply has no value, and stays unscored.
+            values = dict(
+                models.Metric.objects.filter(
+                    file__step=step, name=order_by
+                ).values_list("file__file1", "value")
             )
-            row_group: dict[int, tuple[tuple, str]] = {}
-            for row in rows:
-                rm = row["raw_metrics"] or {}
-                key = tuple(rm.get(k) for k in step_plan.subgroup)
-                per_file[key][row["file1"]] = _num(rm.get(measure.name))
-                row_group[row["id"]] = (key, row["file1"])
+            groups: dict[tuple, dict[str, float | None]] = collections.defaultdict(dict)
+            for row in measured:
+                entities = row["entities"] or {}
+                key = tuple(entities.get(k) for k in step_plan.subgroup)
+                groups[key][row["file1"]] = _num(values.get(row["file1"]))
 
-            scored: dict[tuple[tuple, str], float | None] = {}
-            for key, files in per_file.items():
+            scored: dict[str, float | None] = {}
+            for files in groups.values():
                 names = list(files)
-                values = [files[n] for n in names]
                 for name, priority in zip(
                     names,
                     _priorities(
-                        values,
+                        [files[n] for n in names],
                         step_plan.direction,
                         min_cv=step_plan.min_cv,
                         min_spread=step_plan.min_spread,
                     ),
                 ):
-                    scored[(key, name)] = priority
+                    scored[name] = priority
 
-            current = {row["id"]: row["priority"] for row in rows}
+            # Every rendered view of a file carries the score computed for the file.
             stale = [
-                models.Image(id=image_id, priority=scored[group])
-                for image_id, group in row_group.items()
-                if scored[group] != current[image_id]
+                models.Image(id=row["id"], priority=scored.get(row["file1"]))
+                for row in models.Image.objects.filter(step=step).values(
+                    "id", "priority", "file1"
+                )
+                if scored.get(row["file1"]) != row["priority"]
             ]
             if stale:
                 models.Image.objects.bulk_update(stale, ["priority"])

@@ -24,13 +24,12 @@ name = "study coregistration QC"
 strategy = "anomaly_first"        # fewest-reviews first, worst-aligned first within a depth band
 
 [steps.fmap_coregistration]
-order_by = "coreg_mm"             # the measure below becomes the ordering key
+order_by = "affine_displacement"  # RMS mm the coregistration affine moves the brain
 direction = "higher_worse"        # one-sided: a bigger displacement is more suspect
-
-  [[steps.fmap_coregistration.measures]]
-  name = "coreg_mm"
-  compute = "affine_displacement" # RMS mm the coregistration affine moves the brain
 ```
+
+`affine_displacement` is [measured for every coregistration DIRT renders](../concepts/metrics.md)
+whether or not a plan mentions it; naming it here is what makes it the ordering key.
 
 Two choices are worth calling out, because they differ from the [`mask_volume` example](review-local-dataset.md#4-order-by-quality-metrics-optional):
 
@@ -39,14 +38,14 @@ Two choices are worth calling out, because they differ from the [`mask_volume` e
 
 ## Index, plan, render, prioritize
 
-The plan must be active before you render, because rendering is what stamps each image with the plan and computes its measures:
+Activate the plan before you render, so each image is stamped with the plan it was rendered under (the measures themselves are computed either way):
 
 ```shell
 pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep --adapter freesurfer -o study.duckdb
 # parse and activate the plan, storing it in the database so it travels with the ratings
 pixi run -e manage manage plan dirt.toml # validate → persist → activate
 
-# render just the coregistration images and, for each, compute `affine_displacement` from the run's brain mask and `*_xfm.txt`, stashing the raw millimeter value on the image.
+# render just the coregistration images and measure each one — `affine_displacement` from the run's brain mask and `*_xfm.txt`, alongside every other metric those inputs support.
 pixi run -e manage manage render study.duckdb --step fmap_coregistration
 
 # turn those raw measures into the ordering key, converting each value to a robust z-score (how unusual this run is relative to the rest) and write it to `Image.priority`. Rerun it after new data lands. It is a safe, idempotent recompute.

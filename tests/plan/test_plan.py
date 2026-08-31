@@ -11,13 +11,9 @@ name = "demo"
 strategy = "anomaly_first"
 
 [steps.masks]
-order_by = "volume_mm3"
+order_by = "mask_volume"
 direction = "two_sided"
 subgroup = ["space"]
-
-[[steps.masks.measures]]
-name = "volume_mm3"
-compute = "mask_volume"
 """
 
 
@@ -45,7 +41,7 @@ class TestParseValid:
         assert parsed.reviewable_steps == (models.Step.MASK,)
 
     def test_step_order_by(self, mask_plan):
-        assert mask_plan.order_by == "volume_mm3"
+        assert mask_plan.order_by == "mask_volume"
 
     def test_step_direction(self, mask_plan):
         assert mask_plan.direction == models.MetricDirection.TWO_SIDED
@@ -53,16 +49,8 @@ class TestParseValid:
     def test_step_subgroup(self, mask_plan):
         assert mask_plan.subgroup == ("space",)
 
-    def test_order_by_resolves_to_its_measure(self, mask_plan):
-        assert mask_plan.order_measure == plan.Measure(
-            name="volume_mm3", compute="mask_volume"
-        )
-
-    def test_measure_is_computed(self, mask_plan):
-        assert mask_plan.computed_measures == mask_plan.measures
-
-    def test_measure_is_not_a_catalog_measure(self, mask_plan):
-        assert mask_plan.catalog_measures == ()
+    def test_a_computed_metric_needs_no_measure_block(self, mask_plan):
+        assert mask_plan.measures == ()
 
 
 class TestParseEmpty:
@@ -95,20 +83,17 @@ class TestParseCatalogMeasure:
     def test_measure_is_read_from_the_catalog(self, dtifit_plan):
         assert dtifit_plan.catalog_measures == dtifit_plan.measures
 
-    def test_nothing_is_computed_at_ingest(self, dtifit_plan):
-        assert dtifit_plan.computed_measures == ()
-
 
 @pytest.mark.parametrize(
     "text",
     [
         pytest.param(
-            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\ncatalog="b"',
-            id="compute-and-catalog",
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="mask_volume"',
+            id="legacy-compute-measure",
         ),
         pytest.param(
             '[steps.masks]\n[[steps.masks.measures]]\nname="x"',
-            id="neither-compute-nor-catalog",
+            id="measure-without-a-catalog-key",
         ),
         pytest.param('[steps.masks]\norder_by="nope"', id="order_by-is-not-a-measure"),
         pytest.param("[steps.bogus]\n", id="unknown-step"),
@@ -117,7 +102,7 @@ class TestParseCatalogMeasure:
         pytest.param("[ordering]\ntriage_depth=1", id="stale-triage-depth"),
         pytest.param("[steps.masks]\nbogus=1", id="unknown-step-block-key"),
         pytest.param(
-            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\nbogus=1',
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncatalog="c"\nbogus=1',
             id="unknown-measure-key",
         ),
         pytest.param('[steps.masks]\nstep="masks"', id="step-set-in-block"),
@@ -126,8 +111,7 @@ class TestParseCatalogMeasure:
         pytest.param('[steps.masks]\nmin_cv="0.1"', id="string-min_cv"),
         pytest.param("[steps.masks]\nmin_spread=true", id="boolean-min_spread"),
         pytest.param(
-            '[steps.masks]\ndirection="sideways"\n'
-            '[[steps.masks.measures]]\nname="v"\ncompute="mask_volume"',
+            '[steps.masks]\ndirection="sideways"\norder_by="mask_volume"',
             id="unknown-direction",
         ),
         pytest.param(
@@ -136,15 +120,42 @@ class TestParseCatalogMeasure:
             id="cross-dataset-measure-without-match-keys",
         ),
         pytest.param(
-            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncompute="a"\n'
+            '[steps.masks]\n[[steps.masks.measures]]\nname="x"\ncatalog="c"\n'
             'match=["sub"]',
-            id="match-on-a-computed-measure",
+            id="cross-dataset-measure-without-a-suffix",
         ),
     ],
 )
 def test_invalid_raises_plan_error(text):
     with pytest.raises(plan.PlanError):
         plan.parse(text)
+
+
+class TestComputedMetricsNeedNoDeclaration:
+    """Computed metrics are always measured, so a plan only ever names one."""
+
+    @pytest.fixture
+    def mask_plan(self) -> plan.StepPlan:
+        step_plan = plan.parse('[steps.masks]\norder_by="fov_cutoff_max"').step_plan(
+            models.Step.MASK
+        )
+        if step_plan is None:  # a setup guard, not the assertion under test
+            pytest.fail("the parsed plan declares a [steps.masks] table")
+        return step_plan
+
+    def test_order_by_accepts_any_computed_metric(self, mask_plan):
+        assert mask_plan.order_by == "fov_cutoff_max"
+
+    def test_it_needs_no_measure_block(self, mask_plan):
+        assert mask_plan.measures == ()
+
+    def test_a_legacy_compute_block_says_what_to_do_instead(self):
+        text = (
+            '[steps.masks]\n[[steps.masks.measures]]\nname="v"\ncompute="mask_volume"'
+        )
+
+        with pytest.raises(plan.PlanError, match='order_by = "mask_volume"'):
+            plan.parse(text)
 
 
 @pytest.fixture

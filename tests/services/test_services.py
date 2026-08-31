@@ -9,8 +9,11 @@ from django.core.exceptions import ValidationError
 from django_dirt_ratings.models import (
     Annotation,
     AnnotationCell,
+    ComputedMetric,
     DisplayMode,
     Image,
+    MeasuredFile,
+    Metric,
     Rating,
     Ratings,
     ReviewPlan,
@@ -23,6 +26,7 @@ from django_dirt_ratings.services import (
     image_delete,
     image_upsert,
     image_upsert_many,
+    measured_file_upsert,
     rating_create,
     session_create,
 )
@@ -217,20 +221,6 @@ class TestImageUpsert:
     def test_refreshes_the_bytes(self, updated):
         assert bytes(Image.objects.get().img) == b"second"
 
-    def test_persists_measures(self):
-        image = image_upsert(
-            img=b"x",
-            file1="g.nii.gz",
-            display=DisplayMode.X,
-            step=Step.DTIFIT,
-            slice=None,
-            raw_metrics={"fd_mean": 0.3},
-        )
-
-        image.refresh_from_db()
-
-        assert image.raw_metrics == {"fd_mean": 0.3}
-
 
 @pytest.mark.django_db
 class TestImageUpsertMany:
@@ -256,7 +246,7 @@ class TestImageUpsertMany:
 
 @pytest.mark.django_db
 class TestUpsertManyKeepsPriority:
-    """Ingest owns the measures; `prioritize` owns the score derived from them."""
+    """Ingest owns the bytes; `prioritize` owns the score, and must survive both."""
 
     @pytest.fixture
     def review_plan(self, db) -> ReviewPlan:
@@ -264,34 +254,16 @@ class TestUpsertManyKeepsPriority:
 
     @pytest.fixture
     def ingested(self, review_plan) -> Image:
-        image_upsert_many(
-            images=[
-                _row(
-                    raw_metrics={"space": "MNI", "volume_mm3": 100.0},
-                    review_plan_id=review_plan.pk,
-                )
-            ]
-        )
+        image_upsert_many(images=[_row(review_plan_id=review_plan.pk)])
         return Image.objects.get(file1="f.nii.gz", slice=0)
 
     @pytest.fixture
     def rerendered(self, ingested, review_plan) -> Image:
         """A prioritize run scored the image; then ingest re-rendered it."""
         Image.objects.filter(pk=ingested.pk).update(priority=2.5)
-        image_upsert_many(
-            images=[
-                _row(
-                    img=b"A",
-                    raw_metrics={"space": "MNI", "volume_mm3": 150.0},
-                    review_plan_id=review_plan.pk,
-                )
-            ]
-        )
+        image_upsert_many(images=[_row(img=b"A", review_plan_id=review_plan.pk)])
         ingested.refresh_from_db()
         return ingested
-
-    def test_stores_the_measures(self, ingested):
-        assert ingested.raw_metrics == {"space": "MNI", "volume_mm3": 100.0}
 
     def test_stamps_the_review_plan(self, ingested, review_plan):
         assert ingested.review_plan_id == review_plan.pk
@@ -299,12 +271,63 @@ class TestUpsertManyKeepsPriority:
     def test_rerender_refreshes_the_bytes(self, rerendered):
         assert bytes(rerendered.img) == b"A"
 
-    def test_rerender_refreshes_the_measures(self, rerendered):
-        assert rerendered.raw_metrics["volume_mm3"] == 150.0
-
     def test_rerender_preserves_the_priority(self, rerendered):
         # priority is not in update_fields, so a re-render must not clobber it.
         assert rerendered.priority == 2.5
+
+
+@pytest.mark.django_db
+class TestMeasuredFileUpsert:
+    """Measurements belong to the file, and a re-measure replaces the whole set."""
+
+    @pytest.fixture
+    def measured(self, db) -> MeasuredFile:
+        return measured_file_upsert(
+            step=Step.MASK,
+            file1="f.nii.gz",
+            entities={"space": "MNI"},
+            values={ComputedMetric.MASK_VOLUME: 100.0, "stale": 1.0},
+        )
+
+    @pytest.fixture
+    def remeasured(self, measured) -> MeasuredFile:
+        """The same file measured again, with one metric gone and one changed."""
+        return measured_file_upsert(
+            step=Step.MASK,
+            file1="f.nii.gz",
+            entities={"space": "MNI"},
+            values={
+                ComputedMetric.MASK_VOLUME: 150.0,
+                ComputedMetric.FOV_CUTOFF_MAX: None,
+            },
+        )
+
+    def test_stores_the_entities(self, measured):
+        assert measured.entities == {"space": "MNI"}
+
+    def test_stores_a_row_per_metric(self, measured):
+        assert measured.metrics.count() == 2
+
+    def test_stores_the_value_under_its_canonical_name(self, measured):
+        assert measured.metrics.get(name="mask_volume").value == 100.0
+
+    def test_remeasuring_reuses_the_row(self, measured, remeasured):
+        assert remeasured.pk == measured.pk
+
+    def test_remeasuring_refreshes_a_value(self, remeasured):
+        assert remeasured.metrics.get(name="mask_volume").value == 150.0
+
+    def test_remeasuring_drops_a_metric_no_longer_produced(self, remeasured):
+        assert not remeasured.metrics.filter(name="stale").exists()
+
+    def test_an_unmeasurable_metric_is_stored_as_null(self, remeasured):
+        assert remeasured.metrics.get(name="fov_cutoff_max").value is None
+
+    def test_remeasuring_adds_no_duplicate_file(self, remeasured):
+        assert MeasuredFile.objects.count() == 1
+
+    def test_a_metric_is_scoped_to_its_file(self, remeasured):
+        assert Metric.objects.filter(file=remeasured).count() == 2
 
 
 @pytest.mark.django_db

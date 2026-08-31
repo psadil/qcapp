@@ -27,7 +27,9 @@ def make_row(
         entities={"sub": sub, "ses": ses},
         roles={
             "brain": (
-                lake_mod.Resolved(f"{root}/{brain_path}", brain_path) if brain else None
+                lake_mod.Resolved(f"{root}/{brain_path}", brain_path, root)
+                if brain
+                else None
             )
         },
         unresolved={} if brain else {"brain": 0},

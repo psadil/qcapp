@@ -44,18 +44,30 @@ class Role:
     by column equality, with ``None`` meaning ``IS NULL``. ``basename`` instead
     matches by path suffix, for volumes whose identity is a fixed filename
     (FreeSurfer's ``brain.mgz``) rather than any concept column.
+
+    An ``optional`` role that resolves to nothing leaves the job standing instead
+    of skipping it, so a spec can offer an input only some datasets have (an
+    ``aseg`` segmentation, say). The extractors needing it simply do not run (see
+    ``MetricExtractor.requires``), while everything else is measured as usual.
     """
 
     join: tuple[str, ...]
     where: Mapping[str, Any] | None = None
     basename: str | None = None
+    optional: bool = False
 
 
 class Resolved(typing.NamedTuple):
-    """A resolved role: its local filesystem path and catalog-relative path."""
+    """A resolved role: where it is, and which indexed tree it came from.
+
+    ``root_uri`` is what pairs a file with the dataset-root sidecars that describe
+    it (a ``_dseg.tsv`` label lookup, say) — those carry no entities to join on,
+    and a study indexed as many roots cannot pair them by dataset either.
+    """
 
     local: str
     file_path: str
+    root_uri: str
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -67,28 +79,33 @@ class UnitRow:
     entities: dict[str, Any]
     roles: dict[str, Resolved | None]
     #: role -> match count for every role that is not exactly one file
-    #: (0 = missing, 2+ = ambiguous). Either way the job must be skipped, never
+    #: (0 = missing, 2+ = ambiguous). Either way the role stays None, never
     #: resolved by silently picking a candidate.
     unresolved: dict[str, int]
+    #: roles the spec marked optional: unresolved, they leave the job standing.
+    optional_roles: frozenset[str] = dataclasses.field(default_factory=frozenset)
 
     def warn_unresolved(self, logger: logging.Logger) -> bool:
         """Log each unresolved role; True when this row must be skipped.
 
         Missing (0 matches) logs at DEBUG — an anchor with nothing to pair is
         routine (masks exist in spaces that have no T1w). Ambiguous (2+) is a
-        WARNING: the query under-specifies, and skipping is the only safe move.
+        WARNING: the query under-specifies, and picking one is never safe. Only a
+        *required* role forces the skip; an optional one is simply absent.
         """
         for role, n in self.unresolved.items():
+            fate = "leaving" if role in self.optional_roles else "skipping"
             if n == 0:
-                logger.debug("skipping %s: %s matched nothing", self.file_path, role)
+                logger.debug("%s %s: %s matched nothing", fate, self.file_path, role)
             else:
                 logger.warning(
-                    "skipping %s: %s was ambiguous (%d matches)",
+                    "%s %s: %s was ambiguous (%d matches)",
+                    fate,
                     self.file_path,
                     role,
                     n,
                 )
-        return bool(self.unresolved)
+        return any(role not in self.optional_roles for role in self.unresolved)
 
 
 def unit_rows(
@@ -140,7 +157,9 @@ def unit_rows(
         for name in roles:
             if row[f"{name}__n"] == 1:
                 local = bidslake.to_local_path(bidslake.sibling_path(lake, row, name))
-                resolved[name] = Resolved(str(local), row[f"{name}__file_path"])
+                resolved[name] = Resolved(
+                    str(local), row[f"{name}__file_path"], row[f"{name}__root_uri"]
+                )
             else:
                 resolved[name] = None
         out.append(
@@ -150,6 +169,7 @@ def unit_rows(
                 entities={k: row[k] for k in entities},
                 roles=resolved,
                 unresolved=bidslake.unresolved(row, roles),
+                optional_roles=frozenset(n for n, r in roles.items() if r.optional),
             )
         )
     return out

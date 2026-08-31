@@ -19,13 +19,9 @@ def _scores(priorities: Sequence[float | None]) -> list[float]:
 
 PLAN = """
 [steps.masks]
-order_by = "volume_mm3"
+order_by = "mask_volume"
 direction = "two_sided"
 subgroup = ["space"]
-
-[[steps.masks.measures]]
-name = "volume_mm3"
-compute = "mask_volume"
 """
 
 
@@ -165,17 +161,23 @@ class TestDegeneracyFloor:
 
 @pytest.fixture
 def make_mask(db):
-    """Create a MASK image carrying the measures `prioritize` reads."""
+    """Create a MASK image and the measurements `prioritize` reads for its file."""
 
     def _make(space: str, volume: float) -> models.Image:
         n = models.Image.objects.count()
+        file1 = f"f{n}.nii.gz"
+        services.measured_file_upsert(
+            step=models.Step.MASK,
+            file1=file1,
+            entities={"space": space},
+            values={models.ComputedMetric.MASK_VOLUME: volume},
+        )
         return models.Image.objects.create(
             img=b"\x89PNG",
-            file1=f"f{n}.nii.gz",
+            file1=file1,
             display=0,
             step=models.Step.MASK,
             slice=n,
-            raw_metrics={"space": space, "volume_mm3": volume},
         )
 
     return _make
@@ -222,10 +224,24 @@ class TestPrioritizeCommand:
         assert dict(models.Image.objects.values_list("id", "priority")) == before
 
     def test_no_order_measure_leaves_priority_null(self, make_mask):
-        services.plan_apply(name="t", text="[steps.masks]\n")  # measures nothing
+        services.plan_apply(name="t", text="[steps.masks]\n")  # orders by nothing
         image = make_mask("MNI", 100.0)
 
         call_command("prioritize")
 
         image.refresh_from_db()
         assert image.priority is None
+
+    def test_an_unmeasured_file_is_left_unscored(self, make_mask):
+        """A file with no MeasuredFile row sorts after the scored ones."""
+        services.plan_apply(name="t", text=PLAN)
+        make_mask("MNI", 100.0)
+        make_mask("MNI", 200.0)
+        orphan = models.Image.objects.create(
+            img=b"\x89PNG", file1="orphan.nii.gz", display=0, step=models.Step.MASK
+        )
+
+        call_command("prioritize")
+
+        orphan.refresh_from_db()
+        assert orphan.priority is None

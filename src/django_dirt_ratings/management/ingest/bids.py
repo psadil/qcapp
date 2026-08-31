@@ -18,6 +18,11 @@ def parse_entities(name: str) -> dict[str, str]:
     return dict(_ENTITY.findall(name))
 
 
+def _key_value(f: Any, key: str) -> Any:
+    """One file's value for an index key: a BIDS entity, else a registry column."""
+    return f.entities[key] if key in f.entities else getattr(f, key, None)
+
+
 def index_by(
     lake: Any,
     keys: Sequence[str],
@@ -41,12 +46,15 @@ def index_by(
     ``lake.get`` cannot express (an entity's value prefix, say). Filtering the
     returned dict instead would let the rejects collide with the wanted file first
     and blank the key.
+
+    A key may be a registry column rather than a BIDS entity (``root_uri``, to key
+    the dataset-root files that carry no entities at all).
     """
     index: dict[tuple, Any] = {}
     for f in lake.get(**filters):
         if where is not None and not where(f):
             continue
-        key = tuple(f.entities.get(k) for k in keys)
+        key = tuple(_key_value(f, k) for k in keys)
         if key in index:
             if index[key] is not None:
                 logger.warning(

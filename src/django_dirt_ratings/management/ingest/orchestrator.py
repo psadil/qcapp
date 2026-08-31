@@ -7,7 +7,8 @@
   file's inputs once, runs the prep-once render, and returns every blob. CPU- and
   GIL-bound matplotlib work parallelizes across files; only paths in, blobs out.
 - **Writing** happens back in the parent — the sole DB writer, since SQLite has a
-  single writer — batched per file via ``services.image_upsert_many``.
+  single writer — batched per file via ``services.image_upsert_many``, alongside
+  that file's measurements via ``services.measured_file_upsert``.
 """
 
 from __future__ import annotations
@@ -27,25 +28,42 @@ from .registry import STEP_SPECS, RenderJob
 
 logger = logging.getLogger(__name__)
 
-# A resolved computed measure: (raw_metrics key, extractor instance).
-_Extractor = tuple[str, measures.MetricExtractor]
 
+def _measure(
+    *, job: RenderJob, catalog: Mapping[str, Any] | None
+) -> tuple[dict, dict[str, float | None]]:
+    """Everything measured for one file: its categorical context, and the numbers.
 
-def _measure(*, job: RenderJob, extractors: Sequence[_Extractor]) -> dict | None:
-    """Merge catalog-derived job metrics with the computed extractor values.
+    **Every** extractor whose input roles this job carries runs. The review plan
+    chooses what to *order* by, never what to measure, so a metric DIRT can compute
+    is computed and stored whether or not anything ranks on it — and a step that
+    gains an input gains its metrics with no plan edit.
 
     Extraction runs here in the parent (the sole DB writer): each extractor loads
     only what it needs, cheap next to rendering. A failing extractor yields None
-    rather than aborting the file.
+    for its own metrics rather than aborting the file.
     """
-    values: dict = dict(job.metrics or {})
-    for name, extractor in extractors:
+    entities: dict = dict(job.entities or {})
+    values: dict[str, float | None] = {}
+    for extractor in measures.MetricExtractor.applicable(job.inputs):
         try:
-            values[name] = extractor.extract(job.inputs)
+            produced = extractor.extract(job.inputs)
         except Exception:
-            logger.exception("measure %r failed for %s", name, job.file1)
-            values[name] = None
-    return values or None
+            logger.exception(
+                "measure %s failed for %s", type(extractor).__name__, job.file1
+            )
+            produced = extractor.unmeasured()
+        values.update({str(name): value for name, value in produced.items()})
+    for name, value in (catalog or {}).items():
+        # A catalog value that is not a number is context to compare within, not a
+        # measurement to rank; None is a measurement we could not pin down.
+        if value is None or (
+            not isinstance(value, bool) and isinstance(value, (int, float))
+        ):
+            values[name] = None if value is None else float(value)
+        else:
+            entities[name] = value
+    return entities, values
 
 
 def _write(
@@ -53,13 +71,17 @@ def _write(
     step: models.Step,
     job: RenderJob,
     blobs: dict,
-    extractors: Sequence[_Extractor],
     catalog: Mapping[str, Any] | None,
     review_plan_id: int | None,
 ) -> None:
-    raw = _measure(job=job, extractors=extractors)
-    if catalog:
-        raw = {**(raw or {}), **catalog}
+    entities, values = _measure(job=job, catalog=catalog)
+    services.measured_file_upsert(
+        step=int(step),
+        file1=job.file1,
+        entities=entities or None,
+        values=values,
+        review_plan_id=review_plan_id,
+    )
     rows: list[services.ImageRow] = [
         {
             "img": data,
@@ -68,7 +90,6 @@ def _write(
             "display": int(display),
             "step": int(step),
             "slice": cut,
-            "raw_metrics": raw,
             "review_plan_id": review_plan_id,
         }
         for (display, cut), data in blobs.items()
@@ -93,19 +114,12 @@ def ingest_dataset(
     filters = dict(filters or {})
     chosen = [STEP_SPECS[s] for s in steps] if steps else list(STEP_SPECS.values())
 
-    # The active review plan drives which measures to compute and stamps each image
-    # with its provenance (Image.review_plan). No plan → no measures, breadth-first.
+    # The active review plan stamps each image with its provenance
+    # (Image.review_plan) and names any catalog measures. It no longer decides what
+    # DIRT computes: every applicable extractor runs with or without a plan.
     record = plan.active_record()
     active = plan.parse(record.toml) if record is not None else plan.DEFAULT
     review_plan_id = record.id if record is not None else None
-    extractors_by_step: dict[models.Step, list[_Extractor]] = {
-        sp.step: [
-            (m.name, measures.MetricExtractor.get(m.compute))
-            for m in sp.computed_measures
-            if m.compute  # always true (computed_measures filters); narrows the type
-        ]
-        for sp in active.steps
-    }
     # Cross-dataset catalog measures (an MRIQC IQM in a sibling dataset), harvested
     # per job from the live lake in the loop below.
     catalog_by_step: dict[models.Step, list[plan.Measure]] = {
@@ -166,7 +180,6 @@ def ingest_dataset(
                 step=step,
                 job=job,
                 blobs=blobs,
-                extractors=extractors_by_step.get(step, []),
                 catalog=catalog,
                 review_plan_id=review_plan_id,
             )

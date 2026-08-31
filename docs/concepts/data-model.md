@@ -1,6 +1,6 @@
 # Data model
 
-DIRT's database is small. Six tables carry the whole review workflow; the full,
+DIRT's database is small. Eight tables carry the whole review workflow; the full,
 auto-generated field listing lives in the [Models reference](../reference/models.md).
 
 ## Entities
@@ -13,6 +13,11 @@ auto-generated field listing lives in the [Models reference](../reference/models
   A uniqueness constraint on `(slice, file1, display, step)` means re-rendering updates a
   figure in place rather than duplicating it, preserving any ratings already attached.
 - **`Session`** — one reviewing session: which step, which user, when.
+- **`MeasuredFile`** + **`Metric`** — the [measurements](metrics.md) taken of one source
+  NIfTI, and the categorical context (`space`, `res`) they are compared within. They hang
+  off the *file*, not the `Image`, because a file has many rendered views and one set of
+  numbers. One `Metric` row per name; a NULL value means DIRT tried and could not measure,
+  which is not the same as no row at all.
 
 ## Submissions
 

@@ -12,8 +12,10 @@ rejected, never ignored.
 Two facets live in two natural homes (see :mod:`~django_dirt_ratings.services`):
 
 - the **pipeline facet** (``measures`` / ``order_by`` / ``direction`` / ``subgroup``)
-  shapes the images — ``render`` measures them and stamps ``Image.review_plan``,
-  ``prioritize`` turns the measures into ``Image.priority``;
+  shapes the queue — ``render`` stamps ``Image.review_plan`` and harvests any declared
+  catalog measure, ``prioritize`` turns the measure named by ``order_by`` into
+  ``Image.priority``. What DIRT *computes* is not a plan decision: every applicable
+  extractor runs, plan or no plan;
 - the **serving facet** (``strategy``) shapes a review session — it is copied onto
   ``Session`` at start-up.
 
@@ -49,13 +51,16 @@ _LaxDirection = Annotated[models.MetricDirection, pydantic.Field(strict=False)]
 
 
 class Measure(pydantic.BaseModel):
-    """One measured quantity to store in ``Image.raw_metrics`` under ``name``.
+    """One externally-derived quantity to measure, stored under ``name``.
 
-    Exactly one source: ``compute`` (a :class:`~management.ingest.measures.MetricExtractor`
-    ``key``, computed at ingest) or ``catalog`` (a metadata key read from the bidslake
-    catalog).
+    Only *catalog* measures are declared here — a metadata key read from the
+    bidslake catalog. Metrics DIRT computes itself need no declaration: every
+    extractor whose inputs a file carries runs at ingest, and its values are stored
+    under the canonical names in :class:`~django_dirt_ratings.models.ComputedMetric`,
+    which ``order_by`` can name directly. A catalog key, by contrast, is a string
+    DIRT cannot enumerate, so it must be spelled out.
 
-    A ``catalog`` measure can be **cross-dataset**: when ``catalog_suffix`` and ``match``
+    A measure can be **cross-dataset**: when ``catalog_suffix`` and ``match``
     are set, the value is read from a record of that suffix in a *sibling* dataset (one
     sharing a source, see the bidslake cross-dataset links), paired to this file by the
     ``match`` BIDS entities. That is how MRIQC IQMs (in a separate dataset) order an
@@ -66,13 +71,10 @@ class Measure(pydantic.BaseModel):
     model_config = _STRICT
 
     name: str = pydantic.Field(
-        description="The key this value is stored under in `Image.raw_metrics`."
+        description="The name this value is stored under, and that `order_by` uses."
     )
-    compute: str | None = pydantic.Field(
-        default=None, description="A metric DIRT computes itself at ingest."
-    )
-    catalog: str | None = pydantic.Field(
-        default=None, description="A metadata key read from the bidslake catalog."
+    catalog: str = pydantic.Field(
+        description="A metadata key read from the bidslake catalog."
     )
     catalog_suffix: str | None = pydantic.Field(
         default=None,
@@ -83,17 +85,21 @@ class Measure(pydantic.BaseModel):
         description="Cross-dataset: BIDS entities pairing this file to the sibling record.",
     )
 
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _reject_compute(cls, data: object) -> object:
+        """Point a pre-always-on plan at its replacement, not at "unknown key"."""
+        if isinstance(data, dict) and "compute" in data:
+            raise ValueError(
+                f"`compute` is no longer a measure: {data['compute']!r} is computed "
+                "for every file that supports it. Delete this block and set "
+                f'order_by = "{data["compute"]}" on the step.'
+            )
+        return data
+
     @pydantic.model_validator(mode="after")
-    def _one_source(self) -> Measure:
-        if bool(self.compute) == bool(self.catalog):
-            raise ValueError(
-                f"measure {self.name!r}: set exactly one of `compute` or `catalog`"
-            )
+    def _cross_dataset_is_complete(self) -> Measure:
         cross = self.catalog_suffix is not None or bool(self.match)
-        if cross and not self.catalog:
-            raise ValueError(
-                f"measure {self.name!r}: `catalog_suffix`/`match` apply only to a `catalog` measure"
-            )
         if cross and (not self.catalog_suffix or not self.match):
             raise ValueError(
                 f"measure {self.name!r}: a cross-dataset catalog measure needs both "
@@ -140,7 +146,13 @@ class StepPlan(pydantic.BaseModel):
     measures: Annotated[tuple[Measure, ...], pydantic.Field(strict=False)] = ()
     order_by: str | None = pydantic.Field(
         default=None,
-        description="The measure (by name) that orders this step; omit for breadth-first.",
+        description=(
+            "What orders this step: a metric DIRT computes (see `examples`) or a "
+            "declared catalog measure's name. Omit for breadth-first."
+        ),
+        # Not an enum: a catalog measure's name is any string the plan chose. The
+        # examples give editors the computed names to complete from.
+        examples=[m.value for m in models.ComputedMetric],
     )
     direction: _LaxDirection = pydantic.Field(
         default=models.MetricDirection.TWO_SIDED,
@@ -162,29 +174,23 @@ class StepPlan(pydantic.BaseModel):
     )
 
     @pydantic.model_validator(mode="after")
-    def _order_by_declared(self) -> StepPlan:
-        if self.order_by is not None and self.order_by not in {
-            m.name for m in self.measures
-        }:
+    def _order_by_is_measured(self) -> StepPlan:
+        """``order_by`` must name something that will actually be stored."""
+        if self.order_by is None:
+            return self
+        computed = {m.value for m in models.ComputedMetric}
+        declared = {m.name for m in self.measures}
+        if self.order_by not in computed | declared:
             raise ValueError(
-                f"order_by={self.order_by!r} is not a declared measure "
-                f"(have {[m.name for m in self.measures]})"
+                f"order_by={self.order_by!r} is neither a metric DIRT computes "
+                f"({sorted(computed)}) nor a declared catalog measure "
+                f"({sorted(declared)})"
             )
         return self
 
     @property
-    def order_measure(self) -> Measure | None:
-        """The measure named by ``order_by`` (validated to exist), or None."""
-        if self.order_by is None:
-            return None
-        return next(m for m in self.measures if m.name == self.order_by)
-
-    @property
-    def computed_measures(self) -> tuple[Measure, ...]:
-        return tuple(m for m in self.measures if m.compute)
-
-    @property
     def catalog_measures(self) -> tuple[Measure, ...]:
+        """The catalog measures declared for this step (all of them, today)."""
         return tuple(m for m in self.measures if m.catalog)
 
 

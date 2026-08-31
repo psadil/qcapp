@@ -93,7 +93,7 @@ def discover(lake: Lake, filters: Mapping[str, Any]) -> list[RenderJob]:
                 },
                 cuts=list(range(N_CUTS)),
                 displays=list(models.DisplayMode),
-                metrics=dict(row.entities),
+                entities=dict(row.entities),
             )
         )
     for group, count in skipped.items():

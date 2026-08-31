@@ -18,9 +18,10 @@ class ImageAdmin(admin.ModelAdmin):
     )
     list_filter = ("step", "display", "review_plan")
     search_fields = ("file1", "file2")
-    # Ordering inputs/outputs are researcher-facing transparency (never shown to
-    # raters): the measures harvested and the advisory priority they drive.
-    readonly_fields = ("image_full", "priority", "raw_metrics", "review_plan")
+    # Ordering outputs are researcher-facing transparency (never shown to raters):
+    # the advisory priority the measures drive. The measures themselves are on the
+    # file, under MeasuredFile.
+    readonly_fields = ("image_full", "priority", "review_plan")
 
     @admin.display(description="Preview")
     def image_preview(self, obj: models.Image) -> str:
@@ -61,7 +62,28 @@ class ReviewPlanAdmin(admin.ModelAdmin):
     readonly_fields = ("content_hash", "toml", "created_at", "updated_at")
 
 
+class MetricInline(admin.TabularInline):
+    """This file's measurements, read-only — `render` is what writes them."""
+
+    model = models.Metric
+    extra = 0
+    can_delete = False
+    readonly_fields = ("name", "value")
+
+    def has_add_permission(self, request, obj) -> bool:
+        return False
+
+
+class MeasuredFileAdmin(admin.ModelAdmin):
+    list_display = ("id", "file1", "step", "review_plan", "updated_at")
+    list_filter = ("step", "review_plan")
+    search_fields = ("file1",)
+    readonly_fields = ("step", "file1", "entities", "review_plan")
+    inlines = (MetricInline,)
+
+
 admin.site.register(models.Image, ImageAdmin)
 admin.site.register(models.Rating, RatingAdmin)
 admin.site.register(models.ReviewPlan, ReviewPlanAdmin)
+admin.site.register(models.MeasuredFile, MeasuredFileAdmin)
 admin.site.register([models.Session, models.Annotation])

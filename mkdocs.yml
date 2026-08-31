@@ -68,6 +68,7 @@ nav:
       - How data flows: concepts/data-flow.md
       - Spatial-normalization ROIs: concepts/spatial-normalization-rois.md
       - Landmark warp QC: concepts/landmark-warp-qc.md
+      - Metrics: concepts/metrics.md
       - Review ordering: concepts/review-ordering.md
       - Two kinds of review: concepts/interaction-types.md
       - Data model: concepts/data-model.md

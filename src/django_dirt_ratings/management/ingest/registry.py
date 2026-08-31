@@ -36,6 +36,7 @@ class BidsFile(Protocol):
     file_path: str
     uri: str
     dataset_id: str
+    root_uri: str  # the indexed tree this file belongs to
 
     @property
     def path(self) -> Any: ...  # UPath — local or remote
@@ -77,10 +78,10 @@ class RenderJob:
     inputs: dict[str, str]
     cuts: Sequence[int | None]
     displays: Sequence[models.DisplayMode]
-    # Catalog-derived values attached at discovery: rational-subgroup entities
-    # (e.g. ``{"space": "MNI152..."}``) and any ``catalog`` measures. Merged with the
-    # computed extractors into the resulting Image's ``raw_metrics``.
-    metrics: Mapping[str, float | str | None] | None = None
+    # Catalog-derived context attached at discovery: the rational-subgroup entities
+    # (e.g. ``{"space": "MNI152..."}``) a metric is compared within. Stored on the
+    # resulting ``MeasuredFile``; the metrics themselves come from the extractors.
+    entities: Mapping[str, float | str | None] | None = None
     # The primary source file's dataset_id and BIDS entities, so the orchestrator can
     # harvest a cross-dataset catalog measure (an MRIQC IQM in a sibling dataset) paired
     # to this file by entity. Populated by specs that carry catalog measures.

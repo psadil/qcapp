@@ -43,15 +43,14 @@ def image_upsert(
     step: int,
     slice: int | None = None,
     file2: str | None = None,
-    raw_metrics: dict | None = None,
     review_plan_id: int | None = None,
 ) -> models.Image:
     """Create the Image identified by its unique metadata, or refresh its bytes.
 
     The lookup fields are the ``image_meta`` unique constraint; updating in
     place preserves the primary key (hence any ratings) and ``priority``
-    (recomputed by ``prioritize``), while refreshing the bytes, measures, and the
-    plan the image was rendered under.
+    (recomputed by ``prioritize``), while refreshing the bytes and the plan the
+    image was rendered under. Measurements live on :class:`models.MeasuredFile`.
     """
     instance = models.Image.objects.filter(
         slice=slice, file1=file1, display=display, step=step
@@ -60,7 +59,6 @@ def image_upsert(
         instance = models.Image(slice=slice, file1=file1, display=display, step=step)
     instance.img = img
     instance.file2 = file2
-    instance.raw_metrics = raw_metrics
     instance.review_plan_id = review_plan_id
     instance.full_clean(validate_unique=False)
     instance.save()
@@ -76,9 +74,8 @@ class ImageRow(typing.TypedDict):
     display: int
     step: int
     slice: int | None
-    # Omitting these matches Image(**row) semantics: the model defaults (None)
-    # apply, which on conflict still refresh the stored values to NULL.
-    raw_metrics: typing.NotRequired[dict | None]
+    # Omitting this matches Image(**row) semantics: the model default (None)
+    # applies, which on conflict still refreshes the stored value to NULL.
     review_plan_id: typing.NotRequired[int | None]
 
 
@@ -86,10 +83,9 @@ def image_upsert_many(*, images: typing.Sequence[ImageRow]) -> None:
     """Create or refresh many Images in one INSERT ... ON CONFLICT.
 
     Each row holds the fields of one Image (``img``, ``file1``, ``file2``,
-    ``display``, ``step``, ``slice``, ``raw_metrics``, ``review_plan_id``). On
-    conflict against the ``image_meta`` unique key the bytes/measures/plan are
-    refreshed in place, preserving the primary key (and hence ratings), ``n_reviews``
-    and ``priority``. Only valid for non-null ``slice`` rows: SQLite treats NULLs as
+    ``display``, ``step``, ``slice``, ``review_plan_id``). On conflict against the
+    ``image_meta`` unique key the bytes and plan are refreshed in place, preserving
+    the primary key (and hence ratings), ``n_reviews`` and ``priority``. Only valid for non-null ``slice`` rows: SQLite treats NULLs as
     distinct in a unique index, so ON CONFLICT would not dedup them (the single-image
     DTIFIT step uses :func:`image_upsert` instead).
     """
@@ -103,8 +99,47 @@ def image_upsert_many(*, images: typing.Sequence[ImageRow]) -> None:
         instances,
         update_conflicts=True,
         unique_fields=["slice", "file1", "display", "step"],
-        update_fields=["img", "file2", "raw_metrics", "review_plan"],
+        update_fields=["img", "file2", "review_plan"],
     )
+
+
+def measured_file_upsert(
+    *,
+    step: int,
+    file1: str,
+    entities: dict | None = None,
+    values: typing.Mapping[str, float | None] | None = None,
+    review_plan_id: int | None = None,
+) -> models.MeasuredFile:
+    """Record one file's measurements, replacing whatever was measured before.
+
+    The measured set is authoritative: a metric that used to be stored for this
+    file and is not in ``values`` is deleted, so dropping an extractor (or a
+    catalog measure leaving the plan) does not leave a stale number behind for
+    ``prioritize`` to rank on. A ``None`` value is kept, and means something
+    different from absence — the extractor ran and could not measure this file.
+    """
+    rows = {str(name): value for name, value in (values or {}).items()}
+    with transaction.atomic():
+        instance, _ = models.MeasuredFile.objects.get_or_create(step=step, file1=file1)
+        instance.entities = entities
+        instance.review_plan_id = review_plan_id
+        instance.full_clean(validate_unique=False)
+        instance.save()
+        instance.metrics.exclude(name__in=list(rows)).delete()
+        metrics = [
+            models.Metric(file=instance, name=name, value=value)
+            for name, value in rows.items()
+        ]
+        for metric in metrics:
+            metric.full_clean(validate_unique=False, validate_constraints=False)
+        models.Metric.objects.bulk_create(
+            metrics,
+            update_conflicts=True,
+            unique_fields=["file", "name"],
+            update_fields=["value"],
+        )
+    return instance
 
 
 def plan_apply(*, name: str, text: str) -> models.ReviewPlan:

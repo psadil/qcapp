@@ -111,6 +111,35 @@ class MetricDirection(models.TextChoices):
     LOWER_WORSE = "lower_worse"  # smaller is more suspect (e.g. snr, cnr)
 
 
+class ComputedMetric(models.TextChoices):
+    """The metrics DIRT computes itself, by their canonical `Metric.name`.
+
+    Web-safe home for the names (like :class:`Step`), so the review plan can
+    validate an ``order_by`` against them — and publish them in its JSON Schema —
+    without importing the ingest stack's numpy/nibabel. The extractors that
+    produce them live in ``management.ingest.measures``, which guards at import
+    time that its registry emits exactly these members and no others.
+    """
+
+    # Geometry of the brain mask alone.
+    MASK_VOLUME = "mask_volume"
+    FOV_CUTOFF_DORSAL = "fov_cutoff_dorsal"
+    FOV_CUTOFF_VENTRAL = "fov_cutoff_ventral"
+    FOV_CUTOFF_MAX = "fov_cutoff_max"
+    # How far a coregistration affine moves the brain.
+    AFFINE_DISPLACEMENT = "affine_displacement"
+    # Which tissue the frame cuts through (a proxy; see the metrics concept page).
+    FOV_CUTOFF_CORTEX = "fov_cutoff_cortex"
+    FOV_CUTOFF_CEREBELLUM = "fov_cutoff_cerebellum"
+    FOV_CUTOFF_BRAINSTEM = "fov_cutoff_brainstem"
+    FOV_CUTOFF_CEREBRAL_WM = "fov_cutoff_cerebral_wm"
+    # What fraction of each structure a narrower FOV missed outright (exact).
+    FOV_EXCLUDED_CORTEX = "fov_excluded_cortex"
+    FOV_EXCLUDED_CEREBELLUM = "fov_excluded_cerebellum"
+    FOV_EXCLUDED_BRAINSTEM = "fov_excluded_brainstem"
+    FOV_EXCLUDED_CEREBRAL_WM = "fov_excluded_cerebral_wm"
+
+
 class BaseModel(models.Model):
     id: int  # the auto pk (django-stubs declares only `pk` without the plugin)
     created_at = models.DateTimeField(db_index=True, default=timezone.now)
@@ -175,21 +204,12 @@ class Image(BaseModel):
             "an image."
         ),
     )
-    raw_metrics = models.JSONField(
-        null=True,
-        blank=True,
-        help_text=(
-            "Measured values + rational-subgroup entities harvested at ingest, e.g. "
-            "{'volume_mm3': 1.23e6, 'space': 'MNI152NLin2009cAsym'}. The source "
-            "`manage prioritize` recomputes `priority` from."
-        ),
-    )
     review_plan = models.ForeignKey(
         "ReviewPlan",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
-        help_text="The plan under which this image was rendered and measured.",
+        help_text="The plan under which this image was rendered.",
     )
     review_plan_id: int | None
 
@@ -209,6 +229,78 @@ class Image(BaseModel):
             models.Index(
                 fields=["step", "n_reviews", "-priority", "id"], name="image_priority"
             ),
+        )
+
+
+class MeasuredFile(BaseModel):
+    """One measured NIfTI — the statistical unit the metrics belong to.
+
+    An `Image` is one *view* of a file (a slice along an axis), so a file has ~15
+    of them; a measurement belongs to the file, not the view. Keeping measurements
+    here rather than on `Image` stores each value once and makes it a real column
+    `manage prioritize` can group and aggregate, instead of a JSON blob repeated
+    fifteen times.
+
+    `entities` holds the categorical context a metric is compared *within* — the
+    rational-subgroup entities harvested at discovery (`sub`, `ses`, `space`,
+    `res`), plus any non-numeric catalog value. Numbers go to `Metric`.
+    """
+
+    step = models.IntegerField(choices=Step.choices)
+    file1 = models.TextField(max_length=512)
+    entities = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Categorical context for this file, e.g. {'space': 'MNI152NLin2009cAsym', "
+            "'res': '2'}. `manage prioritize` scores a metric within a subgroup of these."
+        ),
+    )
+    review_plan = models.ForeignKey(
+        "ReviewPlan",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        help_text="The plan active when this file was measured.",
+    )
+    review_plan_id: int | None
+    metrics: "RelatedManager[Metric]"
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(fields=["step", "file1"], name="measured_file"),
+        )
+
+
+class Metric(BaseModel):
+    """One measured value for one file.
+
+    A row per (file, name) rather than a column per metric: DIRT gains metrics
+    faster than it would want migrations, and every metric is the same shape — a
+    number, or NULL for "we tried and could not measure it" (an empty mask, a
+    segmentation on the wrong grid). NULL is deliberately not absence: absence
+    means the extractor never applied to this file at all.
+    """
+
+    file = models.ForeignKey(
+        MeasuredFile, on_delete=models.CASCADE, related_name="metrics"
+    )
+    file_id: int
+    name = models.TextField(
+        help_text=(
+            "The metric's canonical name: a `ComputedMetric` value for a metric DIRT "
+            "computes, or a plan-declared `catalog` measure name."
+        )
+    )
+    value = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(fields=["file", "name"], name="metric_name"),
+        )
+        indexes = (
+            # Serves `prioritize`, which reads one metric across a whole step.
+            models.Index(fields=["name", "file"], name="metric_by_name"),
         )
 
 

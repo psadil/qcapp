@@ -19,16 +19,19 @@ Run `manage render --help` for the full, always-current option list. In brief:
 ## Review ordering
 
 A dataset's [review plan](../concepts/review-ordering.md) (a `dirt.toml` file) chooses the
-ordering strategy and any metrics. It is applied and (re)computed with two web-safe commands:
+ordering strategy and the metric each step is ordered by. It is applied and (re)computed
+with two web-safe commands:
 
 ```shell
 manage plan dirt.toml     # validate, persist, and activate a review plan (--show to print the active one)
 manage prioritize         # recompute Image.priority from measured metrics per the active plan
 ```
 
-`render` reads the active plan to know which metrics to compute and stamps each image with it;
-`manage prioritize` z-scores those metrics into the ordering key. With no active plan, ordering
-is the default breadth-first and no metrics are computed. The `dirt.toml` format has a
+`render` measures every file it renders — [every metric DIRT can compute](../concepts/metrics.md)
+from that file's inputs, whether or not anything orders by it — and stamps each image with the
+active plan; `manage prioritize` z-scores the metric a step names into the ordering key. With no
+active plan the metrics are still computed and stored, and ordering is the default
+breadth-first. The `dirt.toml` format has a
 [JSON Schema](https://psadil.github.io/dirt/api/plan.schema.json) for editor completion and
 validation, regenerated at every docs build by `manage export_plan_schema`.
 

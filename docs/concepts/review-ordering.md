@@ -13,7 +13,7 @@ A plan picks one strategy (`ordering.py`). Both are a single covering index seek
 
 ## The review plan (`dirt.toml`)
 
-A plan is a small TOML file. It says which steps are reviewed, how to order them, and what to measure:
+A plan is a small TOML file. It says which steps are reviewed and how to order them. It does *not* say what to measure — [every metric DIRT can compute is computed and stored](metrics.md) for every file that supports it, plan or no plan:
 
 ```toml
 #:schema https://psadil.github.io/dirt/api/plan.schema.json
@@ -23,23 +23,15 @@ name = "ds007070 QC"
 strategy = "anomaly_first"      # breadth_first | anomaly_first
 
 [steps.masks]                   # one block per step in the review
-order_by = "volume_mm3"         # a measure below → the ordering key (omit ⇒ breadth-first here)
+order_by = "mask_volume"        # a stored metric → the ordering key (omit ⇒ breadth-first here)
 direction = "two_sided"         # two_sided | higher_worse | lower_worse
 subgroup = ["space"]            # score within the same template space
 min_cv = 0.01                   # optional: ignore subgroups varying < 1% (default)
 # min_spread = 10000.0          # optional: absolute noise floor, in the measure's units
 
-  [[steps.masks.measures]]      # what to MEASURE at ingest
-  name = "volume_mm3"
-  compute = "mask_volume"       # a metric DIRT computes itself
-
 [steps.fmap_coregistration]     # order coregistrations worst-alignment first
-order_by = "coreg_mm"
-direction = "higher_worse"      # a bigger induced displacement is more suspect
-
-  [[steps.fmap_coregistration.measures]]
-  name = "coreg_mm"
-  compute = "affine_displacement"   # RMS mm the coregistration affine moves the brain
+order_by = "fov_excluded_cortex"   # or affine_displacement, fov_cutoff_max, …
+direction = "higher_worse"      # a bigger loss is more suspect
 
   [[steps.fmap_coregistration.measures]]   # a metric from ANOTHER dataset (an MRIQC IQM)
   name = "fd_mean"
@@ -48,10 +40,7 @@ direction = "higher_worse"      # a bigger induced displacement is more suspect
   match = ["sub", "ses", "task", "run"]     # entities that pair the two records
 ```
 
-Each measure has exactly one source: `compute` (a metric DIRT computes over the source files) or `catalog` (a metric read from the bidslake catalog). Two computed extractors ship today:
-
-- `mask_volume` — brain-mask volume in mm³ (comparable across voxel sizes; two-sided).
-- `affine_displacement` — how far a coregistration affine moves the brain, in mm (Jenkinson RMS over the brain).
+`order_by` names either a metric DIRT computes — see [Metrics](metrics.md) for the full list, and the schema below for editor completion — or a `[[measures]]` block declared in the plan. Only *catalog* measures need declaring: their key is a string DIRT cannot enumerate, so it has to be spelled out. Computed metrics need no block, and a plan that still carries `compute = "…"` is rejected with a message telling you which `order_by` replaces it.
 
 A `catalog` measure with `catalog_suffix` + `match` is cross-dataset: the metric is read from a record in a sibling dataset (see the bidslake [cross-dataset links](https://github.com/psadil/bidslake)), paired to this file by the `match` BIDS entities. That is how MRIQC IQMs (which live in a separate dataset) order an fMRIPrep review without the unsound cross-dataset entity join: DIRT only trusts the pairing because the shared source guarantees `sub-01` is the same subject in both. A missing or ambiguous match scores nothing (never a guess), so those images just fall back to the review's other ordering.
 
