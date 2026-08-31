@@ -31,7 +31,7 @@ run() { apptainer exec --bind "${a2cps}" --bind "${TEMPLATEFLOW}" --bind "${ROIS
 	"${SIF}" "$@"; }
 
 # A cold ROI cache needs network (TemplateFlow) plus minutes of registration, which
-# the offline compute node can't do: pre-warm on a login node with `./write_imgs2 prewarm`
+# the offline compute node can't do: pre-warm on a login node with `./write_imgs prewarm`
 # before sbatch. In the job the same command is an instant fail-fast cache check.
 run manage build_rois MNI152NLin2009cAsym MNI152NLin6Asym
 if [[ "${1:-}" == prewarm ]]; then exit 0; fi
