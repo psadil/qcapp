@@ -49,6 +49,20 @@ def image_files_rendered(*, step: int) -> set[str]:
     )
 
 
+def measured_file_entities(*, step: int, file1: str) -> dict | None:
+    """The categorical context recorded for a file, or ``None``.
+
+    ``None`` covers both "never measured" and "measured, but nothing categorical
+    to record" — neither can tell a caller anything about the file's space, which
+    is the only thing this is used for.
+    """
+    return (
+        models.MeasuredFile.objects.filter(step=step, file1=file1)
+        .values_list("entities", flat=True)
+        .first()
+    )
+
+
 def image_list(
     *, step: models.Step | None = None, limit: int = 100
 ) -> dm.QuerySet[models.Image]:

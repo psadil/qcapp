@@ -131,6 +131,11 @@ uvloop = ">=0.22.1,<0.23"
 
 [tool.pixi.feature.dev.tasks]
 test = { cmd = ["pytest", "-v"] }
+# Committed figures, regenerated from the bundled sample data and TemplateFlow
+# by the real renderer. Re-run (and commit the output) whenever the landmark
+# ROIs, the palette, or the spatial-normalization rendering style changes.
+reference-images = { cmd = ["python", "tools/make_reference_images.py"] }
+tutorial-images = { cmd = ["python", "tools/make_tutorial_images.py"] }
 
 [tool.pixi.feature.dev.dependencies]
 jupyter = ">=1.1.1,<2"

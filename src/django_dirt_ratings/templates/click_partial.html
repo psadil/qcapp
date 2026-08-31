@@ -1,3 +1,19 @@
+<div id="reference" class="reference-panel{% if not reference_url %} d-none{% endif %}"
+    hx-swap-oob="true">
+    {% if reference_url %}
+    <div class="card shadow-sm">
+        <div class="card-body p-2">
+            <img src="{{ reference_url }}" class="reference-image"
+                alt="The same slice of the {{ reference_space }} template, with each landmark band named">
+            <p class="reference-caption text-muted text-center mb-0 mt-1">
+                <i class="fas fa-map-signs me-1"></i>
+                Anatomy should sit inside these bands &middot; {{ reference_space }}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
 <div class="card shadow-sm">
     <div class="card-body p-4">
         <input type="hidden" id="image-data" value="data:image/{{img_type}};base64,{{image}}">

@@ -82,14 +82,20 @@
             updateBadge();
         };
 
-        const resize = () => {
+        // The backing store is the image's own pixels; CSS scales the element
+        // to fit the column and, on a short viewport, the height as well (see
+        // .responsive-canvas). Nothing here measures the layout, so nothing
+        // here has to react to a resize — cellAt maps clicks back through the
+        // canvas's rendered box either way.
+        const fit = () => {
             if (!img.complete || !img.width) return;
             canvas.width = img.width;
             canvas.height = img.height;
-            const displayW = wrapper.clientWidth;
-            canvas.style.width = displayW + "px";
-            canvas.style.height = (displayW * img.height) / img.width + "px";
             draw();
+            // Until this runs the canvas still has its default 300x150 box, so
+            // a click would land in the wrong grid square. Publish readiness
+            // rather than leaving callers to infer it from the geometry.
+            canvas.dataset.ready = "1";
         };
 
         const cellAt = (clientX, clientY) => {
@@ -133,11 +139,10 @@
         canvas.addEventListener("pointermove", onMove);
         canvas.addEventListener("pointerup", onUp);
         canvas.addEventListener("pointercancel", onUp);
-        window.addEventListener("resize", resize);
 
         img.onload = () => {
             recomputeGrid();
-            resize();
+            fit();
         };
         img.src = document.getElementById("image-data")?.value;
 
@@ -169,7 +174,6 @@
                 canvas.removeEventListener("pointermove", onMove);
                 canvas.removeEventListener("pointerup", onUp);
                 canvas.removeEventListener("pointercancel", onUp);
-                window.removeEventListener("resize", resize);
             },
         };
     };

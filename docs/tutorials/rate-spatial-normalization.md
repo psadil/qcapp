@@ -16,8 +16,29 @@ they are the *tolerance*, not the target.
 > should sit inside its colored band. When anatomy escapes a band, mark those
 > grid cells.
 
-The grid on each image is how you answer. Tap a cell to mark it, or drag to
-paint a swath. Press <kbd>u</kbd> before clicking to mark cells **unsure** (amber),
+## What the bands are
+
+You do not need to know any anatomy to rate these images — you are comparing a
+brain against colored regions, not naming structures. But it helps to know what
+you are looking at. Here are the bands drawn on the template itself, in three
+views, with each one named:
+
+![The landmark bands on the MNI152NLin2009cAsym template, labeled](../assets/tutorial/spatial_normalization/roi_montage.avif)
+
+The **brain edge** band (sky blue) rings the whole brain and is the one you will
+use most. Inside it sit the **ventricles** (orange), the **hippocampi**
+(pink), and bands over four sulci and fissures — the folds between parts of the
+brain — plus the **tentorium** (violet), the sheet between the brain and the
+cerebellum below it.
+
+While you rate, the app shows the matching template view beside each image:
+same template, same slice, framed identically. When you are unsure whether
+something has escaped its band, compare the two — the reference is what a
+well-normalized brain looks like at that exact slice.
+
+## How to answer
+
+Tap a cell to mark it, or drag to paint a swath. Press <kbd>u</kbd> before clicking to mark cells **unsure** (amber),
 <kbd>f</kbd> for **fail** (red), and <kbd>enter</kbd> to submit. An image with no marked
 cells counts as a pass.
 

@@ -44,28 +44,34 @@ img.img-fluid {
     display: block;
 }
 
-/* Canvas wrapper for responsive behavior */
+/* Centering box for the canvas. Carries no background of its own: when the
+   viewport is short the canvas is height-limited and narrower than this box,
+   and a card behind it would frame the image in empty white. */
 .canvas-wrapper {
     position: relative;
-    width: 100%;
-    max-width: 800px;
-    margin: 0 auto;
-    background-color: var(--light-bg);
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
 }
 
-/* Responsive canvas */
+/* Responsive canvas.
+   Sizing is entirely CSS: the canvas is a replaced element with an intrinsic
+   size (its backing store), so `max-height` shrinks it and re-derives the width
+   from the aspect ratio. That means the image fits a short viewport without JS
+   measuring anything, and degrades on its own where the height is indefinite
+   (the stacked mobile layout) to the width-driven behavior it always had. */
 .responsive-canvas {
     width: 100%;
     height: auto;
+    max-width: 800px;
+    max-height: 100%;
     display: block;
     border: 2px solid var(--light-border);
     border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     cursor: crosshair;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    max-width: 100%;
     /* Let the canvas own touch gestures so a drag paints instead of
        scrolling / pinch-zooming the page. */
     touch-action: none;
@@ -95,6 +101,105 @@ img.img-fluid {
     grid-column: 2;
 }
 
+/* ============================================================================
+   Landmark reference panel (spatial normalization)
+   ============================================================================ */
+
+/* The template slice matching the image under review, shown above the controls.
+   It is the panel that gives when the viewport is short: the reviewer can lose
+   reference detail, but never the image they are marking or the submit button. */
+.reference-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-bottom: 1rem;
+}
+
+.reference-panel>.card,
+.reference-panel .card-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+
+.reference-image {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    object-fit: contain;
+}
+
+.reference-caption {
+    flex: 0 0 auto;
+    font-size: 0.85rem;
+}
+
+/* ============================================================================
+   One-screen rating layout
+   ============================================================================ */
+
+/* A reviewer works through hundreds of images: reaching for a scrollbar to see
+   the picture, the reference, or the submit button would be paid on every one.
+   Above the stacked breakpoint the rating pages therefore claim the viewport
+   exactly, and the panels inside share it out.
+
+   `:has()` scopes this to the rating pages without a body class — themes.js
+   rewrites `body.className` wholesale, so a class there would not survive a
+   theme toggle. Where `:has()` is unsupported the pages simply scroll, as
+   before. */
+@media (min-width: 769px) {
+
+    html:has(.rating-interface),
+    body:has(.rating-interface) {
+        height: 100%;
+    }
+
+    body:has(.rating-interface) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    body:has(.rating-interface)>main {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    body:has(.rating-interface)>main>.content-wrapper {
+        height: 100%;
+    }
+
+    .rating-interface {
+        height: 100%;
+        align-items: stretch;
+    }
+
+    .rating-image,
+    .rating-form,
+    .rating-image>.card,
+    .rating-image .card-body,
+    .rating-image .card-body>.text-center {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .rating-image>.card,
+    .rating-image .card-body,
+    .rating-image .card-body>.text-center,
+    .canvas-wrapper {
+        flex: 1 1 auto;
+    }
+
+    /* The hint line under the image, and everything below the reference in the
+       right-hand column, keep their natural height. */
+    .rating-image .card-body>.text-center>p,
+    .rating-form>.annotation-controls,
+    .rating-form>.card {
+        flex: 0 0 auto;
+    }
+}
+
 
 /* ============================================================================
    Theme Toggle Button
@@ -116,6 +221,9 @@ img.img-fluid {
     .rating-interface {
         grid-template-columns: 1fr;
         gap: 1.5rem;
+        /* Stacked, the two panels cannot both fit a phone screen; let the page
+           scroll rather than shrinking either into uselessness. */
+        height: auto;
     }
 
     .rating-image {
@@ -126,23 +234,14 @@ img.img-fluid {
         grid-column: 1;
     }
 
-    .canvas-wrapper {
-        max-width: 100%;
-        margin: 0 auto;
-    }
-
     .responsive-canvas {
         width: 100%;
         height: auto;
+        max-height: none;
     }
 }
 
 @media (max-width: 576px) {
-    .canvas-wrapper {
-        max-width: 100%;
-        padding: 0;
-    }
-
     .responsive-canvas {
         border-width: 1px;
     }

@@ -240,6 +240,80 @@ class TestRatePartial:
         assert client.session["image_id"] == worst.pk
 
 
+@pytest.mark.django_db
+class TestClickPartialReference:
+    """The landmark reference beside a spatial-normalization image."""
+
+    @pytest.fixture
+    def normalization_image(self, db) -> Image:
+        return Image.objects.create(
+            img=b"\x89PNG",
+            file1="sub-01_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz",
+            display=DisplayMode.Z,
+            step=Step.SPATIAL_NORMALIZATION,
+            slice=1,
+        )
+
+    @pytest.fixture
+    def served(self, client, set_session, normalization_image, db):
+        """The partial, for an image whose measured space is known."""
+
+        def _serve(entities: dict | None):
+            if entities is not None:
+                services.measured_file_upsert(
+                    step=int(Step.SPATIAL_NORMALIZATION),
+                    file1=normalization_image.file1,
+                    entities=entities,
+                )
+            session = Session.objects.create(step=Step.SPATIAL_NORMALIZATION)
+            set_session(step=Step.SPATIAL_NORMALIZATION, session_id=session.pk)
+            return client.get(reverse("click_partial"))
+
+        return _serve
+
+    def test_a_measured_space_resolves_its_figure(self, served):
+        response = served({"space": "MNI152NLin2009cAsym", "cohort": None})
+
+        assert response.context["reference_url"].endswith(
+            "ratings/reference/tpl-MNI152NLin2009cAsym/z-1.avif"
+        )
+
+    def test_an_unmeasured_image_gets_no_reference(self, served):
+        response = served(None)
+
+        assert "reference_url" not in response.context
+
+    def test_a_space_without_figures_gets_no_reference(self, served):
+        response = served({"space": "MNI152NLin6Sym", "cohort": None})
+
+        assert "reference_url" not in response.context
+
+    def test_finishing_the_step_clears_the_reference(
+        self, client, set_session, normalization_image, db
+    ):
+        """Nothing is under review any more, so there is nothing to reference —
+        the click step's completion template is the one that clears the panel."""
+        session = Session.objects.create(step=Step.SPATIAL_NORMALIZATION)
+        set_session(
+            step=Step.SPATIAL_NORMALIZATION,
+            session_id=session.pk,
+            image_id=normalization_image.pk,
+        )
+
+        response = client.get(reverse("click_partial"))
+
+        assert "click_complete.html" in [t.name for t in response.templates]
+
+    def test_a_step_without_landmarks_gets_no_reference(
+        self, client, set_session, mask_image, mask_session
+    ):
+        set_session(step=Step.MASK, session_id=mask_session.pk)
+
+        response = client.get(reverse("click_partial"))
+
+        assert "reference_url" not in response.context
+
+
 def _fmap_image(**overrides) -> Image:
     return Image.objects.create(
         img=b"\x89PNG",

@@ -27,6 +27,7 @@ from matplotlib import colors
 from matplotlib import pyplot as plt
 from nibabel import spatialimages
 from nilearn import image, plotting
+from nilearn.image import resampling
 from nilearn.plotting import displays
 
 from django_dirt_ratings import models
@@ -170,6 +171,32 @@ def _roi_cuts(meta_path: str) -> dict[str, list[float]]:
     return rois.load_cuts(meta_path)
 
 
+@functools.lru_cache(maxsize=4)
+def _roi_bounds(path: str) -> dict[str, tuple[float, float, float, float]]:
+    """Fixed in-plane display extents (mm) per display mode, from the dseg.
+
+    nilearn frames a figure from the union of every drawn object's bounds, so a
+    subject whose brain escapes the landmarks would silently zoom the figure
+    *out* — shrinking the very misalignment under review, and breaking the
+    correspondence with the template reference figures raters compare against.
+    Clamping every axis to the landmark image's own bounds pins the field of
+    view per space, for every subject, good or bad.
+
+    Keys are display-mode names; values are ``(h0, h1, v0, v1)`` in the order
+    ``matplotlib.axes.Axes.axis`` wants, matching how ``CutAxes.draw_2d`` maps
+    world axes onto the figure for each cut direction.
+    """
+    roi = _roi_img(path)
+    xmin, xmax, ymin, ymax, zmin, zmax = resampling.get_mask_bounds(
+        image.new_img_like(roi, np.asanyarray(roi.dataobj) > 0)
+    )
+    return {
+        "x": (ymin, ymax, zmin, zmax),
+        "y": (xmin, xmax, zmin, zmax),
+        "z": (xmin, xmax, ymin, ymax),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Per-cut drawing (one blob), used by the prep-once renderers below
 # --------------------------------------------------------------------------- #
@@ -224,27 +251,55 @@ def _draw_surface(
         return img.getvalue()
 
 
-def _draw_spatial_normalization(
-    file_nii, roi_nii, coord: float, display_mode: models.DisplayMode
-) -> bytes:
+def spatial_normalization_figure(
+    file_nii,
+    roi_nii,
+    coord: float,
+    display_mode: models.DisplayMode,
+    bounds: tuple[float, float, float, float],
+) -> tuple[plt.Figure, displays.OrthoSlicer]:
+    """The landmark-overlay figure for one cut, framed to ``bounds``.
+
+    Split out from :func:`_draw_spatial_normalization` (which only encodes what
+    this returns) so the docs-figure tools can reach the slicer's axes — its
+    ``transData`` is an exact world->pixel map, now that the frame is fixed.
+    The caller owns the figure and must close it.
+    """
     f = plt.figure(figsize=(6.4, 4.8), layout="none")
+    p: displays.OrthoSlicer = plotting.plot_roi(
+        roi_img=roi_nii,
+        bg_img=file_nii,
+        cut_coords=[coord],
+        display_mode=display_mode.name.lower(),
+        figure=f,
+        colorbar=False,
+        # Annotations are drawn from the axis limits, so they go on after the
+        # frame is clamped below.
+        annotate=False,
+        # Translucent "confidence band" fill (Benhajali-style): anatomy
+        # should fall inside the tinted regions. One hue per structure
+        # type; nearest resampling keeps the label edges crisp.
+        alpha=0.7,
+        cmap=colors.ListedColormap(rois.DISPLAY_COLORS),
+        vmin=1,
+        vmax=len(rois.DISPLAY_COLORS),
+        resampling_interpolation="nearest",
+    )
+    for cut_ax in p.axes.values():
+        cut_ax.ax.axis(bounds)
+    p.annotate()
+    return f, p
+
+
+def _draw_spatial_normalization(
+    file_nii,
+    roi_nii,
+    coord: float,
+    display_mode: models.DisplayMode,
+    bounds: tuple[float, float, float, float],
+) -> bytes:
+    f, p = spatial_normalization_figure(file_nii, roi_nii, coord, display_mode, bounds)
     with io.BytesIO() as img:
-        p: displays.OrthoSlicer = plotting.plot_roi(
-            roi_img=roi_nii,
-            bg_img=file_nii,
-            cut_coords=[coord],
-            display_mode=display_mode.name.lower(),
-            figure=f,
-            colorbar=False,
-            # Translucent "confidence band" fill (Benhajali-style): anatomy
-            # should fall inside the tinted regions. One hue per structure
-            # type; nearest resampling keeps the label edges crisp.
-            alpha=0.7,
-            cmap=colors.ListedColormap(rois.DISPLAY_COLORS),
-            vmin=1,
-            vmax=len(rois.DISPLAY_COLORS),
-            resampling_interpolation="nearest",
-        )
         _savefig(p, img)
         plt.close(f)
         return img.getvalue()
@@ -386,9 +441,14 @@ def render_spatial_normalization(
     )
     roi_nii = _roi_img(inputs["rois"])  # cached per process
     coords = _roi_cuts(inputs["roi_meta"])
+    bounds = _roi_bounds(inputs["rois"])
     return {
         (display, cut): _draw_spatial_normalization(
-            file_nii, roi_nii, coords[display.name.lower()][cut], display
+            file_nii,
+            roi_nii,
+            coords[display.name.lower()][cut],
+            display,
+            bounds[display.name.lower()],
         )
         for display in displays_
         for cut in cuts

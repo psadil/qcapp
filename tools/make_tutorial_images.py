@@ -12,9 +12,7 @@ structures* escaping their ROIs (the subject starts well-normalized, so each
 structure sits where its template ROI is; the ROI moved by the perturbation is
 where the structure now is, and — after eroding by a visibility tolerance —
 any remainder outside the unmoved ROI group is marked). The "unsure" case is
-simply a smaller perturbation, so only a few cells violate. Figure pixel
-coordinates come from a self-calibration render: the good volume with two
-bright in-plane dots at known world coordinates.
+simply a smaller perturbation, so only a few cells violate.
 
 Failure modes are simulated by resampling the T1w *and its brain mask* through
 the same world-space perturbation (translation / rotation / scale) on the
@@ -24,7 +22,7 @@ landmarks, exactly like a failed normalization.
 Outputs (commit these): docs/assets/tutorial/spatial_normalization/*.avif
 Re-run whenever the spatial-normalization rendering style changes.
 
-Run:  pixi run -e dev python tools/make_tutorial_images.py
+Run:  pixi run -e dev tutorial-images
 """
 
 from __future__ import annotations
@@ -32,7 +30,6 @@ from __future__ import annotations
 import io
 import math
 import sys
-import tempfile
 from pathlib import Path
 
 import nibabel as nb
@@ -49,6 +46,9 @@ import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dirt.settings")
 os.environ.setdefault("DJANGO_SECRET_KEY", "tutorial-images-not-a-secret")
 django.setup()
+
+from matplotlib import pyplot as plt
+from nilearn import image as nl_image
 
 from django_dirt_ratings.management.ingest import render, rois
 from django_dirt_ratings.models import DisplayMode
@@ -70,12 +70,6 @@ FILL_UNSURE = (243, 156, 18, 115)  # rgba(243,156,18,0.45)
 FILL_FAIL = (231, 76, 60, 140)  # rgba(231,76,60,0.55)
 
 CUT = 1  # the middle display cut, same for every case
-
-# Fixed world-space fiducial corners: nilearn frames each figure from the data
-# bounding box, so every case gets two invisible (near-black, single-voxel)
-# markers at the same coordinates, pinning an identical field of view across
-# renders — one pixel calibration per view then applies to every case.
-_FIDUCIALS_MM = ((-88.0, -120.0, -70.0), (88.0, 80.0, 88.0))
 
 # For each display mode: the indices of the world axes shown horizontally and
 # vertically in the figure.
@@ -113,13 +107,6 @@ CASES: dict[str, tuple[np.ndarray, DisplayMode, tuple[int, int, int, int] | None
 }
 
 
-def _set_voxels(data: np.ndarray, affine: np.ndarray, points_mm, value: float) -> None:
-    for point in points_mm:
-        ijk = np.round(np.linalg.inv(affine) @ np.array([*point, 1.0])).astype(int)[:3]
-        i, j, k = np.clip(ijk, 0, np.array(data.shape) - 1)
-        data[i, j, k] = value
-
-
 def _perturbed(src: Path, perturbation: np.ndarray, order: int) -> np.ndarray:
     """The volume's content moved by ``perturbation`` on the unchanged grid.
 
@@ -137,95 +124,84 @@ def _perturbed(src: Path, perturbation: np.ndarray, order: int) -> np.ndarray:
     return ndimage.affine_transform(data, t[:3, :3], offset=t[:3, 3], order=order)
 
 
-def _render(
-    anat: np.ndarray, mask: np.ndarray, display: DisplayMode, workdir: Path
-) -> Image.Image:
+def _figure(anat: np.ndarray, mask: np.ndarray, display: DisplayMode, cut_mm: float):
+    """The renderer's own figure for one perturbed volume.
+
+    Goes through ``render.spatial_normalization_figure`` rather than
+    ``render_spatial_normalization``: the same drawing code, minus the load-from-
+    disk wrapper, so the figure — and the axes whose transform maps world
+    coordinates to pixels — is in hand. The two lines of prep the wrapper does
+    around it are mirrored here; keep them in step.
+    """
     template = rois._load(ANAT)
     artifact = rois.ensure_rois(rois.CANONICAL_SPACE)
-    inputs = {"rois": str(artifact.dseg), "roi_meta": str(artifact.meta)}
-    for role, data in (("anat", anat), ("mask", mask)):
-        path = workdir / f"{role}.nii.gz"
-        nb.nifti1.Nifti1Image(data, template.affine, template.header).to_filename(path)
-        inputs[role] = str(path)
-    blobs = render.render_spatial_normalization(
-        inputs=inputs, cuts=[CUT], displays_=[display]
+    volumes = (
+        nb.nifti1.Nifti1Image(data, template.affine, template.header)
+        for data in (anat, mask)
     )
-    return Image.open(io.BytesIO(blobs[(display, CUT)])).convert("RGBA")
+    file_nii = nl_image.reorder_img(
+        render._skull_strip(*volumes), resample="continuous"
+    )
+    return render.spatial_normalization_figure(
+        file_nii,
+        render._roi_img(str(artifact.dseg)),
+        cut_mm,
+        display,
+        render._roi_bounds(str(artifact.dseg))[display.name.lower()],
+    )
 
 
 def render_case(
-    perturbation: np.ndarray, display: DisplayMode, workdir: Path
-) -> tuple[Image.Image, np.ndarray]:
-    """Render one case; also return its perturbed brain mask for marking."""
-    template = rois._load(ANAT)
+    perturbation: np.ndarray, display: DisplayMode, cut_mm: float
+) -> tuple[Image.Image, np.ndarray, PixelMap]:
+    """Render one case; also return its perturbed brain mask and pixel map."""
     anat = _perturbed(ANAT, perturbation, order=1)
     mask = _perturbed(MASK, perturbation, order=0)
-    _set_voxels(anat, template.affine, _FIDUCIALS_MM, 1.0)
-    _set_voxels(mask, template.affine, _FIDUCIALS_MM, 1.0)
-    return _render(anat, mask, display, workdir), mask
+    figure, slicer = _figure(anat, mask, display, cut_mm)
+    with io.BytesIO() as buffer:
+        figure.savefig(buffer, backend="Agg", format="png")
+        image = Image.open(io.BytesIO(buffer.getvalue())).convert("RGBA")
+    pixmap = PixelMap(figure, next(iter(slicer.axes.values())).ax, image.size)
+    plt.close(figure)
+    return image, mask, pixmap
 
 
 class PixelMap:
-    """Linear world->figure-pixel mapping for one display mode."""
+    """World -> figure-pixel mapping for one rendered panel.
 
-    def __init__(self, world: np.ndarray, pixel: np.ndarray):
-        # world: 2x2 [[h1, v1], [h2, v2]]; pixel: 2x2 [[col1, row1], [col2, row2]]
-        self.h_scale = (pixel[1, 0] - pixel[0, 0]) / (world[1, 0] - world[0, 0])
-        self.h_off = pixel[0, 0] - self.h_scale * world[0, 0]
-        self.v_scale = (pixel[1, 1] - pixel[0, 1]) / (world[1, 1] - world[0, 1])
-        self.v_off = pixel[0, 1] - self.v_scale * world[0, 1]
+    The renderer pins every figure's frame to the landmark bounding box, so the
+    axes' own data transform *is* the mapping: exact, and free. (It used to be
+    solved by rendering the volume twice with two bright dots at known world
+    coordinates and recovering their centroids from the image diff. Pinning the
+    frame made that unnecessary — and put the dots outside the field of view.)
+    """
+
+    def __init__(self, figure, ax, size: tuple[int, int]):
+        figure.canvas.draw()  # the transform is only final once laid out
+        # Data -> *figure fraction*, then out to the saved image's pixels.
+        # Display pixels would be wrong: an interactive canvas renders at the
+        # screen's device pixel ratio (2x here), while savefig writes at the
+        # figure's own dpi — the map has to be free of both.
+        self._transform = (ax.transData + figure.transFigure.inverted()).frozen()
+        self._width, self._height = size
+
+        # The frame is the whole of what was drawn, so its corners must land on
+        # the image — a silent factor here would paint every marked cell in the
+        # wrong place, which is not something the output announces.
+        corners = [self(h, v) for h in ax.get_xlim() for v in ax.get_ylim()]
+        if any(
+            not (-1 <= col <= self._width + 1 and -1 <= row <= self._height + 1)
+            for col, row in corners
+        ):
+            raise RuntimeError(
+                f"world->pixel map puts the {self._width}x{self._height} frame's "
+                f"corners at {[tuple(round(v, 1) for v in c) for c in corners]}"
+            )
 
     def __call__(self, h: float, v: float) -> tuple[float, float]:
-        return self.h_scale * h + self.h_off, self.v_scale * v + self.v_off
-
-
-def calibrate(
-    display: DisplayMode, cut_mm: float, plain: Image.Image, workdir: Path
-) -> PixelMap:
-    """Solve the world->pixel mapping from two bright in-plane dots.
-
-    Renders the good case again with the two fiducial corners moved into the
-    displayed plane and made bright; the dots are the only difference from the
-    plain good render, so their pixel centroids fall out of the image diff.
-    """
-    from scipy import ndimage
-
-    h_axis, v_axis = _DISPLAY_AXES[display]
-    dots = []
-    for fiducial, inset in ((_FIDUCIALS_MM[0], 10.0), (_FIDUCIALS_MM[1], -10.0)):
-        point = [0.0, 0.0, 0.0]
-        # Inset from the field-of-view corners (which the fiducials define) so
-        # neither dot is clipped at the figure border; both stay on background.
-        point[h_axis] = fiducial[h_axis] + inset
-        point[v_axis] = fiducial[v_axis] + inset
-        point[3 - h_axis - v_axis] = cut_mm
-        dots.append(tuple(point))
-
-    template = rois._load(ANAT)
-    anat = _perturbed(ANAT, np.eye(4), order=1)
-    mask = _perturbed(MASK, np.eye(4), order=0)
-    _set_voxels(anat, template.affine, _FIDUCIALS_MM, 1.0)
-    _set_voxels(mask, template.affine, _FIDUCIALS_MM, 1.0)
-    _set_voxels(anat, template.affine, dots, 1e6)  # clipped to vmax => bright
-    _set_voxels(mask, template.affine, dots, 1.0)  # survive skull-stripping
-    with_dots = _render(anat, mask, display, workdir)
-
-    diff = np.abs(
-        np.asarray(with_dots.convert("L"), dtype=np.float32)
-        - np.asarray(plain.convert("L"), dtype=np.float32)
-    )
-    labeled, n = ndimage.label(diff > 25)
-    if n < 2:
-        raise RuntimeError(f"expected 2 calibration dots in the diff, found {n}")
-    counts = np.bincount(labeled.ravel())[1:]
-    keep = np.argsort(counts)[::-1][:2] + 1
-    centroids = ndimage.center_of_mass(diff > 25, labeled, keep)  # (row, col) pairs
-    # The dot with the smaller vertical world coordinate renders lower in the
-    # figure (world v points up, pixel rows point down).
-    by_row = sorted(centroids, key=lambda rc: rc[0], reverse=True)
-    world = np.array([[d[h_axis], d[v_axis]] for d in dots])  # row 0: smaller v
-    pixel = np.array([[rc[1], rc[0]] for rc in by_row])
-    return PixelMap(world, pixel)
+        fraction_x, fraction_y = self._transform.transform((h, v))
+        # Matplotlib measures up from the bottom; image rows count down.
+        return fraction_x * self._width, (1.0 - fraction_y) * self._height
 
 
 # Visibility tolerances for the internal-anatomy proxies (mm): the moved
@@ -309,9 +285,6 @@ def violation_cells(
     np.moveaxis(boundary, slice_axis, 0)[k] = boundary2d
 
     def outside_band(world) -> bool:
-        # Skip the injected fiducial voxels — they are not anatomy.
-        if any(np.allclose(world[:3], f, atol=2.0) for f in _FIDUCIALS_MM):
-            return False
         r = np.round(inv_dseg @ world).astype(int)[:3]
         inside = all(0 <= r[ax] < band.shape[ax] for ax in range(3))
         return not (inside and band[r[0], r[1], r[2]])
@@ -409,40 +382,18 @@ def main() -> None:
     artifact = rois.ensure_rois(rois.CANONICAL_SPACE)
     cuts = rois.load_cuts(artifact.meta)
 
-    with tempfile.TemporaryDirectory() as tmp:
-        workdir = Path(tmp)
-        renders = {
-            name: render_case(perturbation, display, workdir)
-            for name, (perturbation, display, _) in CASES.items()
-        }
-        pixmaps: dict[DisplayMode, PixelMap] = {}
-        for _, display, fill in CASES.values():
-            if fill is not None and display not in pixmaps:
-                cut_mm = cuts[display.name.lower()][CUT]
-                plain, _ = (
-                    renders["good"]
-                    if display == CASES["good"][1]
-                    else render_case(np.eye(4), display, workdir)
-                )
-                pixmaps[display] = calibrate(display, cut_mm, plain, workdir)
-
     for name, (perturbation, display, fill) in CASES.items():
-        image, mask = renders[name]
+        cut_mm = cuts[display.name.lower()][CUT]
+        image, mask, pixmap = render_case(perturbation, display, cut_mm)
         with_grid = draw_grid(image)
         save_avif(with_grid, OUT_DIR / f"{name}.avif")
         print(f"wrote {name}.avif")
-        if fill is not None:
-            cells = violation_cells(
-                mask,
-                perturbation,
-                display,
-                cuts[display.name.lower()][CUT],
-                pixmaps[display],
-                image.size,
-            )
-            marked = paint_cells(with_grid, cells, fill)
-            save_avif(marked, OUT_DIR / f"{name}_marked.avif")
-            print(f"wrote {name}_marked.avif ({len(cells)} cells)")
+        if fill is None:
+            continue
+        cells = violation_cells(mask, perturbation, display, cut_mm, pixmap, image.size)
+        marked = paint_cells(with_grid, cells, fill)
+        save_avif(marked, OUT_DIR / f"{name}_marked.avif")
+        print(f"wrote {name}_marked.avif ({len(cells)} cells)")
 
 
 if __name__ == "__main__":

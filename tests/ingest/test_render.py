@@ -32,22 +32,36 @@ def test_avif_kwargs_are_consumed(figure):
 
 
 @pytest.fixture(scope="module")
-def spatial_normalization_blobs(tmp_path_factory):
-    """One rendered spatial-normalization job over tiny synthetic volumes."""
+def synthetic_grid():
+    """The coarse 4 mm grid every synthetic normalization volume is built on.
+
+    Returns the shape, the affine, and each voxel's distance in mm from the
+    centre — enough to carve a ball of brain or a shell of landmark out of it.
+    """
+    shape = (32, 32, 32)
+    affine = np.diag([4.0, 4.0, 4.0, 1.0])
+    affine[:3, 3] = (-64.0, -64.0, -64.0)
+    grid = np.indices(shape)
+    center = np.array(shape) // 2
+    dist = np.sqrt((((grid - center[:, None, None, None]) * 4.0) ** 2).sum(0))
+    return shape, affine, dist
+
+
+@pytest.fixture(scope="module")
+def spatial_normalization_inputs(tmp_path_factory, synthetic_grid):
+    """Tiny synthetic volumes for one spatial-normalization job.
+
+    A uniform ball of brain inside a landmark shell.
+    """
     import json
 
     import nibabel as nb
 
     from django_dirt_ratings.management.ingest import rois
 
-    shape = (32, 32, 32)
-    affine = np.diag([4.0, 4.0, 4.0, 1.0])
-    affine[:3, 3] = (-64.0, -64.0, -64.0)
+    shape, affine, dist = synthetic_grid
     tmp = tmp_path_factory.mktemp("spatial_normalization")
 
-    center = np.array(shape) // 2
-    grid = np.indices(shape)
-    dist = np.sqrt((((grid - center[:, None, None, None]) * 4.0) ** 2).sum(0))
     mask = (dist <= 40.0).astype(np.uint8)
     anat = np.full(shape, 1000.0, dtype=np.float32)
     dseg = np.zeros(shape, dtype=np.uint8)
@@ -65,9 +79,14 @@ def spatial_normalization_blobs(tmp_path_factory):
     meta = tmp / "rois.json"
     meta.write_text(json.dumps({"cuts": {axis: [-20.0, 0.0, 20.0] for axis in "xyz"}}))
     inputs["roi_meta"] = str(meta)
+    return inputs
 
+
+@pytest.fixture(scope="module")
+def spatial_normalization_blobs(spatial_normalization_inputs):
+    """One rendered spatial-normalization job over those volumes."""
     return render.render_spatial_normalization(
-        inputs=inputs, cuts=[0, 1, 2], displays_=list(DisplayMode)
+        inputs=spatial_normalization_inputs, cuts=[0, 1, 2], displays_=list(DisplayMode)
     )
 
 
@@ -83,6 +102,46 @@ def test_spatial_normalization_blob_decodes_as_avif(spatial_normalization_blobs)
     image = Image.open(io.BytesIO(spatial_normalization_blobs[(DisplayMode.Z, 1)]))
 
     assert image.format == "AVIF"
+
+
+@pytest.fixture(scope="module")
+def frames_for_two_brain_sizes(spatial_normalization_inputs, synthetic_grid):
+    """The figure frame for a brain inside the landmarks, and one far outside."""
+    import nibabel as nb
+    from nilearn import image as nl_image
+
+    roi_path = spatial_normalization_inputs["rois"]
+    shape, affine, dist = synthetic_grid
+
+    frames = []
+    for radius in (40.0, 62.0):  # the landmark shell ends at 38 mm
+        mask = nb.nifti1.Nifti1Image((dist <= radius).astype(np.uint8), affine)
+        anat = nb.nifti1.Nifti1Image(np.full(shape, 1000.0, dtype=np.float32), affine)
+        figure, slicer = render.spatial_normalization_figure(
+            nl_image.reorder_img(
+                render._skull_strip(anat, mask), resample="continuous"
+            ),
+            render._roi_img(roi_path),
+            0.0,
+            DisplayMode.Z,
+            render._roi_bounds(roi_path)["z"],
+        )
+        ax = next(iter(slicer.axes.values())).ax
+        frames.append((ax.get_xlim(), ax.get_ylim()))
+        plt.close(figure)
+    return frames
+
+
+def test_a_brain_outside_the_landmarks_does_not_widen_the_frame(
+    frames_for_two_brain_sizes,
+):
+    """nilearn frames a figure from everything drawn on it, so a failed
+    normalization used to zoom the figure out around its own error — shrinking
+    the misalignment on screen, and breaking the correspondence with the
+    template reference shown beside it."""
+    fitting, escaping = frames_for_two_brain_sizes
+
+    assert escaping == fitting
 
 
 def test_skull_strip_zeroes_everything_outside_the_mask():

@@ -92,9 +92,11 @@ LABELS: dict[str, int] = {
 }
 
 # Rendering collapses left/right into one hue per structure type: label value
-# -> display group. DISPLAY_COLORS[group - 1] is that group's color — the
-# Okabe-Ito colorblind-safe palette (with grey replacing black, which would
-# vanish on the dark background).
+# -> display group. DISPLAY_COLORS[group - 1] is that group's color and
+# DISPLAY_NAMES[group - 1] the short name the reference figures print on it.
+# The palette is Okabe-Ito, whose eighth entry is black — unusable on the dark
+# background — so the tentorium takes a violet from IBM Design's colorblind-safe
+# set instead. It was grey until 2026-08, which read as brain against brain.
 _GROUP_OF_STEM = {
     "brain_band": 1,
     "lateral_ventricle": 2,
@@ -117,7 +119,19 @@ DISPLAY_COLORS = [
     "#009E73",  # cingulate sulcus: bluish green
     "#F0E442",  # calcarine sulcus: yellow
     "#0072B2",  # parieto-occipital fissure: blue
-    "#999999",  # tentorium cerebelli: grey
+    "#785EF0",  # tentorium cerebelli: violet
+]
+# Parallel to DISPLAY_COLORS: what the reference figures call each group. Short,
+# because they are drawn into the slice next to the structure itself.
+DISPLAY_NAMES = [
+    "brain edge",
+    "ventricle",
+    "hippocampus",
+    "central sulcus",
+    "cingulate sulcus",
+    "calcarine sulcus",
+    "parieto-occ. fissure",
+    "tentorium",
 ]
 
 # Structures taken from the space's own Harvard-Oxford subcortical atlas.

@@ -91,12 +91,32 @@ never a guessed overlay.
 ## Display
 
 The renderer collapses left/right structures into one hue per structure type
-(Okabe-Ito colorblind-safe palette), draws the labels as a translucent fill
-with nearest-neighbour resampling over the **skull-stripped** T1w (the
-same-space `desc-brain` mask is a required sibling in discovery), and reads
-the per-space display cuts from the artifact sidecar — derived from fixed
-fractions of the template's brain-mask bounding box, calibrated to reproduce
-the historical MNI cut coordinates.
+(the Okabe-Ito colorblind-safe palette, whose eighth entry is black and would
+vanish on the dark background — the tentorium takes a violet from IBM Design's
+set instead), draws the labels as a translucent fill with nearest-neighbour
+resampling over the **skull-stripped** T1w (the same-space `desc-brain` mask is
+a required sibling in discovery), and reads the per-space display cuts from the
+artifact sidecar — derived from fixed fractions of the template's brain-mask
+bounding box, calibrated to reproduce the historical MNI cut coordinates.
+
+**The field of view is pinned to the landmarks.** nilearn frames a figure from
+the union of everything drawn on it, so a subject whose brain escapes the bands
+— exactly the failure under review — used to zoom the figure *out* around its
+own error, shrinking the misalignment on screen. Every axis is therefore
+clamped to the landmark image's own bounding box (`render._roi_bounds`), which
+is constant per space. Every subject in a space is then framed identically, to
+each other and to the reference figures below.
+
+**Reference figures.** The rating page shows the matching template slice beside
+each image: same space, same cut, same frame, with every band visible in that
+slice named in place. They are per space rather than per subject, so
+`pixi run -e dev reference-images` renders them once — through this same
+renderer, over the space's own TemplateFlow T1w — and commits them under
+`src/django_dirt_ratings/static/ratings/reference/`. The web process carries
+only Django and could not draw them on demand; `django_dirt_ratings.reference`
+maps a served image's recorded `space` to its figure, and shows no panel at all
+rather than a mismatched one. The same tool builds the labeled montage on the
+[rater tutorial](../tutorials/rate-spatial-normalization.md).
 
 ## Adding a space
 
@@ -108,3 +128,7 @@ the historical MNI cut coordinates.
 3. Run `manage build_rois <space>` — the first build registers the canonical
    template to the new space and caches the transform artifact — and inspect
    the built dseg over the template T1w before trusting it.
+4. Run `pixi run -e dev reference-images` and commit the new space's figures,
+   adding it to `reference.SPACES`. A test pins that list to `_RECIPES` and to
+   the files on disk, so a space cannot gain a recipe and quietly lose its
+   reference panel.

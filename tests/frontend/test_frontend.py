@@ -1,6 +1,7 @@
 """Frontend browser integration tests using Playwright."""
 
 import os
+import re
 import struct
 import zlib
 from collections.abc import Iterator
@@ -10,7 +11,7 @@ import pytest
 from playwright.sync_api import Browser, BrowserContext, FloatRect, Page, expect
 from pytest_django import live_server_helper
 
-from django_dirt_ratings import models
+from django_dirt_ratings import models, services
 
 BOOTSWATCH = "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist"
 LIGHT_CSS = f"{BOOTSWATCH}/flatly/bootstrap.min.css"
@@ -87,11 +88,11 @@ def _make_png(width: int, height: int) -> bytes:
     )
 
 
-def _seed_images(step: models.Step, size: int) -> set[int]:
+def _seed_images(step: models.Step, size: int, height: int | None = None) -> set[int]:
     """Two images for `step` — enough that a "next" one exists after a review."""
     return {
         models.Image.objects.create(
-            img=_make_png(size, size),
+            img=_make_png(size, height or size),
             slice=i,
             file1=f"test_{step.value}_{i}.nii.gz",
             display=models.DisplayMode.X,
@@ -314,8 +315,8 @@ class _CanvasPage(NamedTuple):
 
 # clicks.js sizes the canvas from the image inside img.onload; until that runs the
 # element still has its pre-load default box and painted cells would land in the
-# wrong grid squares. `style.width` is set by the same call that draws the grid.
-_GRID_DRAWN = "() => !!document.getElementById('canvas')?.style.width"
+# wrong grid squares. That call marks the canvas ready once it has drawn.
+_GRID_DRAWN = "() => !!document.getElementById('canvas')?.dataset.ready"
 
 
 @pytest.fixture
@@ -340,6 +341,60 @@ def _paint_two_cells(canvas_page: _CanvasPage) -> None:
     page.mouse.click(box["x"] + 40, box["y"] + 40)
     page.keyboard.press("f")
     page.mouse.click(box["x"] + box["width"] - 40, box["y"] + box["height"] - 40)
+
+
+@pytest.fixture
+def normalization_page(
+    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache
+) -> Page:
+    """The spatial-normalization page, whose images have a landmark reference."""
+    step = models.Step.SPATIAL_NORMALIZATION
+    # Full size, like the renderer writes: the layout has to fit the real thing
+    # beside a reference of the same shape, not a thumbnail.
+    for image_id in _seed_images(step, size=640, height=480):
+        services.measured_file_upsert(
+            step=int(step),
+            file1=models.Image.objects.get(pk=image_id).file1,
+            entities={"space": "MNI152NLin2009cAsym", "cohort": None},
+        )
+    _start_review(live_server, class_page, step)
+    class_page.wait_for_function(_GRID_DRAWN)
+    return class_page
+
+
+@pytest.mark.django_db(transaction=True)
+class TestLandmarkReference:
+    """The template slice shown beside the image being marked."""
+
+    def test_the_reference_figure_loads(self, normalization_page: Page):
+        loaded = normalization_page.wait_for_function(
+            "() => { const i = document.querySelector('.reference-image');"
+            " return i && i.complete && i.naturalWidth > 0; }"
+        )
+
+        assert loaded
+
+    def test_the_reference_matches_the_slice_on_screen(self, normalization_page: Page):
+        expect(normalization_page.locator(".reference-image")).to_have_attribute(
+            "src", re.compile(r"/tpl-MNI152NLin2009cAsym/x-0\.avif$")
+        )
+
+    def test_the_page_fits_the_viewport(self, normalization_page: Page):
+        overflow = normalization_page.evaluate(
+            "() => document.documentElement.scrollHeight - window.innerHeight"
+        )
+
+        assert overflow <= 1
+
+    def test_the_reference_follows_the_next_image(self, normalization_page: Page):
+        """The panel lives outside #main, so it rides along on an out-of-band
+        swap rather than the one that replaces the image."""
+        with _posted_to(normalization_page, "spatial_normalization"):
+            normalization_page.click("#submit")
+
+        expect(normalization_page.locator(".reference-image")).to_have_attribute(
+            "src", re.compile(r"/tpl-MNI152NLin2009cAsym/x-1\.avif$")
+        )
 
 
 @pytest.mark.django_db(transaction=True)

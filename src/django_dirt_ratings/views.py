@@ -11,6 +11,7 @@ from django_dirt_ratings import (
     forms,
     models,
     ordering,
+    reference,
     selectors,
     services,
 )
@@ -34,8 +35,33 @@ def _tutorial_url(step: models.Step) -> str | None:
     return f"{settings.DIRT_DOCS_URL}/{path}" if path else None
 
 
+def _reference(image: models.Image) -> dict[str, str]:
+    """Context for the landmark reference panel, or nothing at all.
+
+    The space is looked up rather than derived from the filename: it is already
+    recorded, per file, on :class:`models.MeasuredFile`. An image with no
+    reference contributes no context keys, and the template omits the panel.
+    """
+    if models.Step(image.step) not in reference.STEPS:
+        return {}
+    entities = (
+        selectors.measured_file_entities(step=image.step, file1=image.file1) or {}
+    )
+    space = entities.get("space")
+    url = reference.reference_url(
+        space=space,
+        cohort=entities.get("cohort"),
+        display=image.display,
+        slice=image.slice,
+    )
+    if url is None or space is None:
+        return {}
+    return {"reference_url": url, "reference_space": str(space)}
+
+
 class RatePartial(views.View):
     template_name = f"{RATE_PARTIAL}.html"
+    complete_template_name = "review_complete.html"
 
     def get(self, request: http.HttpRequest) -> http.HttpResponse:
         step = request.session.get("step")
@@ -57,9 +83,7 @@ class RatePartial(views.View):
             )
         except exceptions.ApplicationError:
             # No image left to serve — an empty step, or its only image was just shown.
-            return http.HttpResponse(
-                "Review complete for this step. Please return to the homepage."
-            )
+            return shortcuts.render(request, self.complete_template_name)
 
         request.session["image_id"] = image.pk
         return shortcuts.render(
@@ -70,12 +94,14 @@ class RatePartial(views.View):
                 "image": formatters.image_to_base64(image.img),
                 "grid_cols": models.Step(image.step).grid_cols,
                 "tutorial_url": _tutorial_url(models.Step(image.step)),
+                **_reference(image),
             },
         )
 
 
 class ClickPartial(RatePartial):
     template_name = f"{CLICK_PARTIAL}.html"
+    complete_template_name = "click_complete.html"
 
 
 class RateView(abc.ABC, edit.CreateView):
