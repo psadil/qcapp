@@ -14,19 +14,22 @@ derivatives=${a2cps}/products/mris
 SIF="docker://psadil/dirt:manage"
 CATALOG=/tmp/a2cps.duckdb # node-local; /tmp is bound by apptainer already
 DBDIR=/tmp/dirtdb         # ditto — no explicit bind needed
+MEDIADIR=/tmp/dirtmedia   # rendered images land here as files (see storage.py)
 PLAN=a2cps.toml           # review plan, staged into the submit dir like .env (from the repo's tools/)
 OUT=${SCRATCH}/dirt/db
+OUTMEDIA=${SCRATCH}/dirt/media
 TEMPLATEFLOW=${SCRATCH}/dirt/templateflow # persistent caches, shared login↔compute (see prewarm below)
 ROIS=${SCRATCH}/dirt/rois                 # ditto
 
-mkdir -p "${DBDIR}" "${OUT}" "${TEMPLATEFLOW}" "${ROIS}"
+mkdir -p "${DBDIR}" "${MEDIADIR}" "${OUT}" "${OUTMEDIA}" "${TEMPLATEFLOW}" "${ROIS}"
 rm -f "${CATALOG}" "${CATALOG}.wal"
 set -a
 . ./.env
 set +a # .env uses `export`; --env-file can't read it
 
 run() { apptainer exec --bind "${a2cps}" --bind "${TEMPLATEFLOW}" --bind "${ROIS}" \
-	--env DB="${DBDIR}/dirt.db" --env DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+	--env DB="${DBDIR}/dirt.db" --env MEDIA_ROOT="${MEDIADIR}" \
+	--env DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
 	--env TEMPLATEFLOW_HOME="${TEMPLATEFLOW}" --env DIRT_ROI_CACHE="${ROIS}" \
 	"${SIF}" "$@"; }
 
@@ -57,4 +60,9 @@ run manage plan "${PLAN}"      # activate before render: render stamps the plan 
 run manage render "${CATALOG}" # drop --update on a fresh seed
 run manage prioritize          # measures → Image.priority, the anomaly_first ordering key
 cp -av "${DBDIR}"/. "${OUT}/"
+cp -av "${MEDIADIR}"/. "${OUTMEDIA}/"
 cp -av "${CATALOG}" "${PWD}"
+# Then, from a login node (compute has no network), reconcile with a deployment:
+#   apptainer exec --env DB=${OUT}/dirt.db --env MEDIA_ROOT=${OUTMEDIA} \
+#     --env DJANGO_SECRET_KEY=... "${SIF}" \
+#     manage push --server https://<host>/dirt --user <ingest-account>
