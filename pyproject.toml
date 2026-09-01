@@ -8,7 +8,9 @@ dependencies = [
     "django>=6.0.0",
     "django-typer",
     "django-environ>=0.12.0,<0.13",
-    "django-ninja>=1.2.0",
+    "django-ninja>=1.7.0",
+    "django-axes>=8.3.1",
+    "httpx>=0.28.1",
     "orjson>=3.11.1",
 ]
 
