@@ -112,9 +112,10 @@ def locmem_cache(settings):
 
 @pytest.fixture
 def index_page(
-    live_server: live_server_helper.LiveServer, page: Page, locmem_cache
+    live_server: live_server_helper.LiveServer, page: Page, locmem_cache, rater
 ) -> Page:
     """The browser sitting on the landing step-selection page."""
+    _login(live_server, page)
     page.goto(live_server.url)
     return page
 
@@ -159,13 +160,23 @@ class TestThemeToggle:
         expect(dark_page.locator("#theme-css")).to_have_attribute("href", DARK_CSS)
 
 
+def _login(live_server: live_server_helper.LiveServer, page: Page) -> None:
+    """Log the browser in as the conftest rater (every rating view requires login)."""
+    page.goto(f"{live_server.url}/accounts/login/")
+    page.fill('input[name="username"]', "rater")
+    page.fill('input[name="password"]', "pw")
+    page.click('button[type="submit"]')
+
+
 def _start_review(
     live_server: live_server_helper.LiveServer, page: Page, step: models.Step
 ) -> None:
     """Walk the landing page so the browser session (session_id/step) is set up."""
+    _login(live_server, page)
     page.goto(live_server.url)
     page.select_option("select[name=step]", str(step.value))
-    page.click("button[type=submit]")
+    # scoped to the step form: the navbar's logout button is also type=submit
+    page.click(".form-container button[type=submit]")
 
 
 def _posted_to(page: Page, path: str):
@@ -189,7 +200,7 @@ HOTKEYS = [
 
 @pytest.fixture
 def rating_page(
-    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache
+    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache, rater
 ) -> _RatingPage:
     """Two fmap images seeded, with the browser on the rating page and focused."""
     seeded = _seed_images(models.Step.FMAP_COREGISTRATION, size=64)
@@ -321,7 +332,7 @@ _GRID_DRAWN = "() => !!document.getElementById('canvas')?.dataset.ready"
 
 @pytest.fixture
 def canvas_page(
-    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache
+    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache, rater
 ) -> _CanvasPage:
     """Two mask images seeded, with the grid canvas drawn and ready to paint."""
     seeded = _seed_images(models.Step.MASK, size=200)
@@ -345,7 +356,7 @@ def _paint_two_cells(canvas_page: _CanvasPage) -> None:
 
 @pytest.fixture
 def normalization_page(
-    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache
+    live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache, rater
 ) -> Page:
     """The spatial-normalization page, whose images have a landmark reference."""
     step = models.Step.SPATIAL_NORMALIZATION

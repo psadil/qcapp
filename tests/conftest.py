@@ -51,6 +51,22 @@ def media_root(settings, tmp_path):
 
 
 @pytest.fixture
+def rater(db, django_user_model):
+    """An ordinary rater account (the kind `manage create_rater` makes)."""
+    return django_user_model.objects.create_user("rater", password="pw")
+
+
+@pytest.fixture
+def client(client, rater):
+    """The Django test client, logged in — every rating view requires login.
+
+    Tests exercising the anonymous path build their own ``django.test.Client``.
+    """
+    client.force_login(rater)
+    return client
+
+
+@pytest.fixture
 def make_image(db):
     """Create an Image (with a real stored file), overriding any field."""
 

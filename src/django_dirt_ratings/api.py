@@ -21,6 +21,11 @@ class ORJSONRenderer(renderers.BaseRenderer):
         return orjson.dumps(data)
 
 
+#: Membership in this stock auth Group is what grants image ingest. A group
+#: rather than `is_staff`, which would additionally open /admin/, and rather
+#: than a bespoke token model, which would bypass django-axes entirely.
+INGEST_GROUP = "ingest"
+
 # API instance
 api = ninja.NinjaAPI(
     title="QC App Ratings API",

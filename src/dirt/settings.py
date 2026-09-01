@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_typer",
+    "axes",
 ]
 
 MIDDLEWARE = [
@@ -61,7 +62,29 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # must be last: it wraps authentication to observe the outcome
+    "axes.middleware.AxesMiddleware",
 ]
+
+# Login throttling (django-axes). AxesStandaloneBackend goes first and
+# short-circuits a locked-out attempt before ModelBackend hashes a password.
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 0.25  # hours
+AXES_RESET_ON_SUCCESS = True
+# Lock the (address, username) *pair*, not either alone: username alone lets
+# anyone freeze a known rater out; address alone, behind one shared proxy,
+# would freeze out everybody at once.
+AXES_LOCKOUT_PARAMETERS = [["ip_address", "username"]]
+
+# Raters are issued a password by `manage create_rater` and never set their
+# own, so only login/logout are routed (see dirt/urls.py).
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "index"
+LOGOUT_REDIRECT_URL = "login"
 
 ROOT_URLCONF = "dirt.urls"
 
@@ -223,3 +246,11 @@ if DEPLOYED:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
     SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+    # REMOTE_ADDR is the proxy's container address, so the client IP has to
+    # come from X-Forwarded-For — but only in a way a client cannot forge. The
+    # proxy appends the peer it heard from (never itself), so a request that
+    # arrives with no XFF reaches Django with exactly one entry: hence a proxy
+    # count of 0, not 1 — a forged client XFF then falls back to the proxy's
+    # IP instead of being trusted.
+    AXES_IPWARE_META_PRECEDENCE_ORDER = ("HTTP_X_FORWARDED_FOR", "REMOTE_ADDR")
+    AXES_IPWARE_PROXY_COUNT = 0

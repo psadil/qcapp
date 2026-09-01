@@ -3,6 +3,8 @@ import json
 
 from django import http, shortcuts, urls, views
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views import static
 from django.views.generic import edit
 
@@ -23,8 +25,10 @@ from django_dirt_ratings import (
 IMAGE_CACHE_CONTROL = "private, max-age=31536000, immutable"
 
 
+@login_required
 def media_file(request: http.HttpRequest, path: str) -> http.HttpResponseBase:
-    """Serve one rendered image out of ``MEDIA_ROOT``.
+    """Serve one rendered image out of ``MEDIA_ROOT``. Login-required because
+    these are subject-derived.
 
     HttpResponseBase, not HttpResponse: ``serve`` answers with a FileResponse
     for a hit and an HttpResponseNotModified for a conditional request, and
@@ -79,7 +83,7 @@ def _reference(image: models.Image) -> dict[str, str]:
     return {"reference_url": url, "reference_space": str(space)}
 
 
-class RatePartial(views.View):
+class RatePartial(LoginRequiredMixin, views.View):
     template_name = f"{RATE_PARTIAL}.html"
     complete_template_name = "review_complete.html"
 
@@ -123,7 +127,7 @@ class ClickPartial(RatePartial):
     complete_template_name = "click_complete.html"
 
 
-class RateView(abc.ABC, edit.CreateView):
+class RateView(LoginRequiredMixin, abc.ABC, edit.CreateView):
     template_name = "rate.html"
     form_class = forms.RatingForm
 
@@ -231,7 +235,7 @@ class RateDTIFIT(RateView):
         return models.Step.DTIFIT
 
 
-class LayoutView(edit.FormView):
+class LayoutView(LoginRequiredMixin, edit.FormView):
     template_name = "index.html"
     form_class = forms.IndexForm
 
@@ -255,7 +259,7 @@ class LayoutView(edit.FormView):
     def form_valid(self, form: forms.IndexForm):
         session = services.session_create(
             step=form.cleaned_data["step"],
-            user=self.request.headers.get("X-Tapis-Username"),
+            user=self.request.user.get_username(),
         )
         self.request.session["session_id"] = session.pk
         self.request.session["step"] = session.step
