@@ -28,7 +28,8 @@ services:
       DJANGO_ALLOWED_HOSTS: ${DIRT_HOST:?set it in /srv/dirt/.env},127.0.0.1
       DJANGO_CSRF_TRUSTED_ORIGINS: https://${DIRT_HOST}
       DJANGO_DEPLOYED: "1"
-      # the proxy strips /dirt before forwarding; Django re-prefixes URLs
+      # the proxy forwards /dirt/... unstripped; Django strips it for routing
+      # and prefixes every generated URL (see FORCE_SCRIPT_NAME in settings.py)
       DJANGO_FORCE_SCRIPT_NAME: /dirt
       DB: /app/db/dirt.db
       CACHE_DB: /app/db/cache.sqlite3

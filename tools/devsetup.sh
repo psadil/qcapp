@@ -45,11 +45,11 @@ rm -f "$CATALOG" "${CATALOG}.wal"
 # adapter widens it — so every index run into the catalog passes the union of
 # adapters any of its datasets needs (here: freesurfer), or bidslake refuses
 # the mismatched run.
-pixi run -e manage bidslake index -i "$DATA_DIR" --adapter freesurfer -o "$CATALOG"
+pixi run -e manage bidslake index -i "$DATA_DIR" --adapter freesurfer --adapter fmriprep -o "$CATALOG"
 # FreeSurfer recon-all is standardized but not BIDS; index it as its own dataset
 # with the adapter (the sourcedata/ nesting defeats the term-map anchor otherwise).
 pixi run -e manage bidslake index -i "$DATA_DIR/sourcedata/freesurfer" \
-	--adapter freesurfer --dataset-id freesurfer -o "$CATALOG"
+	--adapter freesurfer --adapter fmriprep --dataset-id freesurfer -o "$CATALOG"
 
 echo "Applying database migrations..."
 # Set up env vars for local sqlite (WAL sidecar files live in db/ too)

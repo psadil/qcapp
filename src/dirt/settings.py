@@ -191,16 +191,18 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Serving under a path prefix (e.g. https://host/dirt/ behind a reverse proxy
-# that strips the prefix): Django prepends this to every generated URL.
+# Serving under a path prefix (e.g. https://host/dirt/). The proxy passes the
+# prefixed path through UNstripped: Django strips it for routing and prepends
+# it to every generated URL. (ASGI sets request.path straight from the scope,
+# so a proxy-side strip would leak into redirects and next= parameters.)
 FORCE_SCRIPT_NAME = env.str("DJANGO_FORCE_SCRIPT_NAME", default=None)
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/stable/howto/static-files/
 # Relative on purpose: Django prepends the script prefix per access, so this
 # resolves root-anchored ("/static/..." locally, "/dirt/static/..." under a
-# prefix) — never relative to the current page. The proxy strips the prefix,
-# so granian's --static-path-route still matches in the container.
+# prefix) — never relative to the current page. The proxy strips the prefix
+# for static requests only, so granian's --static-path-route still matches.
 STATIC_URL = "static/"
 
 # granian: must be mounted with --static-path-mount

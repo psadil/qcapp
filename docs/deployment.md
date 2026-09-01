@@ -62,7 +62,8 @@ separate compose stack (the `proxy` repo) that both apps join over an external
 docker network:
 
 ```
-proxy stack   caddy: ports 80/443, handle_path /dirt/* → dirt:8000, / → melrater:8000
+proxy stack   caddy: ports 80/443; /dirt/* → dirt:8000 (prefix passed through,
+              stripped only for /dirt/static/*), everything else → melrater:8000
 dirt stack    deploy/compose.yaml — no ports, joins the `proxy` network
 host layout   /srv/dirt/{db,media,backups,compose.yaml,.env,DEPLOYED}
 ```
@@ -72,7 +73,9 @@ host layout   /srv/dirt/{db,media,backups,compose.yaml,.env,DEPLOYED}
   ssh. The server never sees source or a build context.
 - `/srv/dirt/.env` (chmod 600) holds exactly `DJANGO_SECRET_KEY` and `DIRT_HOST`.
 - The container serves under the `/dirt` prefix via `DJANGO_FORCE_SCRIPT_NAME`;
-  the proxy strips the prefix before forwarding.
+  the proxy forwards the prefixed path through unstripped (Django strips it for
+  routing), except for static requests, which caddy rewrites onto granian's
+  `/static` route.
 - `DJANGO_DEPLOYED=1` turns on secure cookies, the proxy-header trust, and the
   hardened django-axes address handling.
 

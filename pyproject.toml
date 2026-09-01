@@ -111,6 +111,8 @@ manage = { features = ["manage"] }
 docs = { features = ["docs"] }
 
 [tool.pixi.tasks]
+collectstatic = { cmd = ["manage", "collectstatic", "--no-input"] }
+# granian serves the collected assets itself (same shape as the container).
 runserver = { cmd = [
     "granian",
     "dirt.asgi:application",
@@ -125,7 +127,11 @@ runserver = { cmd = [
     "st",
     "--loop",
     "uvloop",
-] }
+    "--static-path-route",
+    "/static",
+    "--static-path-mount",
+    "static",
+], depends-on = ["collectstatic"] }
 
 [tool.pixi.dependencies]
 granian = ">=2.6.0,<3"
