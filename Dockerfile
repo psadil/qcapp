@@ -101,11 +101,27 @@ ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV PATH=/app/.pixi/envs/${ENVIRONMENT}/bin:$PATH
 ENV CONDA_PREFIX=/app/.pixi/envs/${ENVIRONMENT}
 
-# ---- web (default) runtime: granian, via the migrate/collectstatic entrypoint ----
+# ---- web (default) runtime: granian, via the mount-check/migrate entrypoint ----
 FROM runtime-base AS runtime-default
 COPY --chmod=0544 --chown=$MAMBA_USER:$MAMBA_USER docker/_entrypoint.sh /usr/local/bin/_entrypoint
+# Static assets bake into the image (granian serves them from /app/static), and
+# `check` catches a broken settings module at build rather than first boot. The
+# throwaway secret only satisfies settings import. Settings mkdir the db path at
+# import, so remove it again and pre-create both mount points empty.
+RUN DJANGO_SECRET_KEY=build-only-not-a-secret manage collectstatic --no-input \
+    && DJANGO_SECRET_KEY=build-only-not-a-secret manage check \
+    && rm -rf /app/db \
+    && install -d /app/db /app/media
 EXPOSE 8000
 ENTRYPOINT [ "/usr/local/bin/_entrypoint" ]
+CMD ["granian", "dirt.asgi:application", \
+    "--interface", "asginl", \
+    "--host", "0.0.0.0", "--port", "8000", \
+    "--workers", "2", "--runtime-mode", "st", "--loop", "uvloop", \
+    "--static-path-route", "/static", \
+    "--static-path-mount", "/app/static", \
+    "--static-path-expires", "300", \
+    "--no-ws"]
 
 # ---- manage runtime: the management CLI (render / recount / bidslake …) ----
 FROM runtime-base AS runtime-manage

@@ -1,0 +1,63 @@
+# The deployed stack. rsynced to /srv/dirt/compose.yaml by deploy/deploy.sh;
+# edit it here, never on the server, or the next deploy overwrites your change.
+#
+# dirt serves beside melrater on the same VM, behind the shared caddy edge (the
+# `proxy` repo): no ports are published here, and the app joins the external
+# `proxy` docker network the edge routes over (create it once with
+# `docker network create proxy`). DIRT_HOST comes from /srv/dirt/.env and has
+# to agree with the proxy's PROXY_HOST — a mismatch 400s (ALLOWED_HOSTS) or
+# 403s (CSRF) rather than failing loudly.
+name: dirt
+
+networks:
+  proxy:
+    external: true
+
+services:
+  dirt:
+    # deploy.sh exports DIRT_TAG over ssh; the default is what a bare
+    # `docker compose up -d` on the box uses.
+    image: ${DIRT_TAG:-psadil/dirt:latest}
+    restart: unless-stopped
+    networks: [proxy]
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set it in /srv/dirt/.env}
+      # keep 127.0.0.1 so the healthcheck is not a DisallowedHost. No spaces
+      # after the comma — the setting is split on "," with no trimming.
+      DJANGO_ALLOWED_HOSTS: ${DIRT_HOST:?set it in /srv/dirt/.env},127.0.0.1
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://${DIRT_HOST}
+      DJANGO_DEPLOYED: "1"
+      # the proxy strips /dirt before forwarding; Django re-prefixes URLs
+      DJANGO_FORCE_SCRIPT_NAME: /dirt
+      DB: /app/db/dirt.db
+      CACHE_DB: /app/db/cache.sqlite3
+      MEDIA_ROOT: /app/media
+      # Turn on /api/ so `manage push` can deliver units. Off by default
+      # outside a source checkout, so this line is the whole opt-in; with it
+      # off the endpoint 401s whatever credentials arrive.
+      DIRT_INGEST_ENABLED: "1"
+    volumes:
+      # absolute, so they do not depend on where compose is run from
+      - /srv/dirt/db:/app/db
+      - /srv/dirt/media:/app/media
+    # The web image carries no neuro stack and mirrors melrater's ~400 MB
+    # steady state with two granian workers; the cap makes the kernel kill
+    # this container rather than sshd/dockerd under memory pressure. Budget on
+    # the 4 GB box: melrater 1500m + dirt 1200m + caddy 256m.
+    mem_limit: 1200m
+    # /accounts/login/ rather than /, which is a 302. The base image has
+    # neither curl nor wget, but the pixi environment's python is on PATH.
+    # start_period has to cover the entrypoint's migrate.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/accounts/login/', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # docker's unbounded json-file default would fill the disk that dirt.db
+    # sits on, where it surfaces as SQLite write failures
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
