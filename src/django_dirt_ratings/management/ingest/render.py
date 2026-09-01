@@ -5,7 +5,7 @@ contract. Each ``render_*`` function loads its inputs and computes every
 volume-wide quantity (cut planes, intensity quantiles, derived surfaces, the
 resampling transform, the template) **once**, then emits every ``(display, cut)``
 blob — instead of the old per-cut functions that recomputed all of that on each
-of the 3x5 calls.
+of the one-per-(axis, cut) calls.
 
 Renderers take ``inputs`` (role -> location string, loaded via :mod:`loading`)
 so they can run in a ``ProcessPoolExecutor`` worker with only paths crossing the
@@ -35,6 +35,11 @@ from django_dirt_ratings import models
 from . import loading, rois
 
 N_CUTS = 5
+
+#: Cuts per axis for the coregistration steps. Fewer than the static views: a
+#: two-frame flip is read as an alignment check, not a survey of the volume, and
+#: nine animations per run is already the heaviest thing DIRT renders.
+COREG_N_CUTS = 3
 
 _Blobs = dict[tuple[models.DisplayMode, int | None], bytes]
 
@@ -305,7 +310,7 @@ def _draw_spatial_normalization(
         return img.getvalue()
 
 
-def _draw_fmap_frames(
+def _draw_coregistration_frames(
     bg_nii,
     mask_nii,
     file_nii,
@@ -314,7 +319,15 @@ def _draw_fmap_frames(
     display_mode: models.DisplayMode,
     file_scale: tuple[float, float],
     file2_scale: tuple[float, float],
+    titles: tuple[str, str],
 ) -> bytes:
+    """One cut of a coregistration, as a two-frame flip animation.
+
+    ``titles`` names the moving and reference volumes for the reviewer — the only
+    thing that distinguishes a field-map check from a T1w one on screen. Both
+    frames are plotted over the same empty background, which is what gives them
+    one shared field of view (verified: identical axis limits).
+    """
     dm = display_mode.name.lower()
     f0 = plt.figure(figsize=(6.4, 4.8), layout="none")
     f1 = plt.figure(figsize=(6.4, 4.8), layout="none")
@@ -325,7 +338,7 @@ def _draw_fmap_frames(
             display_mode=dm,
             figure=f0,
             colorbar=False,
-            title="func/boldref",
+            title=titles[0],
         )
         p0.add_overlay(file_nii, cmap="gray", vmin=file_scale[0], vmax=file_scale[1])
         try:
@@ -345,7 +358,7 @@ def _draw_fmap_frames(
             display_mode=dm,
             figure=f1,
             colorbar=False,
-            title="fmap/epi",
+            title=titles[1],
         )
         p1.add_overlay(file2_nii, cmap="gray", vmin=file2_scale[0], vmax=file2_scale[1])
         try:
@@ -381,7 +394,7 @@ def _draw_fmap_frames(
 def render_mask(*, inputs: dict[str, str], cuts: Sequence[int], displays_) -> _Blobs:
     mask_nii = loading.load_nifti(inputs["mask"])
     file_nii = loading.load_nifti(inputs["anat"])
-    coords = cuts_from_bbox(mask_nii, cuts=N_CUTS)  # per-file
+    coords = cuts_from_bbox(mask_nii, cuts=len(cuts))  # per-file
     vmax = float(np.quantile(file_nii.get_fdata(), 0.95))  # per-file
     # Reorder once per file: nilearn repeats this exact call inside every
     # plot/overlay — a full-volume resample when the affine is oblique.
@@ -401,7 +414,7 @@ def render_surface_localization(
 ) -> _Blobs:
     brain_nii = loading.load_mgz(inputs["brain"])
     ribbon_nii = loading.load_mgz(inputs["ribbon"])
-    coords = cuts_from_bbox(ribbon_nii, cuts=N_CUTS)  # per-file
+    coords = cuts_from_bbox(ribbon_nii, cuts=len(cuts))  # per-file
     contour_data = ribbon_nii.get_fdata() % 39  # per-file
     white = image.new_img_like(ribbon_nii, contour_data == 2)
     pial = image.new_img_like(ribbon_nii, contour_data >= 2)
@@ -455,26 +468,39 @@ def render_spatial_normalization(
     }
 
 
-def render_fmap_coregistration(
-    *, inputs: dict[str, str], cuts: Sequence[int], displays_
+def _render_coregistration(
+    *,
+    inputs: dict[str, str],
+    cuts: Sequence[int],
+    displays_,
+    moving: str,
+    reference: str,
+    titles: tuple[str, str],
 ) -> _Blobs:
+    """A coregistration check: ``moving`` resampled into the ``reference`` frame.
+
+    ``moving``/``reference`` name input roles, so one implementation serves both
+    coregistration steps. fMRIPrep writes each alignment as an ITK affine whose
+    fixed image is the reference, and the matrix maps reference points back into
+    the moving image — exactly what pulls the moving data onto the reference grid.
+    """
     import nitransforms as nt
 
-    file2_nii = loading.load_nifti(inputs["epi"])
+    file2_nii = loading.load_nifti(inputs[reference])
     transform = nt.linear.load(loading._local(inputs["transform"]), reference=file2_nii)
     mask_nii = nt.resampling.apply(
         transform, spatialimage=loading._local(inputs["mask"]), order=0
     )
-    boldref_nii = nb.funcs.squeeze_image(loading.load_nifti(inputs["boldref"]))
-    file_nii = nt.resampling.apply(transform, spatialimage=boldref_nii)
+    moving_nii = nb.funcs.squeeze_image(loading.load_nifti(inputs[moving]))
+    file_nii = nt.resampling.apply(transform, spatialimage=moving_nii)
 
-    # Per-file prep: rotate to the EPI's canonical frame and share an empty
+    # Per-file prep: rotate to the reference's canonical frame and share an empty
     # background so both animation frames have an identical, uncropped FOV.
     canonical_r = rotation2canonical(file2_nii)
     file2_nii = rotate_affine(file2_nii, rot=canonical_r)
     file_nii = rotate_affine(file_nii, rot=canonical_r)
     mask_nii = rotate_affine(mask_nii, rot=canonical_r)
-    coords = cuts_from_bbox(mask_nii, cuts=N_CUTS)
+    coords = cuts_from_bbox(mask_nii, cuts=len(cuts))
     file_scale = tuple(np.quantile(file_nii.get_fdata(), [0.15, 0.998]))
     file2_scale = tuple(np.quantile(file2_nii.get_fdata(), [0.15, 0.998]))
     bg_nii = nb.Nifti1Image(
@@ -486,7 +512,7 @@ def render_fmap_coregistration(
     file_nii = image.reorder_img(file_nii, resample="continuous")
     file2_nii = image.reorder_img(file2_nii, resample="continuous")
     return {
-        (display, cut): _draw_fmap_frames(
+        (display, cut): _draw_coregistration_frames(
             bg_nii,
             mask_nii,
             file_nii,
@@ -495,10 +521,37 @@ def render_fmap_coregistration(
             display,
             file_scale,
             file2_scale,
+            titles,
         )
         for display in displays_
         for cut in cuts
     }
+
+
+def render_fmap_coregistration(
+    *, inputs: dict[str, str], cuts: Sequence[int], displays_
+) -> _Blobs:
+    return _render_coregistration(
+        inputs=inputs,
+        cuts=cuts,
+        displays_=displays_,
+        moving="boldref",
+        reference="epi",
+        titles=("func/boldref", "fmap/epi"),
+    )
+
+
+def render_t1w_coregistration(
+    *, inputs: dict[str, str], cuts: Sequence[int], displays_
+) -> _Blobs:
+    return _render_coregistration(
+        inputs=inputs,
+        cuts=cuts,
+        displays_=displays_,
+        moving="boldref",
+        reference="anat",
+        titles=("func/boldref", "anat/T1w"),
+    )
 
 
 def render_dtifit(*, inputs: dict[str, str], cuts, displays_) -> _Blobs:
@@ -519,7 +572,7 @@ def render_dtifit(*, inputs: dict[str, str], cuts, displays_) -> _Blobs:
         f = plt.figure(figsize=(6.4, 4.8), layout="none")
         plt.imshow(np.clip(np.rot90(rgb[:, :, cut_ix[2, cut]]), 0, 1))
         plt.axis("off")
-        # Throwaway intermediates (see _draw_fmap_frames): fast PNG, in memory.
+        # Throwaway intermediates (see _draw_coregistration_frames): fast PNG.
         with io.BytesIO() as img:
             plt.savefig(
                 img,
@@ -551,6 +604,7 @@ RENDERERS = {
     "surface_localization": render_surface_localization,
     "spatial_normalization": render_spatial_normalization,
     "fmap_coregistration": render_fmap_coregistration,
+    "t1w_coregistration": render_t1w_coregistration,
     "dtifit": render_dtifit,
 }
 

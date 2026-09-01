@@ -20,6 +20,7 @@ MASK_VIEW = "mask"
 SPATIAL_NORMALIZATION_VIEW = "spatial_normalization"
 SURFACE_LOCALIZATION_VIEW = "surface_localization"
 FMAP_COREGISTRATION_VIEW = "fmap_coregistration"
+T1W_COREGISTRATION_VIEW = "t1w_coregistration"
 DTIFIT_VIEW = "dtifit"
 RATE_PARTIAL = "rate_partial"
 CLICK_PARTIAL = "click_partial"
@@ -200,6 +201,12 @@ class RateFMapCoregistration(RateView):
         return models.Step.FMAP_COREGISTRATION
 
 
+class RateT1wCoregistration(RateView):
+    @property
+    def step(self) -> models.Step:
+        return models.Step.T1W_COREGISTRATION
+
+
 class RateDTIFIT(RateView):
     @property
     def step(self) -> models.Step:
@@ -220,6 +227,8 @@ class LayoutView(edit.FormView):
                 return urls.reverse(f"{SURFACE_LOCALIZATION_VIEW}")
             case models.Step.FMAP_COREGISTRATION:
                 return urls.reverse(f"{FMAP_COREGISTRATION_VIEW}")
+            case models.Step.T1W_COREGISTRATION:
+                return urls.reverse(f"{T1W_COREGISTRATION_VIEW}")
             case models.Step.DTIFIT:
                 return urls.reverse(f"{DTIFIT_VIEW}")
             case _:

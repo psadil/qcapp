@@ -19,6 +19,7 @@ class Step(models.IntegerChoices):
     SURFACE_LOCALIZATION = 2
     FMAP_COREGISTRATION = 3
     DTIFIT = 4
+    T1W_COREGISTRATION = 5, "T1w Coregistration"
 
     @property
     def image_type(self) -> str:
@@ -26,7 +27,7 @@ class Step(models.IntegerChoices):
 
         Every step stores AVIF: a single frame for the static views
         (mask, spatial normalization, surface localization) and an animation for
-        the multi-frame views (fmap coregistration, dtifit).
+        the multi-frame views (both coregistrations, dtifit).
         """
         return "avif"
 
@@ -67,6 +68,8 @@ class Step(models.IntegerChoices):
                 return "fmap_coregistration"
             case Step.DTIFIT:
                 return "dtifit"
+            case Step.T1W_COREGISTRATION:
+                return "t1w_coregistration"
         raise AssertionError(f"unhandled step {self!r}")
 
     @classmethod
@@ -235,11 +238,11 @@ class Image(BaseModel):
 class MeasuredFile(BaseModel):
     """One measured NIfTI — the statistical unit the metrics belong to.
 
-    An `Image` is one *view* of a file (a slice along an axis), so a file has ~15
-    of them; a measurement belongs to the file, not the view. Keeping measurements
-    here rather than on `Image` stores each value once and makes it a real column
-    `manage prioritize` can group and aggregate, instead of a JSON blob repeated
-    fifteen times.
+    An `Image` is one *view* of a file (a slice along an axis), so a file has nine
+    to fifteen of them; a measurement belongs to the file, not the view. Keeping
+    measurements here rather than on `Image` stores each value once and makes it a
+    real column `manage prioritize` can group and aggregate, instead of a JSON blob
+    repeated once per view.
 
     `entities` holds the categorical context a metric is compared *within* — the
     rational-subgroup entities harvested at discovery (`sub`, `ses`, `space`,

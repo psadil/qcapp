@@ -32,6 +32,7 @@ class TestStepChoices:
             "SURFACE_LOCALIZATION",
             "FMAP_COREGISTRATION",
             "DTIFIT",
+            "T1W_COREGISTRATION",
         }
 
     @pytest.mark.parametrize(
@@ -42,6 +43,7 @@ class TestStepChoices:
             (Step.SURFACE_LOCALIZATION, "avif"),
             (Step.FMAP_COREGISTRATION, "avif"),
             (Step.DTIFIT, "avif"),
+            (Step.T1W_COREGISTRATION, "avif"),
         ],
     )
     def test_image_type(self, step, expected):
@@ -55,6 +57,7 @@ class TestStepChoices:
             (Step.SURFACE_LOCALIZATION, "annotation"),
             (Step.FMAP_COREGISTRATION, "rating"),
             (Step.DTIFIT, "rating"),
+            (Step.T1W_COREGISTRATION, "rating"),
         ],
     )
     def test_related_name(self, step, expected):

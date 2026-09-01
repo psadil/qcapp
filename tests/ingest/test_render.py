@@ -162,6 +162,86 @@ def test_skull_strip_zeroes_everything_outside_the_mask():
 
 
 @pytest.fixture(scope="module")
+def coregistration_inputs(tmp_path_factory):
+    """Tiny synthetic volumes for a coregistration job, plus an identity affine.
+
+    An identity transform is the honest fixture: the renderer's job is to resample
+    the moving image onto the reference grid, and with the two grids differing
+    (2 mm boldref, 1 mm anat) that resampling still has to happen.
+    """
+    import nibabel as nb
+    import nitransforms as nt
+
+    tmp = tmp_path_factory.mktemp("coregistration")
+
+    def ball(shape, zoom):
+        affine = np.diag([zoom, zoom, zoom, 1.0])
+        affine[:3, 3] = -0.5 * zoom * np.asarray(shape)
+        centre = np.asarray(shape) / 2.0
+        dist = np.sqrt(
+            (((np.indices(shape) - centre[:, None, None, None]) * zoom) ** 2).sum(0)
+        )
+        return affine, dist
+
+    moving_affine, moving_dist = ball((24, 24, 24), 2.0)
+    ref_affine, _ = ball((48, 48, 48), 1.0)
+
+    inputs = {}
+    for role, data, affine in (
+        ("boldref", (moving_dist <= 18.0) * 800.0, moving_affine),
+        ("mask", (moving_dist <= 18.0).astype(np.uint8), moving_affine),
+        ("epi", np.full((48, 48, 48), 500.0), ref_affine),
+        ("anat", np.full((48, 48, 48), 1000.0), ref_affine),
+    ):
+        path = tmp / f"{role}.nii.gz"
+        nb.nifti1.Nifti1Image(data.astype(np.float32), affine).to_filename(path)
+        inputs[role] = str(path)
+
+    transform = tmp / "identity_xfm.txt"
+    nt.linear.Affine(np.eye(4)).to_filename(transform, fmt="itk")
+    inputs["transform"] = str(transform)
+    return inputs
+
+
+@pytest.fixture(scope="module")
+def t1w_coregistration_blobs(coregistration_inputs):
+    """One rendered T1w-coregistration job, at the cut count its spec declares."""
+    return render.render_t1w_coregistration(
+        inputs=coregistration_inputs,
+        cuts=list(range(render.COREG_N_CUTS)),
+        displays_=list(DisplayMode),
+    )
+
+
+def test_coregistration_renders_three_cuts_per_axis(t1w_coregistration_blobs):
+    """The spec declares the cut count and the renderer spaces to it; reading a
+    second constant instead would silently render the first three cuts of five."""
+    assert set(t1w_coregistration_blobs) == {
+        (display, cut) for display in DisplayMode for cut in (0, 1, 2)
+    }
+
+
+def test_coregistration_blob_is_a_two_frame_animation(t1w_coregistration_blobs):
+    animation = Image.open(io.BytesIO(t1w_coregistration_blobs[(DisplayMode.Z, 1)]))
+
+    assert sum(1 for _ in ImageSequence.Iterator(animation)) == 2
+
+
+def test_the_two_coregistration_steps_differ_only_in_their_reference(
+    coregistration_inputs, t1w_coregistration_blobs
+):
+    """Same moving image, same transform, different reference volume — so the
+    frames must differ. Equal bytes would mean a role name was ignored."""
+    fmap = render.render_fmap_coregistration(
+        inputs=coregistration_inputs,
+        cuts=list(range(render.COREG_N_CUTS)),
+        displays_=[DisplayMode.Z],
+    )
+
+    assert fmap[(DisplayMode.Z, 1)] != t1w_coregistration_blobs[(DisplayMode.Z, 1)]
+
+
+@pytest.fixture(scope="module")
 def dtifit_blobs(tmp_path_factory):
     """One rendered DTI-fit job over tiny synthetic eigenvector volumes."""
     import nibabel as nb

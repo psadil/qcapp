@@ -54,6 +54,8 @@ pixi run -e manage manage prioritize # measures → Image.priority
 
 You can drop `--step fmap_coregistration` to render every step; the plan only orders the steps it names, and everything else stays breadth-first.
 
+The same block works verbatim for `[steps.t1w_coregistration]`, which checks each run against the session's anatomical rather than against a field map. `affine_displacement` is measured there too, from the `from-boldref_to-T1w` affine — so a study acquired without field maps can still be ordered this way.
+
 ## Serve and review
 
 ```shell

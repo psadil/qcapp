@@ -21,8 +21,8 @@ docs/concepts/review-ordering.md):
 
 ``priority`` is advisory and only ever reorders — never filters or hides an image.
 The statistical unit is one whole NIfTI, which is what a ``MeasuredFile`` row is —
-so the numbers arrive already one-per-file, and the 15 rendered views of a file all
-receive the score computed once for it.
+so the numbers arrive already one-per-file, and every rendered view of a file
+receives the score computed once for it.
 """
 
 from __future__ import annotations

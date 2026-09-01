@@ -14,6 +14,10 @@ subgroup = ["space", "res"] # a native-space volume is not comparable to an MNI-
 order_by = "affine_displacement"
 direction = "higher_worse" # a bigger induced displacement is more suspect
 
+[steps.t1w_coregistration]
+order_by = "affine_displacement" # the boldref->T1w affine, scored the same way
+direction = "higher_worse"
+
 # An active plan gates the landing page to the steps it names, so the other
 # rendered steps are declared too; empty blocks keep them breadth-first.
 [steps.spatial_normalization]

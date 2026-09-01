@@ -49,7 +49,7 @@ Useful flags:
 
 - `--step masks` (repeatable) renders only the named step(s); the default is every step
   found. Choices: `masks`, `spatial_normalization`, `surface_localization`,
-  `fmap_coregistration`, `dtifit`.
+  `fmap_coregistration`, `t1w_coregistration`, `dtifit`.
 - `--update` re-renders image bytes in place, preserving any ratings already collected.
 - `--sub` / `--res` filter to a subject label or resolution.
 - `--workers` sets the number of render worker processes (default: CPU count).

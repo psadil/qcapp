@@ -78,7 +78,7 @@ In the language of statistical process control, distinguish special-cause variat
 
 ## How `priority` is computed
 
-The statistical unit is one target, which may comprise multiple rendered views (e.g., 5 slices along each of 3 axes). So, measures are de-duplicated per file before any statistic is taken.
+The statistical unit is one target, which may comprise multiple rendered views (three or five slices along each of three axes, depending on the step). So, measures are de-duplicated per file before any statistic is taken.
 
 There are two additional considerations.
 

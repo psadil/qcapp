@@ -21,6 +21,11 @@ urlpatterns = [
         views.RateFMapCoregistration.as_view(),
         name=views.FMAP_COREGISTRATION_VIEW,
     ),
+    path(
+        f"{views.T1W_COREGISTRATION_VIEW}/",
+        views.RateT1wCoregistration.as_view(),
+        name=views.T1W_COREGISTRATION_VIEW,
+    ),
     path(f"{views.DTIFIT_VIEW}/", views.RateDTIFIT.as_view(), name=views.DTIFIT_VIEW),
     path(
         f"{views.RATE_PARTIAL}/", views.RatePartial.as_view(), name=views.RATE_PARTIAL

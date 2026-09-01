@@ -15,8 +15,10 @@ for SUB in "sub-0001" "sub-0002"; do
 	# anat files
 	aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/$SUB/ses-01/anat/" "$DATA_DIR/$SUB/ses-01/anat/" --exclude "*" --include "*desc-brain_mask.nii.gz" --include "*desc-preproc_T1w.nii.gz" --include "*.json"
 
-	# func files needed for fmap coregistration
-	aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/$SUB/ses-01/func/" "$DATA_DIR/$SUB/ses-01/func/" --exclude "*" --include "*desc-brain_mask.nii.gz" --include "*desc-coreg_boldref.nii.gz" --include "*from-boldref_to-*_mode-image_xfm.txt" --include "*.json"
+	# func files needed for both coregistration checks. Nothing is pinned after
+	# the `to-` value: the boldref->T1w affine carries a `desc-coreg` before the
+	# suffix, which the fieldmap ones do not.
+	aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/$SUB/ses-01/func/" "$DATA_DIR/$SUB/ses-01/func/" --exclude "*" --include "*desc-brain_mask.nii.gz" --include "*desc-coreg_boldref.nii.gz" --include "*from-boldref_to-*_xfm.txt" --include "*.json"
 
 	# fmap files
 	aws s3 sync --no-sign-request "s3://openneuro.org/ds007070/$SUB/ses-01/fmap/" "$DATA_DIR/$SUB/ses-01/fmap/" --exclude "*" --include "*desc-epi_fieldmap.nii.gz" --include "*desc-preproc_fieldmap.nii.gz" --include "*.json"

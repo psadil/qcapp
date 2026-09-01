@@ -219,6 +219,7 @@ class StepsTable(pydantic.BaseModel):
     spatial_normalization: StepPlan | None = None
     surface_localization: StepPlan | None = None
     fmap_coregistration: StepPlan | None = None
+    t1w_coregistration: StepPlan | None = None
     dtifit: StepPlan | None = None
 
     @pydantic.model_validator(mode="before")

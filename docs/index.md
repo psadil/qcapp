@@ -19,8 +19,9 @@ DIRT has three parts:
 - **Image generation.** Given a preprocessed dataset in
   [BIDS](https://bids.neuroimaging.io/) layout, DIRT uses the BIDS metadata to locate
   derivatives and render a compact set of QC images for each one — for a brain mask, for
-  example, five informative slices in each of three orientations. Where a failure is best
-  seen across a whole volume, the image is animated.
+  example, five informative slices in each of three orientations, and three for a
+  coregistration. Where a failure is best seen across a whole volume, the image is
+  animated.
 - **A review-ordering algorithm.** During a session, images are served one at a time
   using a *breadth-first* strategy: the next image comes from whichever scan has been
   reviewed the fewest times. Effort is spread across the whole dataset first, then deepens

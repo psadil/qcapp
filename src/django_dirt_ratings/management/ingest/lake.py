@@ -84,6 +84,9 @@ class UnitRow:
     unresolved: dict[str, int]
     #: roles the spec marked optional: unresolved, they leave the job standing.
     optional_roles: frozenset[str] = dataclasses.field(default_factory=frozenset)
+    #: the catalog dataset this anchor came from, for pairing a cross-dataset
+    #: measure to it (see ``harvest``). None when a row was built by hand.
+    dataset_id: str | None = None
 
     def warn_unresolved(self, logger: logging.Logger) -> bool:
         """Log each unresolved role; True when this row must be skipped.
@@ -170,6 +173,7 @@ def unit_rows(
                 roles=resolved,
                 unresolved=bidslake.unresolved(row, roles),
                 optional_roles=frozenset(n for n, r in roles.items() if r.optional),
+                dataset_id=row["dataset_id"],
             )
         )
     return out

@@ -6,4 +6,5 @@ from . import (  # noqa: F401
     masks,
     spatial_normalization,
     surface_localization,
+    t1w_coregistration,
 )

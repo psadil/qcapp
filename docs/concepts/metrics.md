@@ -90,10 +90,11 @@ cortex, which is what you wanted to know; it is not a fraction of the cortex los
 
 ## Where the values live
 
-A measurement belongs to a NIfTI, not to a picture of one. A file has ~15 rendered
-views, so DIRT stores its numbers once, on a `MeasuredFile` row, with one `Metric` row
-per name — real columns to group and aggregate in SQL rather than a JSON blob repeated
-fifteen times. `manage prioritize` reads them; `manage render --update` re-measures.
+A measurement belongs to a NIfTI, not to a picture of one. A file has nine to fifteen
+rendered views, so DIRT stores its numbers once, on a `MeasuredFile` row, with one
+`Metric` row per name — real columns to group and aggregate in SQL rather than a JSON
+blob repeated once per view. `manage prioritize` reads them; `manage render --update`
+re-measures.
 
 Absence and NULL mean different things, and the difference is worth keeping:
 

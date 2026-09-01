@@ -25,8 +25,8 @@ DIRT has three parts:
   [BIDS](https://bids.neuroimaging.io/) layout, DIRT uses the BIDS metadata to
   locate derivatives and render a compact set of QC images for each one — for a
   brain mask, for example, five informative slices in each of three
-  orientations. Where a failure is best seen across a whole volume, the image is
-  animated.
+  orientations, and three for a coregistration. Where a failure is best seen
+  across a whole volume, the image is animated.
 - **Quantitative measures.** Every derivative DIRT renders is also measured —
   brain-mask volume, how much of the brain the field of view cuts off, which
   tissue it cuts through, how far a coregistration moves the brain. Every metric

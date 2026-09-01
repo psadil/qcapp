@@ -22,6 +22,7 @@ For problems that are not tied to one location — a globally noisy tensor-fit m
 coregistration that failed to align two images — the reviewer chooses **pass**, **unsure**,
 or **fail** (scored 0 / 1 / 2). A single *fail* can be enough to exclude a derivative.
 
-Used for **field-map coregistration** and **diffusion tensor fitting**.
+Used for both coregistration checks — **field-map** and **T1w** — and for
+**diffusion tensor fitting**.
 
 Each whole-image judgement is a `Rating` row.

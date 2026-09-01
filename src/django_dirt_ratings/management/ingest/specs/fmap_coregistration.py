@@ -145,7 +145,7 @@ def discover(lake: Any, filters: Mapping[str, Any]) -> list[RenderJob]:
                     file2=Path(epi.file_path).name,
                     render_key="fmap_coregistration",
                     inputs=inputs,
-                    cuts=list(range(render.N_CUTS)),
+                    cuts=list(range(render.COREG_N_CUTS)),
                     displays=list(models.DisplayMode),
                     # The BOLD run's identity, so a cross-dataset catalog measure (an
                     # MRIQC bold IQM in a sibling dataset) can be paired by entity.

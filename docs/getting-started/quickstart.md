@@ -29,7 +29,8 @@ This single command:
 
 !!! note
     For this sample that is masks, spatial normalization, surface localization, and
-    field-map coregistration. The sample has no diffusion data, so DTI-fit is skipped.
+    both coregistration checks (field-map and T1w). The sample has no diffusion data,
+    so DTI-fit is skipped.
 
 ## 2. Build and run the web app
 

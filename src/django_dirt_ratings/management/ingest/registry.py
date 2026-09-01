@@ -69,7 +69,9 @@ class RenderJob:
 
     ``file1``/``file2`` are the identity stored on the resulting ``Image`` rows.
     ``cuts`` of ``(None,)`` with a single display models a one-image-per-file
-    step (DTI-fit).
+    step (DTI-fit); otherwise they are indices into the per-axis coordinate list
+    the renderer computes, which it sizes from this list — so they must be
+    ``range(n)``, and how many views a step renders is decided here.
     """
 
     file1: str
