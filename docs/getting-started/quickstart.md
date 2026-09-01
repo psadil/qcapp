@@ -36,7 +36,7 @@ This single command:
 
 ```shell
 docker buildx build -t psadil/dirt --platform=linux/amd64 --provenance=true .
-docker run --rm -it -v $PWD/db:/app/db --env-file=.env.docker -p 8000:8000 psadil/dirt
+docker run --rm -it -v $PWD/db:/app/db -v $PWD/media:/app/media --env-file=.env.docker -p 8000:8000 psadil/dirt
 ```
 
 ## 3. Review

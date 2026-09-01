@@ -60,13 +60,14 @@ to fail:
   / 2); a single *fail* can be enough to exclude a derivative. Used for
   **field-map coregistration** and **diffusion tensor fitting**.
 
-DIRT is deliberately easy to stand up. It can run on cloud infrastructure, but
-it also runs as a single container on one machine — a laptop, a shared lab
-workstation, or a cluster login node — storing images and ratings in a local
-SQLite database that needs no separate database server. That keeps
-the barrier to entry low for teams without dedicated web-backend resources. It
-is in production on A2CPS Release 2.0 (~29 TB across ~2.2 million derivative
-files).
+DIRT is deliberately easy to stand up. It can run on cloud infrastructure
+(rendered images travel to a deployment over an authenticated ingest API — see
+`manage push`), but it also runs as a single container on one machine — a
+laptop, a shared lab workstation, or a cluster login node — storing images as
+local media files and ratings in a local SQLite database that needs no separate
+database server. That keeps the barrier to entry low for teams without
+dedicated web-backend resources. It is in production on A2CPS Release 2.0
+(~29 TB across ~2.2 million derivative files).
 
 ## Running
 
@@ -74,21 +75,23 @@ The following assumes a file `.env` providing at least `DJANGO_SECRET_KEY`, and
 optionally `DB` (the path to the SQLite database file; defaults to
 `db/dirt.db`). See [.env.example](.env.example) for the full list of variables.
 
-The database and its WAL sidecar files live in a `db/` directory that must be
-mounted as a volume so data survives the container:
+The database (with its WAL sidecar files) lives in a `db/` directory and the
+rendered images in a `media/` directory; both must be mounted as volumes so
+data survives the container (the entrypoint refuses to start otherwise):
 
 ```shell
 docker run \
   --rm \
   -it \
   -v ${PWD}/db:/app/db \
+  -v ${PWD}/media:/app/media \
   --env-file=.env \
   -p 8000:8000 \
   psadil/dirt
 ```
 
 If all goes well, the container migrates the database, creates the cache table,
-starts a Celery worker, and serves the app with granian:
+and serves the app with granian:
 
 ```shell
 Performing system checks...
@@ -117,18 +120,23 @@ create a database, and generate quality control images.
    ```
 3. Run the development server via Docker (using your newly populated local database):
    ```shell
-   docker run --rm -it -v $PWD/db:/app/db --env-file=.env.docker -p 8000:8000 psadil/dirt
+   docker run --rm -it -v $PWD/db:/app/db -v $PWD/media:/app/media --env-file=.env.docker -p 8000:8000 psadil/dirt
    ```
-4. Navigate to `http://localhost:8000`. You can log into the admin interface (`/admin`) using the username `admin` and password `admin`.
+4. Navigate to `http://localhost:8000` and log in with the username `admin` and
+   password `admin` (real deployments issue accounts with
+   `manage create_rater <name>`; `--ingest` grants push rights).
 
 ## Deployment notes
 
 DIRT runs the database and the cache on SQLite in a single container, following
 [the alldjango guide to SQLite in production](https://alldjango.com/articles/definitive-guide-to-using-django-sqlite-in-production).
 The database connection uses WAL journaling and `IMMEDIATE` transactions so the
-web workers can share the one file. Because the whole state is a directory of
-files, back it up (or replicate it, e.g. with Litestream) by copying the mounted
-`db/` volume.
+web workers can share the one file. Rendered images live as ordinary files
+under the mounted `media/` volume. The ratings in `db/` are the only
+irreplaceable data — back them up (e.g. `sqlite3 ... "VACUUM INTO ..."`);
+`media/` is recreated by a re-render or another `manage push`. See the
+[deployment docs](https://psadil.github.io/dirt/deployment.html) for the full
+remote (shared VM + push) story.
 
 ## Tips
 

@@ -50,7 +50,7 @@ Useful flags:
 - `--step masks` (repeatable) renders only the named step(s); the default is every step
   found. Choices: `masks`, `spatial_normalization`, `surface_localization`,
   `fmap_coregistration`, `t1w_coregistration`, `dtifit`.
-- `--update` re-renders image bytes in place, preserving any ratings already collected.
+- `--update` re-renders images in place, preserving any ratings already collected.
 - `--sub` / `--res` filter to a subject label or resolution.
 - `--workers` sets the number of render worker processes (default: CPU count).
 
@@ -117,11 +117,19 @@ for the strategies (`breadth_first`, `anomaly_first`) and the full schema.
 
 ## 5. Serve and review
 
-Point the web app at the same `db/` directory:
+Point the web app at the same `db/` and `media/` directories:
 
 ```shell
-docker run --rm -it -v $PWD/db:/app/db --env-file=.env -p 8000:8000 psadil/dirt
+docker run --rm -it -v $PWD/db:/app/db -v $PWD/media:/app/media \
+  --env-file=.env -p 8000:8000 psadil/dirt
 ```
 
-Open <http://localhost:8000> and review. The reviewer never needs the neuro stack — the
-images are pre-rendered and stored in the database.
+Create a login (reviews are per-account) and open <http://localhost:8000>:
+
+```shell
+pixi run -e manage manage create_rater alice
+```
+
+The reviewer never needs the neuro stack — the images are pre-rendered files under
+`media/`, and the database carries their identities and the reviews. To serve from a
+remote deployment instead, see [Deployment](../deployment.md) and `manage push`.
