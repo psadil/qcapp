@@ -191,11 +191,17 @@ USE_I18N = True
 USE_TZ = True
 
 
+# Serving under a path prefix (e.g. https://host/dirt/ behind a reverse proxy
+# that strips the prefix): Django prepends this to every generated URL.
+FORCE_SCRIPT_NAME = env.str("DJANGO_FORCE_SCRIPT_NAME", default=None)
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/stable/howto/static-files/
-# Absolute so it resolves correctly on sub-path pages (e.g. /mask/), not just
-# the site root; also matches granian's --static-path-route in the container.
-STATIC_URL = "/static/"
+# Relative on purpose: Django prepends the script prefix per access, so this
+# resolves root-anchored ("/static/..." locally, "/dirt/static/..." under a
+# prefix) — never relative to the current page. The proxy strips the prefix,
+# so granian's --static-path-route still matches in the container.
+STATIC_URL = "static/"
 
 # granian: must be mounted with --static-path-mount
 STATIC_ROOT = BASE_DIR.parent / "static"
@@ -251,15 +257,26 @@ LOGGING = {
 # restore it.
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
+# Distinct cookie names, because another Django app can share this origin
+# (dirt serves under a path prefix beside melrater): the default "sessionid"
+# and "csrftoken" at path=/ would have each login clobber the other app's.
+SESSION_COOKIE_NAME = "dirt-sessionid"
+CSRF_COOKIE_NAME = "dirt-csrftoken"
+
+# W004 (HSTS): the deployment is addressed by a bare IP with a short-lived
+# certificate — HSTS on an IP would outlive it. W008 (SSL redirect): the
+# proxy redirects http at the edge; a Django-side redirect would 301 the
+# container healthcheck's direct http request.
+SILENCED_SYSTEM_CHECKS = ["security.W004", "security.W008"]
+
 if DEPLOYED:
     SESSION_COOKIE_SECURE = True
     SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
     CSRF_COOKIE_SECURE = True
     CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
     # https://rtl.chrisadams.me.uk/2024/05/til-keeping-your-hair-when-upgrading-django-3-2-behind-a-caddy-server/
-    # also needed because this is behind traefik
+    # request.is_secure() must believe the proxy, or every redirect loops
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = True
     SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
     # REMOTE_ADDR is the proxy's container address, so the client IP has to
     # come from X-Forwarded-For — but only in a way a client cannot forge. The

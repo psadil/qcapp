@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="rating-interface">
-    <div class="rating-image" hx-get="/click_partial/" hx-trigger="load" id="main">
+    <div class="rating-image" hx-get="{% url 'click_partial' %}" hx-trigger="load" id="main">
         <i> Loading image... </i>
     </div>
 
