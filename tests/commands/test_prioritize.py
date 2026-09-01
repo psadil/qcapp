@@ -6,8 +6,8 @@ import pytest
 from django.core.management import call_command
 
 from django_dirt_ratings import models, services
-from django_dirt_ratings.management.commands.prioritize import _num, _priorities
 from django_dirt_ratings.models import MetricDirection as D
+from django_dirt_ratings.prioritizing import _num, _priorities
 
 
 def _scores(priorities: Sequence[float | None]) -> list[float]:

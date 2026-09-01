@@ -5,9 +5,11 @@ Following the Django Styleguide, selectors take keyword-only arguments and
 raise domain errors; HTTP concerns stay in views and APIs.
 """
 
+import collections
+
 from django.db import models as dm
 
-from django_dirt_ratings import exceptions, models, ordering
+from django_dirt_ratings import exceptions, models, ordering, storage
 
 
 def image_get(*, image_id: int) -> models.Image:
@@ -72,8 +74,36 @@ def image_list(
     return qs[:limit]
 
 
+def unit_digests(*, step: int) -> list[dict[str, str]]:
+    """Per ``file1``, the digest of the step's stored image set.
+
+    Computed from Image rows alone (no file reads), so the push client can
+    compare its local render against this index and skip what is already
+    present and unchanged.
+    """
+    grouped: dict[str, list[tuple[int, int | None, str]]] = collections.defaultdict(
+        list
+    )
+    for file1, display, cut, digest in models.Image.objects.filter(
+        step=step
+    ).values_list("file1", "display", "slice", "digest"):
+        grouped[file1].append((display, cut, digest))
+    return [
+        {"file1": file1, "unit_digest": storage.unit_digest(refs)}
+        for file1, refs in grouped.items()
+    ]
+
+
 def rating_list() -> dm.QuerySet[models.Rating]:
     return models.Rating.objects.select_related("session", "image").all()
+
+
+def annotation_list() -> dm.QuerySet[models.Annotation]:
+    return (
+        models.Annotation.objects.select_related("session", "image")
+        .prefetch_related("cells")
+        .all()
+    )
 
 
 def next_image(

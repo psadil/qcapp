@@ -208,6 +208,21 @@ STATIC_ROOT = BASE_DIR.parent / "static"
 MEDIA_URL = "media/"
 MEDIA_ROOT = Path(env.str("MEDIA_ROOT", default=str(BASE_DIR.parent / "media")))
 
+# Image-ingest API (django_dirt_ratings/api.py). Follows DEBUG, and for the
+# same reason it exists: a source checkout gets the endpoint for free, while a
+# bare deployment does not expose a write API onto the image store — the
+# deploy config opts in. With it off, the API 401s whatever credentials arrive.
+INGEST_ENABLED = env.bool("DIRT_INGEST_ENABLED", default=DEBUG)
+
+# The API's own ceilings. A pushed unit arrives as two multipart FILE parts,
+# and DATA_UPLOAD_MAX_MEMORY_SIZE is calculated excluding file upload data, so
+# its 2.5 MB default keeps guarding the login and rating POSTs untouched. A
+# unit is 9-15 images at ~55 KB each, but animated coregistration/dtifit AVIFs
+# run far larger — hence the generous per-image ceiling.
+INGEST_MAX_TAR_BYTES = env.int("DIRT_INGEST_MAX_TAR_BYTES", default=64 * 1024 * 1024)
+INGEST_MAX_IMAGE_BYTES = env.int("DIRT_INGEST_MAX_IMAGE_BYTES", default=8 * 1024 * 1024)
+INGEST_MAX_IMAGES = env.int("DIRT_INGEST_MAX_IMAGES", default=64)
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/stable/ref/settings/#default-auto-field
 

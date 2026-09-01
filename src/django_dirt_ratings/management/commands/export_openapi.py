@@ -45,7 +45,8 @@ def _render_page(schema: dict) -> str:
         ),
         "",
         (
-            "The live app also serves interactive docs at `/api/docs`. The raw schema "
+            "Every endpoint requires HTTP Basic credentials for an account in the "
+            "`ingest` group (see `manage create_rater --ingest`). The raw schema "
             "is published alongside this site at `api/openapi.json`."
         ),
         "",

@@ -35,19 +35,17 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.utils.text import get_valid_filename
 
-from django_dirt_ratings import models
+from django_dirt_ratings import models, transfer
 
 #: Rendered images all live under this storage prefix.
 IMAGES_PREFIX = "images/"
 
-#: Hex characters kept of a sha256 — plenty against accidental collision, short
-#: enough to read in a URL (the same length melrater uses for montage digests).
-DIGEST_LENGTH = 16
+#: The digest length is owned by the (Django-free) wire-format module, so the
+#: push client and the server agree on it by construction.
+DIGEST_LENGTH = transfer.DIGEST_LENGTH
 
-
-def image_digest(data: bytes) -> str:
-    """The 16-hex content fingerprint that names (and versions) an image."""
-    return hashlib.sha256(data).hexdigest()[:DIGEST_LENGTH]
+#: The 16-hex content fingerprint that names (and versions) an image.
+image_digest = transfer.content_digest
 
 
 def unit_key(file1: str) -> str:

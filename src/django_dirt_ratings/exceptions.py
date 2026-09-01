@@ -10,3 +10,11 @@ class ApplicationError(Exception):
 
 class NotFound(ApplicationError):
     """A referenced object does not exist."""
+
+
+class PushRejected(ApplicationError):
+    """A pushed unit contradicts what the server holds or requires (409)."""
+
+
+class PushTooLarge(ApplicationError):
+    """A pushed payload exceeds a configured ceiling (413)."""
