@@ -247,9 +247,8 @@ class TestClickPartialReference:
     """The landmark reference beside a spatial-normalization image."""
 
     @pytest.fixture
-    def normalization_image(self, db) -> Image:
-        return Image.objects.create(
-            img=b"\x89PNG",
+    def normalization_image(self, make_image) -> Image:
+        return make_image(
             file1="sub-01_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz",
             display=DisplayMode.Z,
             step=Step.SPATIAL_NORMALIZATION,
@@ -316,13 +315,15 @@ class TestClickPartialReference:
         assert "reference_url" not in response.context
 
 
-def _fmap_image(**overrides) -> Image:
-    return Image.objects.create(
+def _fmap_image(*, priority: float, **overrides) -> Image:
+    image = services.image_create(
         img=b"\x89PNG",
         display=DisplayMode.X,
         step=Step.FMAP_COREGISTRATION,
         **overrides,
     )
+    Image.objects.filter(pk=image.pk).update(priority=priority)
+    return image
 
 
 def _offered_steps(form: IndexForm) -> set[str]:

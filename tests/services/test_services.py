@@ -6,6 +6,7 @@ import typing
 import pytest
 from django.core.exceptions import ValidationError
 
+from django_dirt_ratings import storage
 from django_dirt_ratings.models import (
     Annotation,
     AnnotationCell,
@@ -35,7 +36,8 @@ from django_dirt_ratings.services import (
 def _row(**overrides) -> ImageRow:
     """One `image_upsert_many` row; identity is (file1, display, step, slice)."""
     row: ImageRow = {
-        "img": b"a",
+        "img": "images/masks/f/a-d0s0.avif",
+        "digest": "a" * 16,
         "file1": "f.nii.gz",
         "file2": None,
         "display": DisplayMode.X,
@@ -175,7 +177,10 @@ class TestImageCreate:
         assert image.pk is not None
 
     def test_stores_the_bytes(self, image):
-        assert bytes(image.img) == b"\x89PNG"
+        assert image.img.read() == b"\x89PNG"
+
+    def test_records_the_content_digest(self, image):
+        assert image.digest == storage.image_digest(b"\x89PNG")
 
 
 @pytest.mark.django_db
@@ -193,9 +198,10 @@ class TestImageUpsert:
     """The same identity upserted twice refreshes one row rather than adding one."""
 
     @pytest.fixture
-    def created(self) -> Image:
+    def created(self, db) -> Image:
         return image_upsert(
-            img=b"first",
+            img="images/masks/a/first-d0s0.avif",
+            digest="first" + "0" * 11,
             file1="a.nii.gz",
             display=DisplayMode.X,
             step=Step.MASK,
@@ -205,7 +211,8 @@ class TestImageUpsert:
     @pytest.fixture
     def updated(self, created) -> Image:
         return image_upsert(
-            img=b"second",
+            img="images/masks/a/second-d0s0.avif",
+            digest="second" + "0" * 10,
             file1="a.nii.gz",
             display=DisplayMode.X,
             step=Step.MASK,
@@ -218,8 +225,8 @@ class TestImageUpsert:
     def test_stores_no_duplicate(self, updated):
         assert Image.objects.count() == 1
 
-    def test_refreshes_the_bytes(self, updated):
-        assert bytes(Image.objects.get().img) == b"second"
+    def test_repoints_the_file(self, updated):
+        assert Image.objects.get().img.name == "images/masks/a/second-d0s0.avif"
 
 
 @pytest.mark.django_db
@@ -230,8 +237,8 @@ class TestImageUpsertMany:
 
     @pytest.fixture
     def reupserted(self, bulk_created) -> Image:
-        """One of the two identities re-upserted with new bytes (ON CONFLICT)."""
-        image_upsert_many(images=[_row(slice=0, img=b"A")])
+        """One of the two identities re-upserted with new content (ON CONFLICT)."""
+        image_upsert_many(images=[_row(slice=0, img="images/A", digest="A" * 16)])
         return Image.objects.get(file1="f.nii.gz", slice=0)
 
     def test_creates_every_row(self, bulk_created):
@@ -240,8 +247,8 @@ class TestImageUpsertMany:
     def test_reupsert_adds_no_duplicate(self, reupserted):
         assert Image.objects.count() == 2
 
-    def test_reupsert_refreshes_the_bytes(self, reupserted):
-        assert bytes(reupserted.img) == b"A"
+    def test_reupsert_refreshes_the_digest(self, reupserted):
+        assert reupserted.digest == "A" * 16
 
 
 @pytest.mark.django_db
@@ -261,15 +268,19 @@ class TestUpsertManyKeepsPriority:
     def rerendered(self, ingested, review_plan) -> Image:
         """A prioritize run scored the image; then ingest re-rendered it."""
         Image.objects.filter(pk=ingested.pk).update(priority=2.5)
-        image_upsert_many(images=[_row(img=b"A", review_plan_id=review_plan.pk)])
+        image_upsert_many(
+            images=[
+                _row(img="images/A", digest="A" * 16, review_plan_id=review_plan.pk)
+            ]
+        )
         ingested.refresh_from_db()
         return ingested
 
     def test_stamps_the_review_plan(self, ingested, review_plan):
         assert ingested.review_plan_id == review_plan.pk
 
-    def test_rerender_refreshes_the_bytes(self, rerendered):
-        assert bytes(rerendered.img) == b"A"
+    def test_rerender_refreshes_the_digest(self, rerendered):
+        assert rerendered.digest == "A" * 16
 
     def test_rerender_preserves_the_priority(self, rerendered):
         # priority is not in update_fields, so a re-render must not clobber it.

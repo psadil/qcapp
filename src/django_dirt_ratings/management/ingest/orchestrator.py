@@ -7,8 +7,8 @@
   file's inputs once, runs the prep-once render, and returns every blob. CPU- and
   GIL-bound matplotlib work parallelizes across files; only paths in, blobs out.
 - **Writing** happens back in the parent — the sole DB writer, since SQLite has a
-  single writer — batched per file via ``services.image_upsert_many``, alongside
-  that file's measurements via ``services.measured_file_upsert``.
+  single writer — one call to ``services.unit_store`` per file, which lands the
+  blobs in media storage and the rows (images + measurements) in the database.
 """
 
 from __future__ import annotations
@@ -75,31 +75,15 @@ def _write(
     review_plan_id: int | None,
 ) -> None:
     entities, values = _measure(job=job, catalog=catalog)
-    services.measured_file_upsert(
+    services.unit_store(
         step=int(step),
         file1=job.file1,
+        file2=job.file2,
         entities=entities or None,
         values=values,
         review_plan_id=review_plan_id,
+        blobs={(int(display), cut): data for (display, cut), data in blobs.items()},
     )
-    rows: list[services.ImageRow] = [
-        {
-            "img": data,
-            "file1": job.file1,
-            "file2": job.file2,
-            "display": int(display),
-            "step": int(step),
-            "slice": cut,
-            "review_plan_id": review_plan_id,
-        }
-        for (display, cut), data in blobs.items()
-    ]
-    # NULL-slice rows (single-image DTIFIT) can't use ON CONFLICT; the rest batch.
-    if any(row["slice"] is None for row in rows):
-        for row in rows:
-            services.image_upsert(**row)
-    else:
-        services.image_upsert_many(images=rows)
 
 
 def ingest_dataset(

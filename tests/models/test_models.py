@@ -103,7 +103,8 @@ def make_image(db):
 
     def _make(**overrides) -> Image:
         fields = {
-            "img": b"\x89PNG",
+            "img": "images/masks/test/d-d0s0.avif",
+            "digest": "d" * 16,
             "slice": 0,
             "file1": "test_file.nii.gz",
             "display": DisplayMode.X,

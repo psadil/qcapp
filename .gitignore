@@ -238,3 +238,7 @@ data/*
 
 # created during dev setups (collectstatic output at the repo root only)
 /static/
+
+# rendered QC images (see django_dirt_ratings/storage.py)
+/media/
+

@@ -3,11 +3,11 @@ import json
 
 from django import http, shortcuts, urls, views
 from django.conf import settings
+from django.views import static
 from django.views.generic import edit
 
 from django_dirt_ratings import (
     exceptions,
-    formatters,
     forms,
     models,
     ordering,
@@ -15,6 +15,25 @@ from django_dirt_ratings import (
     selectors,
     services,
 )
+
+# An image URL contains the image's content digest, so the bytes behind one
+# never change — a re-render mints new URLs. That makes them safely immutable,
+# which matters: every step re-fetches a fresh partial per submission, and the
+# reference panel repeats across images.
+IMAGE_CACHE_CONTROL = "private, max-age=31536000, immutable"
+
+
+def media_file(request: http.HttpRequest, path: str) -> http.HttpResponseBase:
+    """Serve one rendered image out of ``MEDIA_ROOT``.
+
+    HttpResponseBase, not HttpResponse: ``serve`` answers with a FileResponse
+    for a hit and an HttpResponseNotModified for a conditional request, and
+    only their common base covers both.
+    """
+    response = static.serve(request, path, document_root=settings.MEDIA_ROOT)
+    response.headers["Cache-Control"] = IMAGE_CACHE_CONTROL
+    return response
+
 
 MASK_VIEW = "mask"
 SPATIAL_NORMALIZATION_VIEW = "spatial_normalization"
@@ -91,8 +110,7 @@ class RatePartial(views.View):
             request,
             self.template_name,
             {
-                "img_type": models.Step(image.step).image_type,
-                "image": formatters.image_to_base64(image.img),
+                "image_url": image.img.url,
                 "grid_cols": models.Step(image.step).grid_cols,
                 "tutorial_url": _tutorial_url(models.Step(image.step)),
                 **_reference(image),

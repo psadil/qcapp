@@ -177,6 +177,14 @@ STATIC_URL = "/static/"
 # granian: must be mounted with --static-path-mount
 STATIC_ROOT = BASE_DIR.parent / "static"
 
+# Rendered QC images are ordinary Django media: written through
+# `default_storage` (see django_dirt_ratings/storage.py for their layout) and
+# served from MEDIA_ROOT by the media view in dirt/urls.py.
+# Relative on purpose: Django prepends the script prefix per request, so the
+# same setting serves /media/... at the root and /dirt/media/... under one.
+MEDIA_URL = "media/"
+MEDIA_ROOT = Path(env.str("MEDIA_ROOT", default=str(BASE_DIR.parent / "media")))
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/stable/ref/settings/#default-auto-field
 

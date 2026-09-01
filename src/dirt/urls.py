@@ -18,7 +18,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from django_dirt_ratings import views
+
 urlpatterns = [
     path("", include("django_dirt_ratings.urls")),
     path("admin/", admin.site.urls),
+    # Rendered QC images are subject-derived, so media is served by Django
+    # itself (works with DEBUG off; fine at this tool's scale).
+    path("media/<path:path>", views.media_file, name="media"),
 ]

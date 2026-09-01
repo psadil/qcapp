@@ -91,7 +91,7 @@ def _make_png(width: int, height: int) -> bytes:
 def _seed_images(step: models.Step, size: int, height: int | None = None) -> set[int]:
     """Two images for `step` — enough that a "next" one exists after a review."""
     return {
-        models.Image.objects.create(
+        services.image_create(
             img=_make_png(size, height or size),
             slice=i,
             file1=f"test_{step.value}_{i}.nii.gz",

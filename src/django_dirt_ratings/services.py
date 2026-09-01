@@ -7,11 +7,12 @@ writes to the database.
 """
 
 import typing
+from collections.abc import Mapping
 
 from django.db import transaction
 from django.db.models import F
 
-from django_dirt_ratings import models, plan
+from django_dirt_ratings import models, plan, storage
 
 
 def image_create(
@@ -23,8 +24,19 @@ def image_create(
     slice: int | None = None,
     file2: str | None = None,
 ) -> models.Image:
+    digest = storage.image_digest(img)
+    name = storage.image_name(
+        step=step, file1=file1, display=display, slice=slice, digest=digest
+    )
+    storage.save(name, img)
     instance = models.Image(
-        img=img, file1=file1, display=display, step=step, slice=slice, file2=file2
+        img=name,
+        digest=digest,
+        file1=file1,
+        display=display,
+        step=step,
+        slice=slice,
+        file2=file2,
     )
     instance.full_clean()
     instance.save()
@@ -32,12 +44,16 @@ def image_create(
 
 
 def image_delete(*, image: models.Image) -> None:
+    name = image.img.name
     image.delete()
+    if name:
+        storage.delete(name)
 
 
 def image_upsert(
     *,
-    img: bytes,
+    img: str,
+    digest: str,
     file1: str,
     display: int,
     step: int,
@@ -45,12 +61,14 @@ def image_upsert(
     file2: str | None = None,
     review_plan_id: int | None = None,
 ) -> models.Image:
-    """Create the Image identified by its unique metadata, or refresh its bytes.
+    """Create the Image identified by its unique metadata, or repoint its file.
 
-    The lookup fields are the ``image_meta`` unique constraint; updating in
-    place preserves the primary key (hence any ratings) and ``priority``
-    (recomputed by ``prioritize``), while refreshing the bytes and the plan the
-    image was rendered under. Measurements live on :class:`models.MeasuredFile`.
+    ``img`` is a storage name (see :mod:`~django_dirt_ratings.storage`), not
+    bytes — writing the file is the caller's job, so this stays usable from
+    both the local render path and the upload API. The lookup fields are the
+    ``image_meta`` unique constraint; updating in place preserves the primary
+    key (hence any ratings) and ``priority`` (recomputed by ``prioritize``).
+    Measurements live on :class:`models.MeasuredFile`.
     """
     instance = models.Image.objects.filter(
         slice=slice, file1=file1, display=display, step=step
@@ -58,6 +76,7 @@ def image_upsert(
     if instance is None:
         instance = models.Image(slice=slice, file1=file1, display=display, step=step)
     instance.img = img
+    instance.digest = digest
     instance.file2 = file2
     instance.review_plan_id = review_plan_id
     instance.full_clean(validate_unique=False)
@@ -68,7 +87,8 @@ def image_upsert(
 class ImageRow(typing.TypedDict):
     """The fields of one Image as a plain row, for the upsert paths."""
 
-    img: bytes
+    img: str
+    digest: str
     file1: str
     file2: str | None
     display: int
@@ -82,12 +102,14 @@ class ImageRow(typing.TypedDict):
 def image_upsert_many(*, images: typing.Sequence[ImageRow]) -> None:
     """Create or refresh many Images in one INSERT ... ON CONFLICT.
 
-    Each row holds the fields of one Image (``img``, ``file1``, ``file2``,
-    ``display``, ``step``, ``slice``, ``review_plan_id``). On conflict against the
-    ``image_meta`` unique key the bytes and plan are refreshed in place, preserving
-    the primary key (and hence ratings), ``n_reviews`` and ``priority``. Only valid for non-null ``slice`` rows: SQLite treats NULLs as
-    distinct in a unique index, so ON CONFLICT would not dedup them (the single-image
-    DTIFIT step uses :func:`image_upsert` instead).
+    Each row holds the fields of one Image (``img`` — a storage name — plus
+    ``digest``, ``file1``, ``file2``, ``display``, ``step``, ``slice``,
+    ``review_plan_id``). On conflict against the ``image_meta`` unique key the
+    file reference and plan are refreshed in place, preserving the primary key
+    (and hence ratings), ``n_reviews`` and ``priority``. Only valid for
+    non-null ``slice`` rows: SQLite treats NULLs as distinct in a unique index,
+    so ON CONFLICT would not dedup them (the single-image DTIFIT step uses
+    :func:`image_upsert` instead).
     """
     instances = [models.Image(**fields) for fields in images]
     for instance in instances:
@@ -99,8 +121,128 @@ def image_upsert_many(*, images: typing.Sequence[ImageRow]) -> None:
         instances,
         update_conflicts=True,
         unique_fields=["slice", "file1", "display", "step"],
-        update_fields=["img", "file2", "review_plan"],
+        update_fields=["img", "digest", "file2", "review_plan"],
     )
+
+
+class ImageRef(typing.TypedDict):
+    """One image of a unit: its view identity and content digest — no bytes."""
+
+    display: int
+    slice: int | None
+    digest: str
+
+
+def unit_upsert_rows(
+    *,
+    step: int,
+    file1: str,
+    file2: str | None,
+    entities: dict | None,
+    values: typing.Mapping[str, float | None],
+    review_plan_id: int | None,
+    images: typing.Sequence[ImageRef],
+) -> list[str]:
+    """Upsert one measured file and its image rows; return replaced storage names.
+
+    The row-side half of storing a unit, shared by the local render path
+    (:func:`unit_store`) and the upload API — files are the caller's concern.
+    A returned name is one an updated row used to point at (its digest
+    changed): safe to delete only *after* this returns, never before, because
+    until then it is what reviewers are still being served.
+    """
+    existing = {
+        (display, cut): (name, digest)
+        for display, cut, name, digest in models.Image.objects.filter(
+            step=step, file1=file1
+        ).values_list("display", "slice", "img", "digest")
+    }
+    rows: list[ImageRow] = [
+        {
+            "img": storage.image_name(
+                step=step,
+                file1=file1,
+                display=ref["display"],
+                slice=ref["slice"],
+                digest=ref["digest"],
+            ),
+            "digest": ref["digest"],
+            "file1": file1,
+            "file2": file2,
+            "display": ref["display"],
+            "step": step,
+            "slice": ref["slice"],
+            "review_plan_id": review_plan_id,
+        }
+        for ref in images
+    ]
+    with transaction.atomic():
+        measured_file_upsert(
+            step=step,
+            file1=file1,
+            entities=entities,
+            values=values,
+            review_plan_id=review_plan_id,
+        )
+        # NULL-slice rows (single-image DTIFIT) can't use ON CONFLICT; the rest batch.
+        if any(row["slice"] is None for row in rows):
+            for row in rows:
+                image_upsert(**row)
+        else:
+            image_upsert_many(images=rows)
+    replaced = []
+    for ref in images:
+        previous = existing.get((ref["display"], ref["slice"]))
+        if previous is not None and previous[0] and previous[1] != ref["digest"]:
+            replaced.append(previous[0])
+    return replaced
+
+
+def unit_store(
+    *,
+    step: int,
+    file1: str,
+    file2: str | None,
+    entities: dict | None,
+    values: typing.Mapping[str, float | None],
+    review_plan_id: int | None,
+    blobs: Mapping[tuple[int, int | None], bytes],
+) -> int:
+    """Store one unit locally: files into media, rows into the database.
+
+    Files are written before rows and replaced files deleted only after the
+    rows point away — a failure partway leaves unreachable orphans (reclaimed
+    by ``manage prune_media``), never a page of broken images. Idempotent:
+    unchanged bytes keep their digest, so nothing is rewritten.
+    """
+    current = {
+        (display, cut): digest
+        for display, cut, digest in models.Image.objects.filter(
+            step=step, file1=file1
+        ).values_list("display", "slice", "digest")
+    }
+    refs: list[ImageRef] = []
+    for (display, cut), data in blobs.items():
+        digest = storage.image_digest(data)
+        refs.append({"display": display, "slice": cut, "digest": digest})
+        name = storage.image_name(
+            step=step, file1=file1, display=display, slice=cut, digest=digest
+        )
+        # The exists() check covers a wiped media/ next to a surviving database.
+        if current.get((display, cut)) != digest or not storage.exists(name):
+            storage.save(name, data)
+    replaced = unit_upsert_rows(
+        step=step,
+        file1=file1,
+        file2=file2,
+        entities=entities,
+        values=values,
+        review_plan_id=review_plan_id,
+        images=refs,
+    )
+    for name in replaced:
+        storage.delete(name)
+    return len(refs)
 
 
 def measured_file_upsert(

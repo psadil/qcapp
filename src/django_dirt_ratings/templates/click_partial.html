@@ -16,7 +16,7 @@
 
 <div class="card shadow-sm">
     <div class="card-body p-4">
-        <input type="hidden" id="image-data" value="data:image/{{img_type}};base64,{{image}}">
+        <input type="hidden" id="image-data" value="{{ image_url }}">
         <div class="text-center">
             <div class="canvas-wrapper">
                 <canvas id="canvas" class="responsive-canvas" data-grid-cols="{{ grid_cols }}"></canvas>

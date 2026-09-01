@@ -179,7 +179,18 @@ class Session(BaseModel):
 
 
 class Image(BaseModel):
-    img = models.BinaryField()
+    # The rendered bytes live as ordinary media (see storage.py for the
+    # layout); the name is assigned from storage.image_name, never generated
+    # by the field itself, so re-renders replace rather than collision-rename.
+    img = models.FileField(max_length=255)
+    digest = models.CharField(
+        max_length=16,
+        help_text=(
+            "16-hex sha256 prefix of the stored image bytes. Names the media "
+            "file (cache busting: new bytes, new URL) and lets the push client "
+            "compare local and remote content without reading either file."
+        ),
+    )
     slice = models.IntegerField(null=True, blank=True)
     file1 = models.TextField(max_length=512)
     file2 = models.TextField(max_length=512, null=True, blank=True)

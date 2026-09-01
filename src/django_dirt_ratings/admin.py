@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from . import formatters, models
+from . import models
 
 
 class ImageAdmin(admin.ModelAdmin):
@@ -28,10 +28,8 @@ class ImageAdmin(admin.ModelAdmin):
         if not obj.img:
             return "-"
         return format_html(
-            '<img src="data:image/{};base64,{}" '
-            'style="max-height:60px; max-width:120px;" />',
-            models.Step(obj.step).image_type,
-            formatters.image_to_base64(obj.img),
+            '<img src="{}" style="max-height:60px; max-width:120px;" />',
+            obj.img.url,
         )
 
     @admin.display(description="Image")
@@ -39,9 +37,8 @@ class ImageAdmin(admin.ModelAdmin):
         if not obj.img:
             return "-"
         return format_html(
-            '<img src="data:image/{};base64,{}" style="max-width:100%;" />',
-            models.Step(obj.step).image_type,
-            formatters.image_to_base64(obj.img),
+            '<img src="{}" style="max-width:100%;" />',
+            obj.img.url,
         )
 
 

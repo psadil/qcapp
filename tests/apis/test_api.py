@@ -9,24 +9,6 @@ from django_dirt_ratings.models import DisplayMode, Image, Step
 PNG = b"\x89PNG"
 
 
-@pytest.fixture
-def make_image(db):
-    """Create an Image with a fresh identity, overriding any field."""
-
-    def _make(**overrides) -> Image:
-        n = Image.objects.count()
-        fields = {
-            "img": PNG,
-            "slice": n,
-            "file1": f"file_{n}.nii.gz",
-            "display": DisplayMode.X,
-            "step": Step.MASK,
-        }
-        return Image.objects.create(**(fields | overrides))
-
-    return _make
-
-
 def _payload(**overrides) -> dict:
     """The JSON body the create endpoint expects."""
     return {
@@ -57,8 +39,8 @@ class TestGetImage:
     def test_body_carries_the_filename(self, response, image):
         assert response.json()["file1"] == image.file1
 
-    def test_body_base64_encodes_the_bytes(self, response):
-        assert response.json()["img"] == base64.b64encode(PNG).decode()
+    def test_body_carries_the_media_url(self, response, image):
+        assert response.json()["url"] == image.img.url
 
     def test_nonexistent_image_returns_404(self, client):
         response = client.get("/api/image/99999/")
@@ -139,7 +121,7 @@ class TestCreateImage:
     def test_decodes_the_base64_bytes(self, response):
         created = Image.objects.get(pk=response.json()["id"])
 
-        assert bytes(created.img) == PNG
+        assert created.img.read() == PNG
 
 
 @pytest.mark.django_db

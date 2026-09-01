@@ -172,7 +172,7 @@ def make_mask(db):
             entities={"space": space},
             values={models.ComputedMetric.MASK_VOLUME: volume},
         )
-        return models.Image.objects.create(
+        return services.image_create(
             img=b"\x89PNG",
             file1=file1,
             display=0,
@@ -237,7 +237,7 @@ class TestPrioritizeCommand:
         services.plan_apply(name="t", text=PLAN)
         make_mask("MNI", 100.0)
         make_mask("MNI", 200.0)
-        orphan = models.Image.objects.create(
+        orphan = services.image_create(
             img=b"\x89PNG", file1="orphan.nii.gz", display=0, step=models.Step.MASK
         )
 

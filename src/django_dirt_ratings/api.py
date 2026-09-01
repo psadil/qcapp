@@ -6,7 +6,7 @@ from django import http
 from django.core import exceptions as django_exceptions
 from ninja import Schema, parser, renderers
 
-from django_dirt_ratings import exceptions, formatters, models, selectors, services
+from django_dirt_ratings import exceptions, models, selectors, services
 
 
 class ORJSONParser(parser.Parser):
@@ -66,15 +66,24 @@ class ImageInSchema(Schema):
 
 
 class ImageOutSchema(ninja.ModelSchema):
-    img: str
+    url: str
 
     class Meta:
         model = models.Image
-        fields = ("id", "slice", "file1", "file2", "display", "step", "created_at")
+        fields = (
+            "id",
+            "slice",
+            "file1",
+            "file2",
+            "display",
+            "step",
+            "digest",
+            "created_at",
+        )
 
     @staticmethod
-    def resolve_img(obj: models.Image) -> str:
-        return formatters.image_to_base64(obj.img)
+    def resolve_url(obj: models.Image) -> str:
+        return obj.img.url
 
 
 class ImageCreatedSchema(ninja.ModelSchema):

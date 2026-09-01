@@ -31,7 +31,8 @@ def make_image(db):
     def _make(step=RATED_STEP, **overrides) -> Image:
         n = Image.objects.count()
         fields = {
-            "img": b"\x89PNG",
+            "img": f"images/file_{n}-d0s{n}.avif",
+            "digest": "d" * 16,
             "file1": f"file_{n}.nii.gz",
             "display": DisplayMode.X,
             "step": step,

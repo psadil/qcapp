@@ -87,6 +87,6 @@ ENVEOF
 echo ""
 echo "Setup complete! You can now run the development server using Docker:"
 echo "  docker buildx build -t psadil/dirt --platform=linux/amd64 --provenance=true ."
-echo "  docker run --rm -it -v \$PWD/db:/app/db --env-file=.env.docker -p 8000:8000 psadil/dirt"
+echo "  docker run --rm -it -v \$PWD/db:/app/db -v \$PWD/media:/app/media --env-file=.env.docker -p 8000:8000 psadil/dirt"
 echo ""
 echo "Log in at http://localhost:8000/admin/ with username: admin, password: admin"

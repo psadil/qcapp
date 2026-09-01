@@ -9,8 +9,11 @@ import os
 # touches the database (import time, ahead of django_db_setup).
 os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
+from typing import Any
+
 import pytest
 
+from django_dirt_ratings import services
 from django_dirt_ratings.models import (
     DisplayMode,
     Image,
@@ -41,6 +44,29 @@ def django_db_modify_db_settings(django_db_modify_db_settings, tmp_path_factory)
     test["NAME"] = str(test_db)
 
 
+@pytest.fixture(autouse=True)
+def media_root(settings, tmp_path):
+    """Isolate stored images per test (images are media files, see storage.py)."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+
+
+@pytest.fixture
+def make_image(db):
+    """Create an Image (with a real stored file), overriding any field."""
+
+    def _make(*, img: bytes = b"\x89PNG", **overrides) -> Image:
+        n = Image.objects.count()
+        fields: dict[str, Any] = {
+            "slice": n,
+            "file1": f"file_{n}.nii.gz",
+            "display": DisplayMode.X,
+            "step": Step.MASK,
+        }
+        return services.image_create(img=img, **(fields | overrides))
+
+    return _make
+
+
 @pytest.fixture
 def mask_session(db):
     """A Session configured for the MASK step."""
@@ -54,24 +80,12 @@ def fmap_session(db):
 
 
 @pytest.fixture
-def mask_image(db):
+def mask_image(make_image):
     """A minimal Image for the MASK step."""
-    return Image.objects.create(
-        img=b"\x89PNG",
-        slice=0,
-        file1="test.nii.gz",
-        display=DisplayMode.X,
-        step=Step.MASK,
-    )
+    return make_image(slice=0, file1="test.nii.gz")
 
 
 @pytest.fixture
-def fmap_image(db):
+def fmap_image(make_image):
     """A minimal Image for the FMAP_COREGISTRATION step."""
-    return Image.objects.create(
-        img=b"\x89PNG",
-        slice=0,
-        file1="test.nii.gz",
-        display=DisplayMode.X,
-        step=Step.FMAP_COREGISTRATION,
-    )
+    return make_image(slice=0, file1="test.nii.gz", step=Step.FMAP_COREGISTRATION)
