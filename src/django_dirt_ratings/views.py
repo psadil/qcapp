@@ -25,6 +25,25 @@ from django_dirt_ratings import (
 IMAGE_CACHE_CONTROL = "private, max-age=31536000, immutable"
 
 
+class HtmxLoginRequiredMixin(LoginRequiredMixin):
+    """Login gate that a partial request can survive.
+
+    A plain redirect to the login page would be *followed* by htmx and swapped
+    into the target element — a login form nested inside #main, with the
+    submission lost. Answering an htmx request with HX-Redirect instead makes
+    the browser perform a full-page navigation to the login page.
+    """
+
+    # supplied by the View the mixin is mixed into; annotated for the stubs
+    request: http.HttpRequest
+
+    def handle_no_permission(self):
+        response = super().handle_no_permission()
+        if self.request.headers.get("HX-Request") != "true":
+            return response
+        return http.HttpResponse(headers={"HX-Redirect": response.headers["Location"]})
+
+
 @login_required
 def media_file(request: http.HttpRequest, path: str) -> http.HttpResponseBase:
     """Serve one rendered image out of ``MEDIA_ROOT``. Login-required because
@@ -83,7 +102,7 @@ def _reference(image: models.Image) -> dict[str, str]:
     return {"reference_url": url, "reference_space": str(space)}
 
 
-class RatePartial(LoginRequiredMixin, views.View):
+class RatePartial(HtmxLoginRequiredMixin, views.View):
     template_name = f"{RATE_PARTIAL}.html"
     complete_template_name = "review_complete.html"
 
@@ -127,7 +146,7 @@ class ClickPartial(RatePartial):
     complete_template_name = "click_complete.html"
 
 
-class RateView(LoginRequiredMixin, abc.ABC, edit.CreateView):
+class RateView(HtmxLoginRequiredMixin, abc.ABC, edit.CreateView):
     template_name = "rate.html"
     form_class = forms.RatingForm
 

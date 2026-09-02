@@ -25,6 +25,21 @@ class TestAnonymousRedirects:
 
 
 @pytest.mark.django_db
+class TestHtmxExpiry:
+    """An expired session on an htmx request must not nest the login page."""
+
+    def test_a_partial_request_gets_a_client_redirect(self, anon):
+        response = anon.get(reverse("rate_partial"), headers={"HX-Request": "true"})
+
+        assert response.headers["HX-Redirect"].startswith(reverse("login"))
+
+    def test_a_partial_request_is_not_a_302(self, anon):
+        response = anon.get(reverse("rate_partial"), headers={"HX-Request": "true"})
+
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
 class TestLoginPage:
     def test_renders_anonymously(self, anon):
         response = anon.get(reverse("login"))
