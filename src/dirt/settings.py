@@ -53,8 +53,14 @@ INSTALLED_APPS = [
     "axes",
 ]
 
+# No GZipMiddleware: compression is the edge's job (see the `proxy` repo's
+# Caddyfile, `encode zstd gzip`). Caddy negotiates zstd, skips already-compressed
+# types by default — every rendered image here is AVIF — and does the work on its
+# own goroutines. Django's version has no content-type filter, so it spent the
+# worker's one thread_sensitive thread gzipping AVIF that came out *larger*
+# (~96 ms for an 8 MB animation), and dropped Content-Length doing it. A
+# deployment without the edge serves uncompressed HTML; that is the trade.
 MIDDLEWARE = [
-    "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

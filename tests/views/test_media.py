@@ -32,3 +32,18 @@ class TestMediaView:
         response = client.get(image_url)
 
         assert b"".join(response.streaming_content) == b"\x89PNG"
+
+    def test_an_already_compressed_image_is_not_encoded(self, client, image_url):
+        # Every rendered image is AVIF. Gzipping one spends the worker's single
+        # thread to make the payload marginally *larger*; the edge's `encode`
+        # skips image types, and Django no longer competes with it.
+        response = client.get(image_url, headers={"accept-encoding": "gzip"})
+
+        assert "Content-Encoding" not in response.headers
+
+    def test_the_length_is_declared(self, client, image_url):
+        # Compressing a streamed response deletes Content-Length, leaving the
+        # browser unable to size the download it is waiting on.
+        response = client.get(image_url, headers={"accept-encoding": "gzip"})
+
+        assert response.headers["Content-Length"] == "4"

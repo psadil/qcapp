@@ -118,13 +118,19 @@ class TestRateViewGet:
 class TestRateViewPost:
     @pytest.fixture
     def response(self, client, set_session, fmap_image, fmap_session):
-        set_session(image_id=fmap_image.pk, session_id=fmap_session.pk)
+        set_session(
+            step=Step.FMAP_COREGISTRATION,
+            image_id=fmap_image.pk,
+            session_id=fmap_session.pk,
+        )
         return client.post(
             reverse(FMAP_COREGISTRATION_VIEW), data={"rating": Ratings.PASS}
         )
 
-    def test_redirects(self, response):
-        assert response.status_code == 302
+    def test_answers_with_the_next_partial(self, response):
+        # The submission renders the next image itself; redirecting to the
+        # partial cost a second round trip for a response it could already build.
+        assert response.status_code == 200
 
     def test_creates_one_rating(self, response):
         assert Rating.objects.count() == 1
@@ -154,7 +160,9 @@ class TestClickViewPost:
         """Submit a click review of `mask_image` with the given cells."""
 
         def _post(cells):
-            set_session(image_id=mask_image.pk, session_id=mask_session.pk)
+            set_session(
+                step=Step.MASK, image_id=mask_image.pk, session_id=mask_session.pk
+            )
             return client.post(
                 reverse(MASK_VIEW),
                 data={
@@ -174,8 +182,8 @@ class TestClickViewPost:
     def unmarked(self, post_cells):
         return post_cells([])
 
-    def test_redirects(self, marked):
-        assert marked.status_code == 302
+    def test_answers_with_the_next_partial(self, marked):
+        assert marked.status_code == 200
 
     def test_creates_one_annotation(self, marked):
         assert Annotation.objects.count() == 1
@@ -191,8 +199,8 @@ class TestClickViewPost:
     def test_stores_every_marked_cell(self, marked):
         assert AnnotationCell.objects.count() == 2
 
-    def test_empty_payload_redirects(self, unmarked):
-        assert unmarked.status_code == 302
+    def test_empty_payload_is_accepted(self, unmarked):
+        assert unmarked.status_code == 200
 
     def test_empty_payload_still_creates_an_annotation(self, unmarked):
         assert Annotation.objects.count() == 1
@@ -224,6 +232,101 @@ class TestRatePartial:
         response = client.get(reverse("rate_partial"))
 
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestNextImagePrefetch:
+    """The partial names the image the next request will serve, so the browser
+    can have the bytes cached before the swap that needs them."""
+
+    @pytest.fixture
+    def following(self, make_image):
+        return make_image(slice=1, file1="next.nii.gz")
+
+    def test_the_upcoming_image_is_offered(
+        self, client, set_session, mask_image, following, mask_session
+    ):
+        set_session(step=Step.MASK, session_id=mask_session.pk)
+
+        response = client.get(reverse("rate_partial"))
+
+        assert response.context["next_image_url"] == following.img.url
+
+    def test_the_last_image_offers_nothing(
+        self, client, set_session, mask_image, mask_session
+    ):
+        set_session(step=Step.MASK, session_id=mask_session.pk)
+
+        response = client.get(reverse("rate_partial"))
+
+        assert response.context["next_image_url"] is None
+
+    def test_the_prediction_is_what_the_next_request_serves(
+        self, client, set_session, mask_image, following, mask_session
+    ):
+        """A wrong guess would fetch bytes nobody then uses."""
+        set_session(step=Step.MASK, session_id=mask_session.pk)
+        predicted = client.get(reverse("rate_partial")).context["next_image_url"]
+
+        served = client.get(reverse("rate_partial")).context["image_url"]
+
+        assert served == predicted
+
+    def test_the_prediction_is_a_hint_not_a_reservation(
+        self, client, set_session, mask_image, following, make_image, mask_session
+    ):
+        """Nothing is held for the browser between the two requests: the image
+        served is whatever the ordering says *now*. Storing the prediction and
+        handing it back would pin a reviewer to a stale choice the moment a
+        second reviewer rates that image first."""
+        third = make_image(slice=2, file1="third.nii.gz")
+        set_session(step=Step.MASK, session_id=mask_session.pk)
+        # Serves `mask_image` and predicts `following`; also pins the image_id
+        # the next request excludes.
+        client.get(reverse("rate_partial"))
+
+        # A second reviewer gets there first, sinking the predicted image.
+        services.rating_create(
+            image=following, session=mask_session, rating=Ratings.PASS
+        )
+
+        served = client.get(reverse("rate_partial")).context["image_url"]
+
+        # `third`, not the predicted `following` — recomputed, not replayed.
+        assert served == third.img.url
+
+    def test_the_submission_serves_what_the_partial_prefetched(
+        self, client, set_session, fmap_image, make_image, fmap_session
+    ):
+        """The whole point: the bytes the browser was told to warm are the bytes
+        the very next response asks it to display."""
+        make_image(slice=1, file1="next.nii.gz", step=Step.FMAP_COREGISTRATION)
+        set_session(step=Step.FMAP_COREGISTRATION, session_id=fmap_session.pk)
+        prefetched = client.get(reverse("rate_partial")).context["next_image_url"]
+
+        response = client.post(
+            reverse(FMAP_COREGISTRATION_VIEW), data={"rating": Ratings.PASS}
+        )
+
+        assert response.context["image_url"] == prefetched
+
+    def test_the_submission_answers_with_the_next_image(
+        self, client, set_session, fmap_image, make_image, fmap_session
+    ):
+        upcoming = make_image(
+            slice=1, file1="next.nii.gz", step=Step.FMAP_COREGISTRATION
+        )
+        set_session(
+            step=Step.FMAP_COREGISTRATION,
+            image_id=fmap_image.pk,
+            session_id=fmap_session.pk,
+        )
+
+        response = client.post(
+            reverse(FMAP_COREGISTRATION_VIEW), data={"rating": Ratings.PASS}
+        )
+
+        assert response.context["image_url"] == upcoming.img.url
 
     def test_anomaly_strategy_serves_highest_priority(
         self, client, set_session, fmap_session

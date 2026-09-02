@@ -102,42 +102,89 @@ def _reference(image: models.Image) -> dict[str, str]:
     return {"reference_url": url, "reference_space": str(space)}
 
 
+def _upcoming_image_url(
+    *,
+    step: models.Step,
+    strategy: ordering.OrderingStrategy,
+    after: models.Image,
+) -> str | None:
+    """URL of the image the *next* request will serve, or ``None`` at the end of a step.
+
+    Running now the exact seek that request will run predicts its answer rather
+    than guessing it: the ordering is deterministic, and reviewing an image only
+    ever sinks that one image — which this call excludes. The template offers the
+    URL to the browser so the bytes are already cached when the swap lands.
+
+    Strictly a hint, never a reservation: nothing here touches session state, and
+    the image actually served is still chosen fresh by the request serving it. A
+    second reviewer rating that image first costs one wasted download and a
+    transition no slower than it was before the prefetch existed.
+    """
+    try:
+        image = selectors.next_image(step=step, strategy=strategy, exclude=after.pk)
+    except exceptions.ApplicationError:
+        return None
+    return image.img.url
+
+
+def _next_image_response(
+    request: http.HttpRequest,
+    *,
+    template_name: str,
+    complete_template_name: str,
+) -> http.HttpResponse:
+    """Serve the next image for this browser session's step, and record it.
+
+    Shared by the partial views (htmx's opening ``hx-get``) and by the submit
+    POSTs, which answer with the next image directly. Redirecting there instead
+    cost every submission a second round trip — cookie, auth query, template
+    load — for a response the POST already had everything to render.
+    """
+    step = request.session.get("step")
+    if step is None:
+        raise http.Http404("no active rating session")
+
+    # Serve the next image synchronously under the session's pinned strategy
+    # (cached in the cookie at session start). Every strategy is a single index
+    # seek; excluding the image just shown gives the next one in order.
+    strategy = ordering.OrderingStrategy.build(
+        request.session.get("strategy", models.ReviewStrategy.BREADTH_FIRST)
+    )
+    try:
+        image = selectors.next_image(
+            step=models.Step(step),
+            strategy=strategy,
+            exclude=request.session.get("image_id"),
+        )
+    except exceptions.ApplicationError:
+        # No image left to serve — an empty step, or its only image was just shown.
+        return shortcuts.render(request, complete_template_name)
+
+    request.session["image_id"] = image.pk
+    return shortcuts.render(
+        request,
+        template_name,
+        {
+            "image_url": image.img.url,
+            "next_image_url": _upcoming_image_url(
+                step=models.Step(step), strategy=strategy, after=image
+            ),
+            "grid_cols": models.Step(image.step).grid_cols,
+            "tutorial_url": _tutorial_url(models.Step(image.step)),
+            **_reference(image),
+        },
+    )
+
+
 class RatePartial(HtmxLoginRequiredMixin, views.View):
     template_name = f"{RATE_PARTIAL}.html"
     complete_template_name = "review_complete.html"
 
     def get(self, request: http.HttpRequest) -> http.HttpResponse:
-        step = request.session.get("step")
-        if step is None:
-            raise http.Http404("no active rating session")
-
-        # Serve the next image synchronously under the session's pinned strategy
-        # (cached in the cookie at session start). Every strategy is a single index
-        # seek, so there is no slow query to hide behind a prefetch; excluding the
-        # image just shown gives the next one in order.
-        strategy = ordering.OrderingStrategy.build(
-            request.session.get("strategy", models.ReviewStrategy.BREADTH_FIRST)
-        )
-        try:
-            image = selectors.next_image(
-                step=models.Step(step),
-                strategy=strategy,
-                exclude=request.session.get("image_id"),
-            )
-        except exceptions.ApplicationError:
-            # No image left to serve — an empty step, or its only image was just shown.
-            return shortcuts.render(request, self.complete_template_name)
-
-        request.session["image_id"] = image.pk
-        return shortcuts.render(
+        return _next_image_response(
             request,
-            self.template_name,
-            {
-                "image_url": image.img.url,
-                "grid_cols": models.Step(image.step).grid_cols,
-                "tutorial_url": _tutorial_url(models.Step(image.step)),
-                **_reference(image),
-            },
+            template_name=self.template_name,
+            complete_template_name=self.complete_template_name,
         )
 
 
@@ -149,14 +196,22 @@ class ClickPartial(RatePartial):
 class RateView(HtmxLoginRequiredMixin, abc.ABC, edit.CreateView):
     template_name = "rate.html"
     form_class = forms.RatingForm
+    #: The partial a successful submission answers with. Naming the view class
+    #: keeps the (template, complete-template) pair defined in one place.
+    partial: type[RatePartial] = RatePartial
 
     @property
     @abc.abstractmethod
     def step(self) -> models.Step:
         raise NotImplementedError
 
-    def get_success_url(self) -> str:
-        return urls.reverse(RATE_PARTIAL)
+    def next_image_response(self, request: http.HttpRequest) -> http.HttpResponse:
+        """Answer a submission with the next image, rather than a redirect to it."""
+        return _next_image_response(
+            request,
+            template_name=self.partial.template_name,
+            complete_template_name=self.partial.complete_template_name,
+        )
 
     def _get_image_and_session(
         self, request: http.HttpRequest
@@ -187,15 +242,13 @@ class RateView(HtmxLoginRequiredMixin, abc.ABC, edit.CreateView):
             source_data_issue=form.cleaned_data["source_data_issue"],
             comments=form.cleaned_data["comments"],
         )
-        return http.HttpResponseRedirect(self.get_success_url())
+        return self.next_image_response(request)
 
 
 class ClickView(RateView):
     template_name = "click.html"
     form_class = forms.ClickForm
-
-    def get_success_url(self) -> str:
-        return urls.reverse(CLICK_PARTIAL)
+    partial = ClickPartial
 
     def post(self, request: http.HttpRequest, *args, **kwargs) -> http.HttpResponse:
         form = self.get_form()
@@ -215,7 +268,7 @@ class ClickView(RateView):
             source_data_issue=form.cleaned_data["source_data_issue"],
             comments=form.cleaned_data["comments"],
         )
-        return http.HttpResponseRedirect(self.get_success_url())
+        return self.next_image_response(request)
 
 
 class RateMask(ClickView):

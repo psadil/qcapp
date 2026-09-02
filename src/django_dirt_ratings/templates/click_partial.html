@@ -31,3 +31,8 @@
         </div>
     </div>
 </div>
+
+{% if next_image_url %}
+<img src="{{ next_image_url }}" class="prefetch" alt="" aria-hidden="true"
+    fetchpriority="low" decoding="async">
+{% endif %}

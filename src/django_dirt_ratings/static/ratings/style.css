@@ -37,17 +37,43 @@
    Responsive Images and Canvas
    ============================================================================ */
 
-/* Ensure images are responsive */
-img.img-fluid {
-    max-width: 100%;
+/* The image under review on the whole-image rating pages, and the next one
+   waiting in the browser's cache.
+
+   Both axes `auto` with both capped is the one spelling of "fit the box" a
+   replaced element honors without distortion. Setting a definite width instead
+   makes `max-height` squash the picture rather than re-derive the width from
+   the aspect ratio. */
+.responsive-figure {
+    width: auto;
     height: auto;
+    max-width: 100%;
+    max-height: 100%;
     display: block;
 }
 
-/* Centering box for the canvas. Carries no background of its own: when the
-   viewport is short the canvas is height-limited and narrower than this box,
-   and a card behind it would frame the image in empty white. */
-.canvas-wrapper {
+/* The next image, fetched while the reviewer looks at the current one so the
+   swap after a submission has pixels to show at once. `fixed` so it can never
+   extend the scroll area of a layout that claims the viewport exactly (see
+   "One-screen rating layout"). */
+.prefetch {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Centering box for the figure under review — a canvas where cells are painted,
+   a plain image where the whole picture is rated. Carries no background of its
+   own: when the viewport is short the figure is height-limited and narrower
+   than this box, and a card behind it would frame the image in empty white.
+   Two class names rather than one: clicks.js keys off `.canvas-wrapper` being
+   absent to bail on the rating pages. */
+.canvas-wrapper,
+.image-wrapper {
     position: relative;
     display: flex;
     align-items: center;
@@ -174,11 +200,14 @@ img.img-fluid {
         align-items: stretch;
     }
 
+    /* `div.text-center`, not `.text-center`: it is a Bootstrap text utility, and
+       the hint paragraph carries it too. Matching the paragraph turned it into a
+       column flex container and stacked its own words one per line. */
     .rating-image,
     .rating-form,
     .rating-image>.card,
     .rating-image .card-body,
-    .rating-image .card-body>.text-center {
+    .rating-image .card-body>div.text-center {
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -186,14 +215,15 @@ img.img-fluid {
 
     .rating-image>.card,
     .rating-image .card-body,
-    .rating-image .card-body>.text-center,
-    .canvas-wrapper {
+    .rating-image .card-body>div.text-center,
+    .canvas-wrapper,
+    .image-wrapper {
         flex: 1 1 auto;
     }
 
     /* The hint line under the image, and everything below the reference in the
        right-hand column, keep their natural height. */
-    .rating-image .card-body>.text-center>p,
+    .rating-image .card-body>div.text-center>p,
     .rating-form>.annotation-controls,
     .rating-form>.card {
         flex: 0 0 auto;
@@ -237,6 +267,12 @@ img.img-fluid {
     .responsive-canvas {
         width: 100%;
         height: auto;
+        max-height: none;
+    }
+
+    /* A percentage max-height resolves against an indefinite height here, so
+       this is belt-and-braces — say it anyway, the way the canvas does. */
+    .responsive-figure {
         max-height: none;
     }
 }

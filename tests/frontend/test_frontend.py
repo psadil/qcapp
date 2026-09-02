@@ -203,11 +203,43 @@ def rating_page(
     live_server: live_server_helper.LiveServer, class_page: Page, locmem_cache, rater
 ) -> _RatingPage:
     """Two fmap images seeded, with the browser on the rating page and focused."""
-    seeded = _seed_images(models.Step.FMAP_COREGISTRATION, size=64)
+    seeded = _seed_images(models.Step.FMAP_COREGISTRATION, size=640, height=480)
     _start_review(live_server, class_page, models.Step.FMAP_COREGISTRATION)
     expect(class_page).to_have_url(f"{live_server.url}/fmap_coregistration/")
     class_page.click("body")
     return _RatingPage(page=class_page, seeded=seeded)
+
+
+@pytest.mark.django_db(transaction=True)
+class TestRatingPageLayout:
+    """The rate pages claim the viewport, the way the click pages do."""
+
+    def test_the_hotkey_hint_reads_as_one_line(self, rating_page: _RatingPage):
+        """Regression: the one-screen CSS matched `.text-center` on the hint
+        paragraph itself, making it a column flex container that stacked every
+        word — icon, "Hotkeys:", each key — one per line."""
+        height, line = rating_page.page.evaluate(
+            "() => { const p = document.querySelector('#main p');"
+            " return [p.getBoundingClientRect().height,"
+            "         parseFloat(getComputedStyle(p).lineHeight)]; }"
+        )
+
+        assert height <= line * 2
+
+    def test_the_page_fits_the_viewport(self, rating_page: _RatingPage):
+        overflow = rating_page.page.evaluate(
+            "() => document.documentElement.scrollHeight - window.innerHeight"
+        )
+
+        assert overflow <= 1
+
+    def test_the_next_image_is_already_fetched(self, rating_page: _RatingPage):
+        """Two images are seeded, so the partial should carry the second one."""
+        srcs = rating_page.page.eval_on_selector_all(
+            "#main img", "els => els.map(e => e.getAttribute('src'))"
+        )
+
+        assert len(set(srcs)) == 2
 
 
 def _rate_and_submit(rating_page: _RatingPage, hotkey: str) -> None:

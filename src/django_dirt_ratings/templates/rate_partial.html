@@ -1,11 +1,20 @@
 <div class="card shadow-sm">
     <div class="card-body p-4">
-        <img src="{{ image_url }}" class="img-fluid rounded" id="image"
-            alt="Quality Control Image">
-        <p class="text-muted mt-3 text-center">
-            <i class="fas fa-keyboard me-2"></i>
-            Hotkeys: <strong>p</strong> = Pass, <strong>u</strong> = Unsure, <strong>f</strong> = Fail,
-            <strong>Enter</strong> = Submit
-        </p>
+        <div class="text-center">
+            <div class="image-wrapper">
+                <img src="{{ image_url }}" class="responsive-figure rounded" id="image"
+                    alt="Quality Control Image" decoding="async" fetchpriority="high">
+            </div>
+            <p class="text-muted mt-3">
+                <i class="fas fa-keyboard me-2"></i>
+                Hotkeys: <strong>p</strong> = Pass, <strong>u</strong> = Unsure, <strong>f</strong> = Fail,
+                <strong>Enter</strong> = Submit
+            </p>
+        </div>
     </div>
 </div>
+
+{% if next_image_url %}
+<img src="{{ next_image_url }}" class="prefetch" alt="" aria-hidden="true"
+    fetchpriority="low" decoding="async">
+{% endif %}
