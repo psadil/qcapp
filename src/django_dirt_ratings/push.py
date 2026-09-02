@@ -76,12 +76,21 @@ def push_plan(
 
 def fetch_units(
     client: httpx.Client, target: PushTarget, *, step: str
-) -> dict[str, str]:
-    """``{file1: unit_digest}`` for every unit the server already holds."""
+) -> dict[str, tuple[str, str]]:
+    """``{file1: (unit_digest, meta_digest)}`` for the server's stored units.
+
+    Two digests because they answer different questions: the unit digest
+    covers the image bytes, the meta digest covers what travels beside them
+    (metrics, entities, plan provenance) — either differing means the unit
+    must be re-sent.
+    """
     response = client.get(target.url("/units"), params={"step": step})
     if response.status_code != 200:
         raise PushFailed(f"units: HTTP {response.status_code} {_detail(response)}")
-    return {row["file1"]: row["unit_digest"] for row in response.json()}
+    return {
+        row["file1"]: (row["unit_digest"], row["meta_digest"])
+        for row in response.json()
+    }
 
 
 def push_unit(

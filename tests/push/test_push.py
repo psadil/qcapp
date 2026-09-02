@@ -113,15 +113,22 @@ class TestPushUnit4xx:
 
 
 class TestFetchUnits:
-    def test_maps_file1_to_digest(self):
+    def test_maps_file1_to_the_digest_pair(self):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(
-                200, json=[{"file1": "a.nii.gz", "unit_digest": "d" * 16}]
+                200,
+                json=[
+                    {
+                        "file1": "a.nii.gz",
+                        "unit_digest": "d" * 16,
+                        "meta_digest": "m" * 16,
+                    }
+                ],
             )
 
         index = push.fetch_units(_client(handler), TARGET, step="masks")
 
-        assert index == {"a.nii.gz": "d" * 16}
+        assert index == {"a.nii.gz": ("d" * 16, "m" * 16)}
 
     def test_an_error_status_raises(self):
         def handler(request: httpx.Request) -> httpx.Response:

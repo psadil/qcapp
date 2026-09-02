@@ -143,19 +143,23 @@ def unit_upsert_rows(
     review_plan_id: int | None,
     images: typing.Sequence[ImageRef],
 ) -> list[str]:
-    """Upsert one measured file and its image rows; return replaced storage names.
+    """Make ``images`` the unit's whole stored view set; return replaced names.
 
     The row-side half of storing a unit, shared by the local render path
     (:func:`unit_store`) and the upload API — files are the caller's concern.
-    A returned name is one an updated row used to point at (its digest
-    changed): safe to delete only *after* this returns, never before, because
-    until then it is what reviewers are still being served.
+    The incoming set is authoritative, like a re-measure's metric set: a
+    ``(display, slice)`` the unit used to have and no longer does is deleted
+    (with its reviews — the view itself is gone), or a renderer that narrows
+    its cuts would leave stale images in rotation forever and the push
+    skip-set could never converge. A returned name is one no surviving row
+    points at any more: safe to delete only *after* this returns, never
+    before, because until then it is what reviewers are still being served.
     """
     existing = {
-        (display, cut): (name, digest)
-        for display, cut, name, digest in models.Image.objects.filter(
+        (display, cut): (pk, name, digest)
+        for pk, display, cut, name, digest in models.Image.objects.filter(
             step=step, file1=file1
-        ).values_list("display", "slice", "img", "digest")
+        ).values_list("pk", "display", "slice", "img", "digest")
     }
     rows: list[ImageRow] = [
         {
@@ -176,6 +180,8 @@ def unit_upsert_rows(
         }
         for ref in images
     ]
+    incoming = {(ref["display"], ref["slice"]) for ref in images}
+    stale = [view for view in existing if view not in incoming]
     with transaction.atomic():
         measured_file_upsert(
             step=step,
@@ -190,11 +196,15 @@ def unit_upsert_rows(
                 image_upsert(**row)
         else:
             image_upsert_many(images=rows)
-    replaced = []
+        if stale:
+            models.Image.objects.filter(
+                pk__in=[existing[view][0] for view in stale]
+            ).delete()
+    replaced = [existing[view][1] for view in stale if existing[view][1]]
     for ref in images:
         previous = existing.get((ref["display"], ref["slice"]))
-        if previous is not None and previous[0] and previous[1] != ref["digest"]:
-            replaced.append(previous[0])
+        if previous is not None and previous[1] and previous[2] != ref["digest"]:
+            replaced.append(previous[1])
     return replaced
 
 

@@ -170,6 +170,7 @@ class PlanInSchema(Schema):
 class UnitSummarySchema(Schema):
     file1: str
     unit_digest: str
+    meta_digest: str
 
 
 class ImageMetaSchema(Schema):

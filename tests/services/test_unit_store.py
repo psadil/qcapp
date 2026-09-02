@@ -99,6 +99,35 @@ class TestChangedRestore:
         assert Rating.objects.filter(image=image).count() == 1
 
 
+class TestNarrowedRestore:
+    """The incoming view set is authoritative: absent views are removed."""
+
+    @pytest.fixture
+    def narrowed(self, stored) -> None:
+        """The unit re-stored with only its X view — the Y view is gone."""
+        _store({(int(DisplayMode.X), 0): b"x-bytes"})
+
+    def test_the_absent_view_row_is_deleted(self, narrowed):
+        assert Image.objects.count() == 1
+
+    def test_the_absent_view_file_is_deleted(self, narrowed):
+        assert len(list(storage.stored_names())) == 1
+
+    def test_the_surviving_view_is_untouched(self, narrowed):
+        image = Image.objects.get()
+
+        assert image.img.read() == b"x-bytes"
+
+    def test_the_unit_digest_converges(self, narrowed):
+        from django_dirt_ratings import selectors
+
+        digest = selectors.unit_digests(step=int(Step.MASK))[0]["unit_digest"]
+
+        assert digest == storage.unit_digest(
+            [(int(DisplayMode.X), 0, storage.image_digest(b"x-bytes"))]
+        )
+
+
 class TestNullSlice:
     """The single-image DTIFIT path: NULL slice rows go through image_upsert."""
 

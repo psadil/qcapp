@@ -3,9 +3,11 @@
 The local-first contract: `render` writes into the local SQLite database and
 media directory with no network at all (A2CPS compute nodes have none), and
 this command later reconciles that on-disk state against a deployment's ingest
-API from any networked machine. Reconciliation is by content digest — a unit
-whose stored image set already matches the server's is skipped — so re-running
-after a partial failure pushes only what is missing.
+API from any networked machine. Reconciliation is by digest pair — a unit is
+skipped only when the server already holds the same image set (unit digest)
+AND the same metrics/entities/plan provenance (meta digest) — so re-running
+after a partial failure pushes only what is missing, and a re-measure with
+byte-identical images still travels.
 
 Order per run: every review plan the pushed units reference (the local active
 plan last, so both sides end active on the same one), then the units, then one
@@ -24,7 +26,7 @@ from django.core.files.storage import default_storage
 from django.core.management.base import CommandError
 from django_typer.management import TyperCommand
 
-from django_dirt_ratings import models, push, storage, transfer
+from django_dirt_ratings import models, push, selectors, transfer
 
 
 class Command(TyperCommand):
@@ -89,10 +91,16 @@ class Command(TyperCommand):
         with push.open_client(target) as client:
             to_push: list[tuple[models.Step, str, _Unit]] = []
             for step_enum in steps:
+                # The digest index comes from the same selector the server's
+                # /units endpoint runs, so both sides compute it identically.
+                local_index = {
+                    row["file1"]: (row["unit_digest"], row["meta_digest"])
+                    for row in selectors.unit_digests(step=int(step_enum))
+                }
                 local = _local_units(step_enum)
                 remote = push.fetch_units(client, target, step=step_enum.cli_name)
                 for file1, unit in sorted(local.items()):
-                    if remote.get(file1) == unit.digest:
+                    if remote.get(file1) == local_index[file1]:
                         skipped += 1
                     else:
                         to_push.append((step_enum, file1, unit))
@@ -124,7 +132,6 @@ class Command(TyperCommand):
 class _Unit(t.NamedTuple):
     """One local unit's rows, as the push needs them."""
 
-    digest: str
     file2: str | None
     review_plan_id: int | None
     images: list[tuple[int, int | None, str, str]]  # display, slice, digest, name
@@ -142,9 +149,6 @@ def _local_units(step: models.Step) -> dict[str, _Unit]:
         extras[file1] = (file2, plan_id)
     return {
         file1: _Unit(
-            digest=storage.unit_digest(
-                (display, cut, digest) for display, cut, digest, _ in images
-            ),
             file2=extras[file1][0],
             review_plan_id=extras[file1][1],
             images=images,

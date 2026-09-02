@@ -75,21 +75,46 @@ def image_list(
 
 
 def unit_digests(*, step: int) -> list[dict[str, str]]:
-    """Per ``file1``, the digest of the step's stored image set.
+    """Per ``file1``, digests of the step's stored image set and its metadata.
 
-    Computed from Image rows alone (no file reads), so the push client can
-    compare its local render against this index and skip what is already
-    present and unchanged.
+    Computed from rows alone (no file reads), so the push client can compare
+    its local render against this index and skip what is already present and
+    unchanged. ``unit_digest`` covers the image set; ``meta_digest`` covers
+    what travels beside it (file2, entities, metrics, plan provenance), so a
+    re-measure with byte-identical images still registers as different.
     """
     grouped: dict[str, list[tuple[int, int | None, str]]] = collections.defaultdict(
         list
     )
-    for file1, display, cut, digest in models.Image.objects.filter(
+    extras: dict[str, tuple[str | None, int | None]] = {}
+    for file1, display, cut, digest, file2, plan_id in models.Image.objects.filter(
         step=step
-    ).values_list("file1", "display", "slice", "digest"):
+    ).values_list("file1", "display", "slice", "digest", "file2", "review_plan_id"):
         grouped[file1].append((display, cut, digest))
+        extras[file1] = (file2, plan_id)
+    measured = {
+        file1: entities
+        for file1, entities in models.MeasuredFile.objects.filter(
+            step=step
+        ).values_list("file1", "entities")
+    }
+    metrics: dict[str, dict[str, float | None]] = collections.defaultdict(dict)
+    for file1, name, value in models.Metric.objects.filter(file__step=step).values_list(
+        "file__file1", "name", "value"
+    ):
+        metrics[file1][name] = value
+    plan_hashes = dict(models.ReviewPlan.objects.values_list("pk", "content_hash"))
     return [
-        {"file1": file1, "unit_digest": storage.unit_digest(refs)}
+        {
+            "file1": file1,
+            "unit_digest": storage.unit_digest(refs),
+            "meta_digest": storage.unit_meta_digest(
+                file2=extras[file1][0],
+                entities=measured.get(file1),
+                values=metrics.get(file1, {}),
+                plan_hash=plan_hashes.get(extras[file1][1]),
+            ),
+        }
         for file1, refs in grouped.items()
     ]
 

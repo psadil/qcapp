@@ -1,5 +1,7 @@
 """Tests for the media-storage layout (django_dirt_ratings.storage)."""
 
+from typing import Any
+
 import pytest
 from django.core.files.storage import default_storage
 
@@ -87,6 +89,51 @@ class TestUnitDigest:
         after = [(0, 1, "a" * 16), (1, 2, "x" * 16)]
 
         assert storage.unit_digest(before) != storage.unit_digest(after)
+
+    def test_a_null_slice_never_aliases_an_integer_one(self):
+        sliceless = [(0, None, "a" * 16)]
+        negative = [(0, -1, "a" * 16)]
+
+        assert storage.unit_digest(sliceless) != storage.unit_digest(negative)
+
+
+def _meta(**overrides: Any) -> str:
+    """The meta digest of one reference unit, overriding any field."""
+    base: dict[str, Any] = {
+        "file2": "ref.nii.gz",
+        "entities": {"space": "MNI", "res": "2"},
+        "values": {"mask_volume": 100.0, "fov_cutoff_max": 0.5},
+        "plan_hash": "h" * 16,
+    }
+    return storage.unit_meta_digest(**(base | overrides))
+
+
+class TestUnitMetaDigest:
+    def test_is_stable_for_identical_metadata(self):
+        assert _meta() == _meta()
+
+    def test_key_order_does_not_matter(self):
+        reordered = _meta(
+            entities={"res": "2", "space": "MNI"},
+            values={"fov_cutoff_max": 0.5, "mask_volume": 100.0},
+        )
+
+        assert _meta() == reordered
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            pytest.param({"values": {"mask_volume": 150.0}}, id="metric-value"),
+            pytest.param(
+                {"values": {"mask_volume": 100.0, "new": None}}, id="metric-added"
+            ),
+            pytest.param({"entities": {"space": "native"}}, id="entities"),
+            pytest.param({"plan_hash": None}, id="plan"),
+            pytest.param({"file2": None}, id="file2"),
+        ],
+    )
+    def test_any_metadata_change_changes_the_digest(self, change):
+        assert _meta() != _meta(**change)
 
 
 @pytest.fixture

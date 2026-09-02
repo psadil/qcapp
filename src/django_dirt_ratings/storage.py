@@ -27,10 +27,12 @@ uploaded and unchanged" an exact comparison for the push client.
 from __future__ import annotations
 
 import hashlib
+import typing
 from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from pathlib import Path
 
+import orjson
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.utils.text import get_valid_filename
@@ -100,18 +102,51 @@ def delete(name: str) -> None:
     _remove_empty_directory(prefix)
 
 
+def modified_time(name: str):
+    """When the stored file last changed (timezone-aware under USE_TZ)."""
+    return default_storage.get_modified_time(name)
+
+
 def unit_digest(images: Iterable[tuple[int, int | None, str]]) -> str:
     """Order-independent fingerprint of one unit's ``(display, slice, digest)`` set.
 
     Computable from ``Image`` rows alone — no file reads — so the push client
-    and the server can agree on "present and unchanged" over the wire.
+    and the server can agree on "present and unchanged" over the wire. A None
+    slice keeps its own spelling (never an integer's), so a sliceless view can
+    never alias a sliced one.
     """
     canonical = sorted(
-        (display, -1 if slice is None else slice, digest)
+        f"{display},{'' if slice is None else slice},{digest}"
         for display, slice, digest in images
     )
-    joined = ";".join(f"{d},{s},{g}" for d, s, g in canonical)
-    return hashlib.sha256(joined.encode()).hexdigest()[:DIGEST_LENGTH]
+    return hashlib.sha256(";".join(canonical).encode()).hexdigest()[:DIGEST_LENGTH]
+
+
+def unit_meta_digest(
+    *,
+    file2: str | None,
+    entities: dict | None,
+    values: typing.Mapping[str, float | None] | None,
+    plan_hash: str | None,
+) -> str:
+    """Fingerprint of everything a unit carries *besides* its image bytes.
+
+    The push skip-set compares this alongside :func:`unit_digest`, so a
+    re-measure (new metrics, changed entities, a new plan) still reaches the
+    server even when every rendered byte is identical. Canonical via orjson
+    with sorted keys — both ends run the same serializer over the same float
+    values, so equality is exact, not approximate.
+    """
+    payload = orjson.dumps(
+        {
+            "file2": file2,
+            "entities": entities,
+            "metrics": dict(values or {}),
+            "plan_hash": plan_hash,
+        },
+        option=orjson.OPT_SORT_KEYS,
+    )
+    return hashlib.sha256(payload).hexdigest()[:DIGEST_LENGTH]
 
 
 def stored_names() -> Iterator[str]:

@@ -175,13 +175,22 @@ class TestUnitIndex:
     def test_digests_agree_with_the_client_side_computation(self, client, auth):
         _post_unit(client, auth)
         payload = _unit_payload()
-        expected = storage.unit_digest(
-            (m["display"], m["slice"], m["digest"]) for m in payload["images"]
-        )
+        expected = {
+            "file1": payload["file1"],
+            "unit_digest": storage.unit_digest(
+                (m["display"], m["slice"], m["digest"]) for m in payload["images"]
+            ),
+            "meta_digest": storage.unit_meta_digest(
+                file2=payload["file2"],
+                entities=payload["entities"],
+                values=payload["metrics"],
+                plan_hash=payload["plan_hash"],
+            ),
+        }
 
         response = client.get("/api/units?step=masks", **auth)
 
-        assert response.json() == [{"file1": payload["file1"], "unit_digest": expected}]
+        assert response.json() == [expected]
 
 
 @pytest.mark.django_db
