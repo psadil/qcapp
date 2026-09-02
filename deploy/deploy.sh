@@ -3,7 +3,8 @@
 # starts here and the server only ever receives a finished image and one
 # config file. TLS and routing live in the shared proxy stack (the `proxy`
 # repo), which must already be serving on the box; this script never touches
-# the Caddyfile.
+# the Caddyfile. That stack also installs /usr/local/bin/vm-host, which this
+# script calls for the box's public address — so deploy the proxy first.
 #
 #   ./deploy/deploy.sh
 #

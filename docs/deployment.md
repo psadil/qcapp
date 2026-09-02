@@ -38,6 +38,7 @@ pixi run -e manage manage create_rater alice
 
 (from a checkout; `devsetup` creates a local `admin`/`admin` account. On the
 deployed VM the same command runs inside the stack:
+`export DIRT_HOST=$(vm-host)` once per shell, then
 `docker compose exec dirt manage create_rater alice`.)
 
 ## SQLite + media in production
@@ -89,6 +90,7 @@ Accounts on the box (no superuser is created — `createsuperuser` is the one wa
 into `/admin/`):
 
 ```shell
+export DIRT_HOST=$(vm-host)   # compose interpolates it; the deploy normally supplies it
 docker compose exec dirt manage create_rater alice           # a reviewer
 docker compose exec dirt manage create_rater pushbot --ingest  # an upload account
 ```
