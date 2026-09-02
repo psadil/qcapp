@@ -70,6 +70,9 @@ dirt stack    deploy/compose.yaml — no ports, joins the `proxy` network
 host layout   /srv/dirt/{db,media,backups,compose.yaml,.env,DEPLOYED}
 ```
 
+- A fresh box is prepared once by the proxy repo's `bootstrap.sh` (docker,
+  the `/srv` layout, this app's `.env` secret, the shared network), and the
+  proxy's own deploy goes first — it installs the `vm-host` this deploy calls.
 - `deploy/deploy.sh` runs from the laptop: build for linux/amd64, smoke-test,
   push to Docker Hub, rsync `deploy/compose.yaml`, `docker compose up -d` over
   ssh. The server never sees source or a build context.
