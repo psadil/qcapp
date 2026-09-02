@@ -34,8 +34,14 @@ docker buildx build --platform=linux/amd64 \
 # Emulation yields a subtly wrong binary far more readily than it yields a
 # failed build, so a green build proves nothing by itself.
 echo "==> 2/6 smoke-test the emulated binary"
+# Two probes. The compiled extensions are what emulation gets subtly wrong,
+# so import exactly those; then boot the real Django stack with `check`,
+# which loads every app (axes included) under a throwaway secret. Bare
+# imports of the app modules would not do: ninja validates its NINJA_*
+# settings at import time and raises with no DJANGO_SETTINGS_MODULE set.
 docker run --rm --entrypoint python "$TAG" \
-	-c "import django, ninja, axes, httpx, orjson, django_dirt_ratings; print('imports ok')"
+	-c "import orjson, uvloop, granian; print('extensions ok')"
+docker run --rm --entrypoint manage -e DJANGO_SECRET_KEY=smoke-only-not-a-secret "$TAG" check
 
 echo "==> 3/6 push the image"
 docker push "$TAG"
