@@ -5,7 +5,8 @@ DIRT is split into two worlds that stay deliberately separate:
 - a **web app** — a lightweight Django/HTMX service that serves pre-rendered QC images and
   records ratings. It needs no neuroimaging libraries.
 - an **image-generation** step — a batch job that reads a preprocessed dataset and renders
-  the QC figures into the database. This pulls in the heavy neuroimaging stack
+  the QC figures into a local media directory (their identities and reviews live in the
+  database). This pulls in the heavy neuroimaging stack
   (nibabel, nilearn, dipy, matplotlib, …).
 
 Keeping them apart means reviewers only ever run the small web app, and the neuro stack is
@@ -66,5 +67,6 @@ docker buildx build --build-arg ENVIRONMENT=manage \
   -t psadil/dirt:manage --platform=linux/amd64 --provenance=true .
 ```
 
-The `db/` directory holds the SQLite database and its WAL sidecar files; mount it as a
-volume so data survives the container. See [Deployment](../deployment.md) for production notes.
+The `db/` directory holds the SQLite database and its WAL sidecar files, and `media/`
+holds the rendered images; mount both as volumes so data survives the container. See
+[Deployment](../deployment.md) for production notes.

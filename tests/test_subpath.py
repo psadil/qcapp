@@ -1,7 +1,10 @@
 """With FORCE_SCRIPT_NAME set, every generated URL carries the prefix.
 
-The deployment serves at https://<host>/dirt/ behind a proxy that strips the
-prefix, so Django sees unprefixed paths in and must emit prefixed URLs out.
+The deployment serves at https://<host>/dirt/ behind a proxy that forwards the
+prefixed path through UNstripped (Django strips it for routing — under ASGI,
+request.path comes straight from the scope, so a proxy-side strip would leak
+into redirects). Unprefixed paths must keep resolving too: the container
+healthcheck requests /accounts/login/ directly.
 """
 
 import pytest
@@ -36,6 +39,12 @@ class TestSubpathUrls:
         response = Client().get("/")
 
         assert response.headers["Location"].startswith("/dirt/accounts/login/")
+
+    def test_an_unprefixed_path_still_resolves(self, subpath):
+        """The compose healthcheck hits the container directly, prefixless."""
+        response = Client().get("/accounts/login/")
+
+        assert response.status_code == 200
 
     def test_static_urls_are_prefixed(self, subpath, client):
         response = client.get("/")

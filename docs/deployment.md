@@ -33,11 +33,12 @@ database, creates the cache table, and serves the app with
 <http://localhost:8000> and log in — accounts are issued with:
 
 ```shell
-docker compose run --rm dirt manage create_rater alice
+pixi run -e manage manage create_rater alice
 ```
 
-(or `pixi run -e manage manage create_rater alice` from a checkout; `devsetup`
-creates a local `admin`/`admin` account).
+(from a checkout; `devsetup` creates a local `admin`/`admin` account. On the
+deployed VM the same command runs inside the stack:
+`docker compose exec dirt manage create_rater alice`.)
 
 ## SQLite + media in production
 

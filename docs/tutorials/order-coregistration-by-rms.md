@@ -41,7 +41,7 @@ Two choices are worth calling out, because they differ from the [`mask_volume` e
 Activate the plan before you render, so each image is stamped with the plan it was rendered under (the measures themselves are computed either way):
 
 ```shell
-pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep --adapter freesurfer -o study.duckdb
+pixi run -e manage bidslake index -i /path/to/derivatives/fmriprep --adapter freesurfer --adapter fmriprep -o study.duckdb
 # parse and activate the plan, storing it in the database so it travels with the ratings
 pixi run -e manage manage plan dirt.toml # validate → persist → activate
 
