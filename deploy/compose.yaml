@@ -4,9 +4,11 @@
 # dirt serves beside melrater on the same VM, behind the shared caddy edge (the
 # `proxy` repo): no ports are published here, and the app joins the external
 # `proxy` docker network the edge routes over (create it once with
-# `docker network create proxy`). DIRT_HOST comes from /srv/dirt/.env and has
-# to agree with the proxy's PROXY_HOST — a mismatch 400s (ALLOWED_HOSTS) or
-# 403s (CSRF) rather than failing loudly.
+# `docker network create proxy`). DIRT_HOST is not configured anywhere: the
+# deploy exports it from `vm-host`, the box's own answer for its public
+# address, so it cannot drift from the proxy's PROXY_HOST — a mismatch 400s
+# (ALLOWED_HOSTS) or 403s (CSRF) rather than failing loudly, and the
+# container's 127.0.0.1 healthcheck would keep reporting healthy throughout.
 name: dirt
 
 networks:
@@ -25,7 +27,7 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set it in /srv/dirt/.env}
       # keep 127.0.0.1 so the healthcheck is not a DisallowedHost. No spaces
       # after the comma — the setting is split on "," with no trimming.
-      DJANGO_ALLOWED_HOSTS: ${DIRT_HOST:?set it in /srv/dirt/.env},127.0.0.1
+      DJANGO_ALLOWED_HOSTS: ${DIRT_HOST:?deploy.sh exports it; by hand, export DIRT_HOST from vm-host},127.0.0.1
       DJANGO_CSRF_TRUSTED_ORIGINS: https://${DIRT_HOST}
       DJANGO_DEPLOYED: "1"
       # the proxy forwards /dirt/... unstripped; Django strips it for routing

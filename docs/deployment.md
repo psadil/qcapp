@@ -72,7 +72,12 @@ host layout   /srv/dirt/{db,media,backups,compose.yaml,.env,DEPLOYED}
 - `deploy/deploy.sh` runs from the laptop: build for linux/amd64, smoke-test,
   push to Docker Hub, rsync `deploy/compose.yaml`, `docker compose up -d` over
   ssh. The server never sees source or a build context.
-- `/srv/dirt/.env` (chmod 600) holds exactly `DJANGO_SECRET_KEY` and `DIRT_HOST`.
+- `/srv/dirt/.env` (chmod 600) holds exactly `DJANGO_SECRET_KEY`. The public
+  address is not stored: `deploy.sh` exports `DIRT_HOST` from `vm-host`, the
+  box's own answer for its own address (installed by the proxy repo), so
+  `ALLOWED_HOSTS` cannot drift from the address the edge holds a certificate
+  for — a drift that 400s every request while the `127.0.0.1` healthcheck
+  still reports healthy.
 - The container serves under the `/dirt` prefix via `DJANGO_FORCE_SCRIPT_NAME`;
   the proxy forwards the prefixed path through unstripped (Django strips it for
   routing), except for static requests, which caddy rewrites onto granian's
@@ -96,7 +101,7 @@ at all), and `manage push` later reconciles that on-disk state against a
 deployment from any networked machine:
 
 ```shell
-manage push --server https://<host>/dirt --user pushbot
+manage push --server "https://$(ssh hetzner vm-host)/dirt" --user pushbot
 ```
 
 The push is idempotent by content digest — units the server already holds
