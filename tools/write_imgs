@@ -21,23 +21,52 @@ OUTMEDIA=${SCRATCH}/dirt/media
 TEMPLATEFLOW=${SCRATCH}/dirt/templateflow # persistent caches, shared login↔compute (see prewarm below)
 ROIS=${SCRATCH}/dirt/rois                 # ditto
 
+# Two login-node modes, each needing the network a compute node lacks:
+#   ./write_imgs prewarm   before sbatch — fills the ROI/TemplateFlow caches
+#   ./write_imgs push      after the job — uploads its outputs to the deployment
+# In push mode the job's copied-out db/ and media/ stand in for the node-local
+# ones, so the same container invocation serves both.
+MODE=${1:-}
+if [[ "${MODE}" == push ]]; then DBDIR=${OUT}; MEDIADIR=${OUTMEDIA}; fi
+
 mkdir -p "${DBDIR}" "${MEDIADIR}" "${OUT}" "${OUTMEDIA}" "${TEMPLATEFLOW}" "${ROIS}"
 rm -f "${CATALOG}" "${CATALOG}.wal"
+# .env (staged in the submit dir, chmod 600) uses `export`, which --env-file can't
+# read, so it is sourced — with xtrace off, or every secret lands in render.log.
+# It holds DJANGO_SECRET_KEY, and for push mode DIRT_PUSH_URL (https://<host>/dirt),
+# DIRT_PUSH_USER and DIRT_PUSH_PASSWORD (an `ingest` account; see create_rater).
+{ set +x; } 2>/dev/null
 set -a
 . ./.env
-set +a # .env uses `export`; --env-file can't read it
+set +a
+set -x
 
-run() { apptainer exec --bind "${a2cps}" --bind "${TEMPLATEFLOW}" --bind "${ROIS}" \
-	--env DB="${DBDIR}/dirt.db" --env MEDIA_ROOT="${MEDIADIR}" \
-	--env DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
-	--env TEMPLATEFLOW_HOME="${TEMPLATEFLOW}" --env DIRT_ROI_CACHE="${ROIS}" \
-	"${SIF}" "$@"; }
+run() {
+	{ set +x; } 2>/dev/null # the command line carries secrets; keep it out of the log
+	apptainer exec --bind "${a2cps}" --bind "${TEMPLATEFLOW}" --bind "${ROIS}" \
+		--bind "${OUT}" --bind "${OUTMEDIA}" \
+		--env DB="${DBDIR}/dirt.db" --env MEDIA_ROOT="${MEDIADIR}" \
+		--env DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+		--env TEMPLATEFLOW_HOME="${TEMPLATEFLOW}" --env DIRT_ROI_CACHE="${ROIS}" \
+		--env DIRT_PUSH_URL="${DIRT_PUSH_URL:-}" --env DIRT_PUSH_USER="${DIRT_PUSH_USER:-}" \
+		--env DIRT_PUSH_PASSWORD="${DIRT_PUSH_PASSWORD:-}" \
+		"${SIF}" "$@"
+	set -x
+}
+
+if [[ "${MODE}" == push ]]; then
+	# Reconciles by digest: units the server already holds unchanged are skipped,
+	# the plan travels first, and the server re-prioritizes afterwards — so this
+	# is safe to re-run after a partial failure, and after a later --update render.
+	run manage push
+	exit 0
+fi
 
 # A cold ROI cache needs network (TemplateFlow) plus minutes of registration, which
 # the offline compute node can't do: pre-warm on a login node with `./write_imgs prewarm`
 # before sbatch. In the job the same command is an instant fail-fast cache check.
 run manage build_rois MNI152NLin2009cAsym MNI152NLin6Asym
-if [[ "${1:-}" == prewarm ]]; then exit 0; fi
+if [[ "${MODE}" == prewarm ]]; then exit 0; fi
 
 for s in "${derivatives}"/*/fmriprep-v4/*; do
 	echo $s
@@ -62,7 +91,4 @@ run manage prioritize          # measures → Image.priority, the anomaly_first 
 cp -av "${DBDIR}"/. "${OUT}/"
 cp -av "${MEDIADIR}"/. "${OUTMEDIA}/"
 cp -av "${CATALOG}" "${PWD}"
-# Then, from a login node (compute has no network), reconcile with a deployment:
-#   apptainer exec --env DB=${OUT}/dirt.db --env MEDIA_ROOT=${OUTMEDIA} \
-#     --env DJANGO_SECRET_KEY=... "${SIF}" \
-#     manage push --server https://<host>/dirt --user <ingest-account>
+# Then, from a login node: ./write_imgs push

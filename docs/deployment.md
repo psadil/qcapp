@@ -112,7 +112,9 @@ manage push --server "https://$(ssh hetzner vm-host)/dirt" --user pushbot
 The push is idempotent by content digest — units the server already holds
 unchanged are skipped, review plans travel first, and a server-side `prioritize`
 runs at the end — so re-running after a partial failure sends only what is
-missing. The API is inert unless the deployment sets `DIRT_INGEST_ENABLED=1`,
+missing. On the cluster, `tools/write_imgs push` from a login node does exactly
+this against the job's copied-out `db/` and `media/`, with the destination and
+the ingest credentials in the staged `.env`. The API is inert unless the deployment sets `DIRT_INGEST_ENABLED=1`,
 and authenticates with HTTP Basic against an account in the `ingest` group.
 
 ## Generating images at scale
