@@ -13,9 +13,10 @@ from pytest_django import live_server_helper
 
 from django_dirt_ratings import models, services
 
-BOOTSWATCH = "https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist"
-LIGHT_CSS = f"{BOOTSWATCH}/flatly/bootstrap.min.css"
-DARK_CSS = f"{BOOTSWATCH}/darkly/bootstrap.min.css"
+# The palette is selected by Bootstrap's own attribute on <html>, not by
+# swapping stylesheets, so that attribute is what the theme tests assert on.
+LIGHT = "light"
+DARK = "dark"
 
 
 @pytest.fixture(scope="class")
@@ -141,23 +142,34 @@ class TestThemeToggle:
     ):
         page.goto(live_server.url)
 
-        expect(page.locator("#theme-css")).to_have_attribute("href", LIGHT_CSS)
+        expect(page.locator("html")).to_have_attribute("data-bs-theme", LIGHT)
 
     def test_toggle_switches_to_dark(self, index_page: Page):
         index_page.locator("#theme-toggle").click()
 
-        expect(index_page.locator("#theme-css")).to_have_attribute("href", DARK_CSS)
+        expect(index_page.locator("html")).to_have_attribute("data-bs-theme", DARK)
 
     def test_toggle_again_switches_back_to_light(self, dark_page: Page):
         dark_page.locator("#theme-toggle").click()
 
-        expect(dark_page.locator("#theme-css")).to_have_attribute("href", LIGHT_CSS)
+        expect(dark_page.locator("html")).to_have_attribute("data-bs-theme", LIGHT)
 
     def test_theme_persists_across_reloads(self, dark_page: Page):
         """State lives in localStorage, not the server session."""
         dark_page.reload()
 
-        expect(dark_page.locator("#theme-css")).to_have_attribute("href", DARK_CSS)
+        expect(dark_page.locator("html")).to_have_attribute("data-bs-theme", DARK)
+
+    def test_one_stylesheet_serves_both_palettes(self, dark_page: Page):
+        """The palette used to arrive by swapping a CDN stylesheet from
+        DOMContentLoaded, so dark mode flashed the light one on every
+        navigation. Nothing is left to swap: one Bootstrap stylesheet, and the
+        attribute above chooses the palette inside it."""
+        hrefs = dark_page.eval_on_selector_all(
+            "link[rel=stylesheet]", "els => els.map(e => e.href)"
+        )
+
+        assert len([h for h in hrefs if "bootstrap.min.css" in h]) == 1
 
 
 def _login(live_server: live_server_helper.LiveServer, page: Page) -> None:

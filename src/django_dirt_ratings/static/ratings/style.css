@@ -1,25 +1,25 @@
 /* ============================================================================
    QCAPP - Quality Control Application Styles
-   Using Bootswatch themes with minimal custom CSS
+
+   Layout, plus one contrast fix. This file holds no palette: every color,
+   radius and shadow below is a Bootstrap token, so it follows the
+   `data-bs-theme` attribute themes.js sets on <html>.
    ============================================================================ */
 
 /* ============================================================================
-   Theme Variables
+   Dark-palette contrast
    ============================================================================ */
 
-/* One color is themed here: the frame around the figure under review. Every
-   other value this stylesheet draws with is a Bootstrap token (--bs-primary,
-   --bs-border-radius-lg, --bs-box-shadow*), which follows whichever Bootswatch
-   theme themes.js has loaded. The neutrals cannot be: Bootswatch 5.3's darkly
-   build leaves --bs-border-color at its light-mode grey, which would frame a
-   dark page in near-white. So the border keeps a per-theme value, and nothing
-   else does. */
-:root {
-    --dirt-figure-border: #e2e8f0;
-}
-
-.theme-dark {
-    --dirt-figure-border: #444444;
+/* The one place a Bootstrap token needs help. Flatly's `--bs-primary` is a navy
+   picked for a white page, and `btn-outline-*` compiles the resting color from
+   it — so on the dark palette the Pass / Unsure / Fail group sat at 1.4:1
+   against the card, close to invisible. Bootstrap's own emphasis token is the
+   theme-aware version of the same hue (4.45:1 measured); the filled and checked
+   states already read fine, so only the resting color and border move. Scoped to
+   dark, which leaves the light palette untouched. */
+[data-bs-theme="dark"] .btn-outline-primary {
+    --bs-btn-color: var(--bs-primary-text-emphasis);
+    --bs-btn-border-color: var(--bs-primary-text-emphasis);
 }
 
 /* ============================================================================
@@ -82,7 +82,7 @@
     max-width: 800px;
     max-height: 100%;
     display: block;
-    border: 2px solid var(--dirt-figure-border);
+    border: 2px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius-lg);
     box-shadow: var(--bs-box-shadow-sm);
     cursor: crosshair;
