@@ -7,7 +7,7 @@
 
             {% for field in form %}
             {% if field.name == 'rating' %}
-            <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
+            <div class="btn-group mb-3" role="group" aria-label="Basic radio toggle button group">
                 {% for choice in field %}
                 {{ choice.tag }}
                 <label class="btn btn-outline-primary" for="{{ choice.id_for_label }}">
@@ -16,18 +16,24 @@
                 {% endfor %}
             </div>
             {% elif field.name == 'source_data_issue' %}
-            <div class="form-check">
+            <div class="form-check mb-3">
                 {{ field }}
                 <label class="form-check-label" for="{{ field.id_for_label }}">
                     {{ field.label }}
                 </label>
             </div>
             {% elif field.name == 'comments' %}
-            <div class="form-floating">
+            {% comment %}
+            A label above the box, like every other field: `form-floating` overlaid
+            it on the control, and darkly pairs a white control with a white label,
+            so "Comments" vanished in dark mode. The help-text div carries the id
+            the widget's aria-describedby already points at.
+            {% endcomment %}
+            <div>
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
-                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                <div class="form-text" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</div>
             </div>
-
             {% else %}
             <label class="form-label fw-bold" for="{{ field.id_for_label }}">
                 {{ field.label }}

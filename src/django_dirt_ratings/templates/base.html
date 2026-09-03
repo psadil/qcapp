@@ -33,7 +33,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
-<body class="dirt-body">
+<body>
     <!-- Bootstrap 5 Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
@@ -64,23 +64,23 @@
                     </li>
                 </ul>
 
-                <!-- Theme Toggle -->
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <button id="theme-toggle" class="btn btn-outline-light btn-sm" type="button">
-                            <i id="theme-icon" class="fas fa-moon me-1"></i>
-                            <span id="theme-text">Dark Mode</span>
-                        </button>
-                    </li>
+                <!-- Theme toggle and account controls. A flex row rather than
+                     a second navbar-nav: these are buttons, not nav links, and
+                     a `.nav-item` stretches to the row height, which left its
+                     button top-aligned against the links beside it. One `gap`
+                     replaces the per-child margin utilities. -->
+                <div class="d-flex align-items-center gap-2">
+                    <button id="theme-toggle" class="btn btn-outline-light btn-sm" type="button">
+                        <i id="theme-icon" class="fas fa-moon me-1"></i>
+                        <span id="theme-text">Dark Mode</span>
+                    </button>
                     {% if user.is_authenticated %}
-                    <li class="nav-item d-flex align-items-center ms-2">
-                        <span class="navbar-text me-2">{{ user.username }}</span>
-                        <form method="post" action="{% url 'logout' %}">{% csrf_token %}
-                            <button class="btn btn-outline-light btn-sm" type="submit">Log out</button>
-                        </form>
-                    </li>
+                    <span class="navbar-text">{{ user.username }}</span>
+                    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+                        <button class="btn btn-outline-light btn-sm" type="submit">Log out</button>
+                    </form>
                     {% endif %}
-                </ul>
+                </div>
             </div>
         </div>
     </nav>

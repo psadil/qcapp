@@ -10,7 +10,7 @@
                     Log in
                 </h1>
                 {% if form.errors %}
-                <p class="text-danger">Invalid username or password.</p>
+                <div class="alert alert-danger" role="alert">Invalid username or password.</div>
                 {% endif %}
                 <form method="post">{% csrf_token %}
                     <div class="mb-3">

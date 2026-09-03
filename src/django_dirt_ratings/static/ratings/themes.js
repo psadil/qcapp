@@ -3,13 +3,13 @@ const themes = {
     light: {
         name: 'flatly',
         url: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css',
-        icon: 'fas fa-moon',
+        icon: 'fa-moon',
         text: 'Dark Mode'
     },
     dark: {
         name: 'darkly',
         url: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/darkly/bootstrap.min.css',
-        icon: 'fas fa-sun',
+        icon: 'fa-sun',
         text: 'Light Mode'
     }
 };
@@ -42,12 +42,16 @@ class ThemeSwitcher {
         // Update CSS link
         this.themeLink.href = themeConfig.url;
 
-        // Update button
-        this.themeIcon.className = themeConfig.icon;
+        // Update button. Swap only the glyph: assigning className would drop
+        // the spacing utility the template puts on the icon, and the moon would
+        // sit flush against the label from the first toggle on.
+        this.themeIcon.classList.remove(...Object.values(themes).map((t) => t.icon));
+        this.themeIcon.classList.add(themeConfig.icon);
         this.themeText.textContent = themeConfig.text;
 
-        // Update body class
-        document.body.className = `dirt-body theme-${theme}`;
+        // Mark the body for the theme-dependent custom CSS (style.css keys the
+        // canvas frame off `.theme-dark`), leaving any other class in place.
+        document.body.classList.toggle('theme-dark', theme === 'dark');
 
         // Save to localStorage
         localStorage.setItem('theme', theme);

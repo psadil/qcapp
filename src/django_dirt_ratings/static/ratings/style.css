@@ -7,30 +7,19 @@
    Theme Variables
    ============================================================================ */
 
+/* One color is themed here: the frame around the figure under review. Every
+   other value this stylesheet draws with is a Bootstrap token (--bs-primary,
+   --bs-border-radius-lg, --bs-box-shadow*), which follows whichever Bootswatch
+   theme themes.js has loaded. The neutrals cannot be: Bootswatch 5.3's darkly
+   build leaves --bs-border-color at its light-mode grey, which would frame a
+   dark page in near-white. So the border keeps a per-theme value, and nothing
+   else does. */
 :root {
-    /* Light theme colors (Flatly) */
-    --light-bg: #ffffff;
-    --light-border: #e2e8f0;
-    --light-text: #2c3e50;
-    --light-text-muted: #7f8c8d;
-    --light-hover: #f8f9fa;
-    --light-primary: #3498db;
-    --light-success: #27ae60;
-    --light-danger: #e74c3c;
-    --light-warning: #f39c12;
+    --dirt-figure-border: #e2e8f0;
 }
 
-/* Dark theme colors (Darkly) */
 .theme-dark {
-    --light-bg: #303030;
-    --light-border: #444444;
-    --light-text: #ffffff;
-    --light-text-muted: #b0b0b0;
-    --light-hover: #404040;
-    --light-primary: #375a7f;
-    --light-success: #00bc8c;
-    --light-danger: #e74c3c;
-    --light-warning: #f39c12;
+    --dirt-figure-border: #444444;
 }
 
 /* ============================================================================
@@ -93,9 +82,9 @@
     max-width: 800px;
     max-height: 100%;
     display: block;
-    border: 2px solid var(--light-border);
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    border: 2px solid var(--dirt-figure-border);
+    border-radius: var(--bs-border-radius-lg);
+    box-shadow: var(--bs-box-shadow-sm);
     cursor: crosshair;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     /* Let the canvas own touch gestures so a drag paints instead of
@@ -104,8 +93,8 @@
 }
 
 .responsive-canvas:hover {
-    border-color: var(--light-primary);
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    border-color: var(--bs-primary);
+    box-shadow: var(--bs-box-shadow);
 }
 
 /* ============================================================================
@@ -169,10 +158,9 @@
    Above the stacked breakpoint the rating pages therefore claim the viewport
    exactly, and the panels inside share it out.
 
-   `:has()` scopes this to the rating pages without a body class — themes.js
-   rewrites `body.className` wholesale, so a class there would not survive a
-   theme toggle. Where `:has()` is unsupported the pages simply scroll, as
-   before. */
+   `:has()` keys off the markup the rating pages already have, so no template
+   has to mark the body for it. Where `:has()` is unsupported the pages simply
+   scroll, as before. */
 @media (min-width: 769px) {
 
     html:has(.rating-interface),
@@ -228,19 +216,6 @@
     .rating-form>.card {
         flex: 0 0 auto;
     }
-}
-
-
-/* ============================================================================
-   Theme Toggle Button
-   ============================================================================ */
-
-#theme-toggle {
-    transition: all 0.2s ease;
-}
-
-#theme-toggle:hover {
-    transform: scale(1.05);
 }
 
 /* ============================================================================

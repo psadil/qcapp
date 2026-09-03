@@ -19,7 +19,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from django_dirt_ratings import views
+from django_dirt_ratings import forms, views
 
 urlpatterns = [
     path("", include("django_dirt_ratings.urls")),
@@ -28,7 +28,11 @@ urlpatterns = [
     # raters are issued a password by `manage create_rater` and never set their
     # own, so nothing routes password_change or password_reset (which would
     # render to anonymous visitors and 500 on submit — no mail backend exists).
-    path("accounts/login/", auth_views.LoginView.as_view(), name="login"),
+    path(
+        "accounts/login/",
+        auth_views.LoginView.as_view(authentication_form=forms.LoginForm),
+        name="login",
+    ),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     # Rendered QC images are subject-derived, so media requires login and is
     # served by Django itself (works with DEBUG off; fine at this tool's scale).
