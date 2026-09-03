@@ -24,10 +24,10 @@
             </div>
             {% elif field.name == 'comments' %}
             {% comment %}
-            A label above the box, like every other field: `form-floating` overlaid
-            it on the control, and darkly pairs a white control with a white label,
-            so "Comments" vanished in dark mode. The help-text div carries the id
-            the widget's aria-describedby already points at.
+            A label above the box, like every other field on the page.
+            `form-floating` put it inside the control instead, with nowhere for
+            the help text to sit. That div carries the id the widget's
+            aria-describedby already points at.
             {% endcomment %}
             <div>
                 <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>

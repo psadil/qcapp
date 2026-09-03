@@ -7,10 +7,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}DIRT - Quality Control{% endblock %}</title>
 
-    <!-- Bootswatch Flatly. One stylesheet for both palettes: it ships
-         Bootstrap 5.3's `[data-bs-theme=dark]` block, and themes.js sets that
-         attribute on <html>. -->
-    <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap 5, stock. One stylesheet for both palettes: it carries the
+         `[data-bs-theme=dark]` block, and themes.js sets that attribute on
+         <html>. Same version as the JS bundle below. -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" type="text/css" href="{% static 'ratings/style.css' %}">
